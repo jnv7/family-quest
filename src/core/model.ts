@@ -16,6 +16,12 @@ export const SCHEMA_VERSION = 1;
 /** Epoch milliseconds, device clock. */
 export type Millis = number;
 
+/** Injected clock; production uses `Date.now`. */
+export type Clock = () => Millis;
+
+/** Injected randomness: an unbiased integer in `[0, maxExclusive)`. */
+export type RandomInt = (maxExclusive: number) => number;
+
 /** Calendar date in the world's timezone: `YYYY-MM-DD`. */
 export type DateKey = string;
 
