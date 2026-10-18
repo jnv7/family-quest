@@ -1,0 +1,26 @@
+# Dependencies and build output
+node_modules/
+dist/
+coverage/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*service-account*.json
+*-credentials.json
+
+# Firebase local state and logs
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+database-debug.log*
+
+# Logs and OS / editor files
+npm-debug.log*
+*.log
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
