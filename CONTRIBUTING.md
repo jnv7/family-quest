@@ -1,6 +1,6 @@
 # Contributing
 
-Project-specific engineering conduct. The generic rules are in `GOVERNANCE.md`, and the product is specified in `SPEC.md`.
+Project-specific engineering conduct. The generic rules are in `GOVERNANCE.md`, the product is specified in `SPEC.md`, and the technical design is in `docs/architecture.md`.
 
 ## Language
 
@@ -45,9 +45,10 @@ A change is done only when all of these hold:
    | When | Update |
    | --- | --- |
    | Behaviour, data model or rules change | `SPEC.md` |
+| Layers, data flow, adapters or tooling change | `docs/architecture.md` |
    | A major architecture decision is taken (`GOVERNANCE.md` §1) | a new ADR in `docs/adr/`, and its index |
    | Anything user-visible is delivered | `CHANGELOG.md`, under `[Unreleased]` or under the version being delivered |
-   | A delivery or release completes, or scope changes | `ROADMAP.md` (current release, and checkboxes or status) |
+   | A delivery or release completes, or scope changes | `ROADMAP.md` and the release's plan in `docs/plans/` (checkboxes or status), plus `version` in `package.json` |
    | An out-of-scope idea comes up | the radar in `ROADMAP.md` |
    | Setup, scripts or status change | `README.md` |
    | Working rules for Claude Code change | `CLAUDE.md` |

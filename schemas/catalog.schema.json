@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jnv7.github.io/family-quest/schemas/catalog.schema.json",
+  "title": "Theme package: catalog.json",
+  "description": "The collectibles a theme offers. Slots are stable forever: never rename or remove one, because stored collectibles reference it (SPEC.md §8).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "slots"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "slots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["slot", "tier", "name", "art"],
+        "properties": {
+          "slot": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,59}$" },
+          "tier": { "enum": ["low", "mid", "high"] },
+          "name": { "type": "string", "minLength": 1, "maxLength": 30 },
+          "art": { "$ref": "theme.schema.json#/$defs/art" }
+        }
+      }
+    }
+  }
+}

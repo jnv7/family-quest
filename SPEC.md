@@ -68,7 +68,7 @@ All collections live under `worlds/{worldId}`. Every document has `schemaVersion
 - `timezone`: `Europe/Lisbon`; `weekStartsOn`: Monday.
 - `openingDay`: ISO weekday on which the current week's rewards can be opened; default 7 (Sunday). **[decided]**
 - `pendingDays`: how many days a newly obtained collectible stays in its owner's pending list before moving to the reserve; default 1. **[decided]** (value is configurable)
-- `tierOdds`: probability of each reward `tier`, per task `level`. **[proposal]** The `mid` row (65/25/10) comes from the product owner; the other two rows are guesses to be tuned.
+- `tierOdds`: probability of each reward `tier`, per task `level`. **[proposal]** The `mid` row (65/25/10) comes from the product owner; the other two rows are guesses to be tuned. Each row holds integers that sum to 100; the client validates this whenever the ruleset is saved. **[proposal]**
 
 | Task `level` | `low` | `mid` | `high` |
 | --- | --- | --- | --- |
@@ -101,7 +101,7 @@ The role belongs to the device, not to the profile, so choosing an adult profile
 
 ### `taskDefs/{defId}` — recurring task definitions
 
-`title`, `cadence` (`daily`, `weekly`, `monthly`), `level` (`low`, `mid`, `high`), `assignedTo` (list of `profileId`; everyone if empty), `question` (string or null), `big` (boolean; only these can be planned with a day and a trigger), `active`.
+`title`, `cadence` (`daily`, `weekly`, `monthly`), `level` (`low`, `mid`, `high`), `assignedTo` (list of `profileId`; every non-archived profile if empty; archived profiles never get new tasks **[proposal]**), `question` (string or null), `big` (boolean; only these can be planned with a day and a trigger), `active`.
 
 ### `tasks/{taskId}`
 
@@ -161,7 +161,7 @@ A completed task produces a `reward` with the task's id. Opening the reward prod
 
 The rule "a `done` task never changes `status`", together with the immutable `createdAt`, is essential. Without it, generating recurring tasks again could overwrite completed tasks (section 6).
 
-The rules cannot count documents, and checking the weekday there would use UTC server time at sync. The daily task limit, the `party` size and the opening day are therefore enforced in the client and tested in the domain. The reward `tier` and the collectible `slot` are drawn in the client and cannot be verified by the rules; like profile choice, this relies on trust. **[decided]**
+The rules cannot count documents, and checking the weekday there would use UTC server time at sync. The daily task limit and the opening day are therefore enforced in the client and tested in the domain. The `party` size is enforced in both places: the rules compare the length of `partyIds` with `ruleset.partySize`. The reward `tier` and the collectible `slot` are drawn in the client and cannot be verified by the rules; like profile choice, this relies on trust. **[decided]**
 
 ## 6. Mechanics
 
@@ -178,7 +178,7 @@ There is therefore at most one open task per `taskDef` and profile. Completing a
 
 Known edge case: the "no open task" check runs on the local cache, so a device whose cache misses an open task (for example, a fresh install that has not synced yet) can still create a second open task for a new period. The `board` shows only the oldest open task per `taskDef` and profile; any extra task stays stored and appears once the first is completed. **[proposal]**
 
-**Ad hoc tasks.** An `admin` creates them for any profile. A child creates them only for themselves, within the daily limit. An ad hoc task stays open until it is completed. It may have a `question`.
+**Ad hoc tasks.** An `admin` creates them for any profile. A child creates them only for themselves, within the daily limit. The limit counts the ad hoc tasks the child's profile created for itself whose `createdAt` falls on today's date in Lisbon; tasks created by an admin do not count. **[proposal]** An ad hoc task stays open until it is completed. It may have a `question`.
 
 **Completing.** Each person completes only their own tasks. **[decided]** In one atomic batch, the client:
 
@@ -191,7 +191,7 @@ Known edge case: the "no open task" check runs on the local cache, so a device w
 
 **Opening rewards.** On or after `ruleset.openingDay` (Sunday by default), a person can open the current week's rewards. Rewards from closed weeks can be opened at any time, so if the family skips a Sunday, everything opens on Monday or later. Each person opens their own. Everyone can open at the same time on the same screen, but each person sees only their own result. Opening is one atomic batch that:
 
-- draws a theme catalogue `slot` with the reward's `tier`;
+- draws a theme catalogue `slot` with the reward's `tier`, uniformly among that tier's slots **[proposal]**;
 - creates the `collectible` with the same id;
 - sets `openedAt` on the reward.
 
@@ -249,7 +249,10 @@ src/data/       DataStore interface + adapters (firestore, memory)
 src/ui/         screens and components (no framework)
 src/i18n/       neutral interface text per locale
 src/themes/     theme packages
-firebase/       firestore.rules, rules tests, firebase.json
+firebase/       firestore.rules, firestore.indexes.json, rules tests
+schemas/        JSON Schemas for theme, catalogue and locale files
+scripts/        validate-theme, lint:theme-leak and their configuration
+firebase.json   Firebase CLI configuration (at the root, where the CLI expects it)
 .github/        workflows (build, tests, Pages deployment)
 ```
 
@@ -278,7 +281,7 @@ firebase/       firestore.rules, rules tests, firebase.json
   - `rewards` and `collectibles` are never replaced;
   - only an `admin` writes `taskDefs`;
   - nothing can be deleted.
-- **`npm run lint:theme-leak`:** fails if it finds theme vocabulary anywhere in `src/`, `firebase/` or `.github/` outside `src/themes/`. Documentation is not scanned. The list of forbidden terms for the pirate theme lives in the script itself (for example: baú, bicho, pirata, farol, papagaio, tripulação, gruta, chest, crew, parrot, lighthouse, pirate, treasure).
+- **`npm run lint:theme-leak`:** fails if it finds theme vocabulary anywhere in `src/`, `firebase/`, `schemas/` or `.github/` outside `src/themes/`. Documentation is not scanned. The forbidden terms are listed per theme in `scripts/theme-leak-terms.json` (for the pirate theme, for example: baú, bicho, pirata, farol, papagaio, tripulação, gruta, chest, crew, parrot, lighthouse, pirate, treasure).
 - **Two real devices** in releases 0.2, 0.5 and 0.6, including airplane mode.
 - **Second minimal theme** (emoji and text) working without touching code or data, in 0.2.
 
@@ -294,6 +297,7 @@ See `ROADMAP.md`. Each release is a minor version developed on its own `release/
 | Weekly guaranteed minimum | Off by default |
 | What happens when the answer to the question is "no" | Proposal in section 6 |
 | Device role vs. profile kind as the source of admin rights | Proposal in section 4 |
+| Small rules: `tierOdds` rows sum to 100; archived profiles get no tasks; what the child daily limit counts; uniform slot draw | Proposals in sections 4 and 6 |
 | Firestore read quota with real-time listeners | Measure in 0.2 against the free limits |
 
 ## 14. Out of scope (v1)

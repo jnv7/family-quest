@@ -4,7 +4,7 @@ Each release is one minor version, developed on its own `release/0.x` branch (`G
 
 The behaviour each release implements is specified in `SPEC.md`.
 
-**Current release: 0.1 — Foundations** (not started).
+**Current release: 0.1 — Foundations** (in progress; delivery plan in [docs/plans/0.1.md](docs/plans/0.1.md)).
 
 ## Release plan
 

@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      # The Firestore emulator needs Java; only CI provides it (CONTRIBUTING.md).
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ hashFiles('package-lock.json') }}
+
+      - name: Firestore rules tests
+        run: npm run test:rules 2>&1 | tee rules.log; exit ${PIPESTATUS[0]}
+
+      # Surfaces emulator start-up errors (such as a rules syntax error) as annotations.
+      - name: Report rules failures
+        if: failure()
+        run: grep -iE "error|fail" rules.log | head -30 | sed 's/^/::error::/' || true
