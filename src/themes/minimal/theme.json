@@ -1,0 +1,172 @@
+{
+  "$schema": "../../../schemas/theme.schema.json",
+  "id": "minimal",
+  "name": "Tema mínimo",
+  "locale": "pt-PT",
+  "roles": {
+    "world": {
+      "singular": "família",
+      "plural": "famílias",
+      "gender": "f"
+    },
+    "profile": {
+      "singular": "pessoa",
+      "plural": "pessoas",
+      "gender": "f"
+    },
+    "board": {
+      "singular": "quadro",
+      "plural": "quadros",
+      "gender": "m"
+    },
+    "checkin": {
+      "singular": "registo",
+      "plural": "registos",
+      "gender": "m"
+    },
+    "home": {
+      "singular": "casa",
+      "plural": "casas",
+      "gender": "f"
+    },
+    "vault": {
+      "singular": "cofre",
+      "plural": "cofres",
+      "gender": "m"
+    },
+    "showcase": {
+      "singular": "vitrina",
+      "plural": "vitrinas",
+      "gender": "f"
+    },
+    "reward": {
+      "singular": "prémio",
+      "plural": "prémios",
+      "gender": "m"
+    },
+    "collectible": {
+      "singular": "cromo",
+      "plural": "cromos",
+      "gender": "m"
+    },
+    "party": {
+      "singular": "equipa",
+      "plural": "equipas",
+      "gender": "f"
+    },
+    "reserve": {
+      "singular": "reserva",
+      "plural": "reservas",
+      "gender": "f"
+    }
+  },
+  "tiers": {
+    "low": "Baixo",
+    "mid": "Médio",
+    "high": "Alto"
+  },
+  "map": {
+    "background": {
+      "emoji": "🗺️"
+    },
+    "aspectRatio": 0.5625
+  },
+  "places": {
+    "board": {
+      "x": 8,
+      "y": 8,
+      "width": 38,
+      "height": 20,
+      "art": {
+        "emoji": "📋"
+      },
+      "transition": {
+        "kind": "move",
+        "durationMs": 400
+      }
+    },
+    "checkin": {
+      "x": 54,
+      "y": 8,
+      "width": 38,
+      "height": 20,
+      "art": {
+        "emoji": "✅"
+      },
+      "transition": {
+        "kind": "move",
+        "durationMs": 400
+      }
+    },
+    "home": {
+      "x": 31,
+      "y": 38,
+      "width": 38,
+      "height": 22,
+      "art": {
+        "emoji": "🏠"
+      },
+      "transition": {
+        "kind": "fade",
+        "durationMs": 300
+      }
+    },
+    "vault": {
+      "x": 8,
+      "y": 70,
+      "width": 38,
+      "height": 20,
+      "art": {
+        "emoji": "🧰"
+      },
+      "transition": {
+        "kind": "move",
+        "durationMs": 400
+      }
+    },
+    "showcase": {
+      "x": 54,
+      "y": 70,
+      "width": 38,
+      "height": 20,
+      "art": {
+        "emoji": "🏆"
+      },
+      "transition": {
+        "kind": "move",
+        "durationMs": 400
+      }
+    }
+  },
+  "homeVariants": {
+    "adult": {
+      "emoji": "🏡"
+    },
+    "child": {
+      "emoji": "🏠"
+    }
+  },
+  "character": {
+    "art": {
+      "emoji": "🙂"
+    },
+    "lines": {
+      "greeting": [
+        "Olá! Pronto para uma tarefa?",
+        "Bom ver-te por aqui."
+      ],
+      "congrats": [
+        "Muito bem!",
+        "Boa! Está feito."
+      ],
+      "doubt": [
+        "Sem pressa. Quando estiver feito, voltas cá.",
+        "Tudo bem, fica para depois."
+      ],
+      "farewell": [
+        "Até logo!",
+        "Até à próxima."
+      ]
+    }
+  }
+}

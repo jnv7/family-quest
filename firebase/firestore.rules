@@ -1,0 +1,392 @@
+rules_version = '2';
+
+// Firestore security rules. Specified in SPEC.md §5; tested in firebase/tests.
+//
+// Principles:
+// - Everything lives under worlds/{worldId}; only members of a world read it.
+// - Nothing is ever deleted.
+// - Every document carries schemaVersion == 1 and createdAt, which never change.
+// - "Owner" means the device whose member.profileId equals the document's profileId.
+// - "Admin" means a device whose active profile is a non-archived adult profile.
+// - Batches (writeBatch) are checked with get() for the state before the batch
+//   and getAfter() for the state after it. No transactions are used.
+//
+// Field limits mirror LIMITS in src/core/model.ts.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /worlds/{worldId} {
+
+      // ---------------------------------------------------------------------
+      // Paths and identity
+
+      function worldPath() {
+        return /databases/$(database)/documents/worlds/$(worldId);
+      }
+      function memberPath(uid) {
+        return /databases/$(database)/documents/worlds/$(worldId)/members/$(uid);
+      }
+      function profilePath(profileId) {
+        return /databases/$(database)/documents/worlds/$(worldId)/profiles/$(profileId);
+      }
+      function taskDefPath(defId) {
+        return /databases/$(database)/documents/worlds/$(worldId)/taskDefs/$(defId);
+      }
+      function taskPath(taskId) {
+        return /databases/$(database)/documents/worlds/$(worldId)/tasks/$(taskId);
+      }
+      function rewardPath(taskId) {
+        return /databases/$(database)/documents/worlds/$(worldId)/rewards/$(taskId);
+      }
+      function collectiblePath(taskId) {
+        return /databases/$(database)/documents/worlds/$(worldId)/collectibles/$(taskId);
+      }
+
+      function signedIn() {
+        return request.auth != null;
+      }
+      function isMember() {
+        return signedIn() && exists(memberPath(request.auth.uid));
+      }
+      function me() {
+        return get(memberPath(request.auth.uid)).data;
+      }
+      function activeProfileId() {
+        return me().profileId;
+      }
+      // Admin rights come from the active profile: any non-archived adult profile.
+      function isAdmin() {
+        return isMember()
+          && activeProfileId() != null
+          && get(profilePath(activeProfileId())).data.kind == 'adult'
+          && get(profilePath(activeProfileId())).data.archived == false;
+      }
+      // True only inside the batch that creates this world, for its creator.
+      function isCreatingWorld() {
+        return signedIn()
+          && !exists(worldPath())
+          && existsAfter(worldPath())
+          && getAfter(worldPath()).data.createdBy == request.auth.uid;
+      }
+      function isOwnerOf(profileId) {
+        return isMember() && activeProfileId() != null && activeProfileId() == profileId;
+      }
+
+      // ---------------------------------------------------------------------
+      // Value checks
+
+      function newDoc() {
+        return request.resource.data;
+      }
+      function changed() {
+        return request.resource.data.diff(resource.data).affectedKeys();
+      }
+      function validMetaOnCreate() {
+        return newDoc().schemaVersion == 1 && newDoc().createdAt is timestamp;
+      }
+      function text(value, maxSize) {
+        return value is string && value.size() >= 1 && value.size() <= maxSize;
+      }
+      function optionalText(value, maxSize) {
+        return value == null || text(value, maxSize);
+      }
+      function isTier(value) {
+        return value in ['low', 'mid', 'high'];
+      }
+      function isDateKey(value) {
+        return value is string && value.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+      }
+      function isWeekKey(value) {
+        return value is string && value.matches('^[0-9]{4}-W[0-9]{2}$');
+      }
+      function isMonthKey(value) {
+        return value is string && value.matches('^[0-9]{4}-[0-9]{2}$');
+      }
+      function isActiveProfile(profileId) {
+        return profileId is string
+          && exists(profilePath(profileId))
+          && get(profilePath(profileId)).data.archived == false;
+      }
+
+      // ---------------------------------------------------------------------
+      // worlds/{worldId}
+
+      function validWorld(data) {
+        return text(data.name, 60)
+          && data.themeId is string
+          && data.createdBy is string
+          && data.ruleset is map;
+      }
+
+      allow read: if isMember();
+      allow create: if signedIn()
+        && newDoc().keys().hasOnly(['name', 'themeId', 'createdBy', 'ruleset', 'schemaVersion', 'createdAt'])
+        && newDoc().keys().hasAll(['name', 'themeId', 'createdBy', 'ruleset', 'schemaVersion', 'createdAt'])
+        && worldId.size() >= 24
+        && newDoc().createdBy == request.auth.uid
+        && validWorld(newDoc())
+        && validMetaOnCreate();
+      allow update: if isAdmin()
+        && changed().hasOnly(['name', 'ruleset'])
+        && validWorld(newDoc());
+      allow delete: if false;
+
+      // ---------------------------------------------------------------------
+      // members/{uid}: one device
+
+      match /members/{uid} {
+        allow read: if isMember();
+
+        // A device creates only its own membership, with no profile yet. The
+        // world's creator, in the creating batch, starts on its own adult profile.
+        allow create: if signedIn()
+          && uid == request.auth.uid
+          && existsAfter(worldPath())
+          && newDoc().keys().hasOnly(['profileId', 'schemaVersion', 'createdAt'])
+          && newDoc().keys().hasAll(['profileId', 'schemaVersion', 'createdAt'])
+          && validMetaOnCreate()
+          && (newDoc().profileId == null
+            || (isCreatingWorld()
+              && newDoc().profileId is string
+              && getAfter(profilePath(newDoc().profileId)).data.kind == 'adult'));
+
+        // The device switches its own profile (Netflix-style).
+        allow update: if uid == request.auth.uid
+          && isMember()
+          && changed().hasOnly(['profileId'])
+          && isActiveProfile(newDoc().profileId);
+
+        allow delete: if false;
+      }
+
+      // ---------------------------------------------------------------------
+      // profiles/{profileId}: one person
+
+      match /profiles/{profileId} {
+        function validProfile(data) {
+          return text(data.displayName, 40)
+            && data.kind in ['adult', 'child']
+            && data.avatar is map
+            && data.partyIds is list
+            && data.partyIds.size() <= getAfter(worldPath()).data.ruleset.partySize
+            && data.archived is bool;
+        }
+
+        allow read: if isMember();
+        // An admin creates profiles; the world's creator creates its own adult
+        // profile in the batch that creates the world.
+        allow create: if (isAdmin() || (isCreatingWorld() && newDoc().kind == 'adult'))
+          && newDoc().keys().hasOnly(['displayName', 'kind', 'avatar', 'partyIds', 'archived', 'schemaVersion', 'createdAt'])
+          && newDoc().keys().hasAll(['displayName', 'kind', 'avatar', 'partyIds', 'archived', 'schemaVersion', 'createdAt'])
+          && validProfile(newDoc())
+          && newDoc().partyIds.size() == 0
+          && newDoc().archived == false
+          && validMetaOnCreate();
+        // `kind` never changes and adult profiles are never archived, so every
+        // world always keeps at least one adult profile, and therefore an admin.
+        allow update: if validProfile(newDoc()) && (
+            (isAdmin()
+              && changed().hasOnly(['displayName', 'avatar', 'archived'])
+              && (newDoc().archived == false || resource.data.kind == 'child'))
+            || (isOwnerOf(profileId) && changed().hasOnly(['avatar', 'partyIds']))
+          );
+        allow delete: if false;
+      }
+
+      // ---------------------------------------------------------------------
+      // taskDefs/{defId}: recurring task definitions
+
+      match /taskDefs/{defId} {
+        function validTaskDef(data) {
+          return text(data.title, 80)
+            && data.cadence in ['daily', 'weekly', 'monthly']
+            && isTier(data.level)
+            && data.assignedTo is list
+            && optionalText(data.question, 140)
+            && data.big is bool
+            && data.active is bool;
+        }
+
+        allow read: if isMember();
+        allow create: if isAdmin()
+          && newDoc().keys().hasOnly(['title', 'cadence', 'level', 'assignedTo', 'question', 'big', 'active', 'schemaVersion', 'createdAt'])
+          && newDoc().keys().hasAll(['title', 'cadence', 'level', 'assignedTo', 'question', 'big', 'active', 'schemaVersion', 'createdAt'])
+          && validTaskDef(newDoc())
+          && validMetaOnCreate();
+        allow update: if isAdmin()
+          && changed().hasOnly(['title', 'cadence', 'level', 'assignedTo', 'question', 'big', 'active'])
+          && validTaskDef(newDoc());
+        allow delete: if false;
+      }
+
+      // ---------------------------------------------------------------------
+      // tasks/{taskId}
+
+      match /tasks/{taskId} {
+        function validPeriodKey(cadence, periodKey) {
+          return (cadence == 'daily' && isDateKey(periodKey))
+            || (cadence == 'weekly' && isWeekKey(periodKey))
+            || (cadence == 'monthly' && isMonthKey(periodKey));
+        }
+
+        // A recurring task copies an active definition assigned to its profile,
+        // and its id is {defId}_{periodKey}_{profileId}.
+        function validRecurring(data) {
+          let def = get(taskDefPath(data.defId)).data;
+          return data.defId is string
+            && def.active == true
+            && (def.assignedTo.size() == 0 || data.profileId in def.assignedTo)
+            && validPeriodKey(def.cadence, data.periodKey)
+            && taskId == data.defId + '_' + data.periodKey + '_' + data.profileId
+            && data.title == def.title
+            && data.level == def.level
+            && data.question == def.question;
+        }
+
+        // Only tasks from a big definition can carry a plan.
+        function validPlan(data) {
+          return data.plan == null || (
+            data.plan is map
+            && data.plan.keys().hasOnly(['date', 'trigger'])
+            && data.plan.keys().hasAll(['date', 'trigger'])
+            && isDateKey(data.plan.date)
+            && text(data.plan.trigger, 80)
+            && data.source == 'recurring'
+            && get(taskDefPath(data.defId)).data.big == true
+          );
+        }
+
+        allow read: if isAdmin() || isOwnerOf(resource.data.profileId);
+
+        allow create: if isMember()
+          && newDoc().keys().hasOnly(['profileId', 'title', 'level', 'question', 'source', 'defId', 'periodKey',
+            'createdBy', 'origin', 'plan', 'status', 'doneAt', 'answer', 'talkFlag', 'weekKey', 'schemaVersion', 'createdAt'])
+          && newDoc().keys().hasAll(['profileId', 'title', 'level', 'question', 'source', 'defId', 'periodKey',
+            'createdBy', 'origin', 'plan', 'status', 'doneAt', 'answer', 'talkFlag', 'weekKey', 'schemaVersion', 'createdAt'])
+          && validMetaOnCreate()
+          && activeProfileId() != null
+          && newDoc().createdBy == activeProfileId()
+          && isActiveProfile(newDoc().profileId)
+          && text(newDoc().title, 80)
+          && isTier(newDoc().level)
+          && optionalText(newDoc().question, 140)
+          && newDoc().origin == 'app'
+          && newDoc().plan == null
+          && newDoc().status == 'open'
+          && newDoc().doneAt == null
+          && newDoc().answer == null
+          && newDoc().talkFlag == false
+          && newDoc().weekKey == null
+          && (
+            (newDoc().source == 'adhoc'
+              && newDoc().defId == null
+              && newDoc().periodKey == null
+              && (isAdmin() || isOwnerOf(newDoc().profileId)))
+            || (newDoc().source == 'recurring'
+              && isOwnerOf(newDoc().profileId)
+              && validRecurring(newDoc()))
+          );
+
+        // Only the owner completes, and only from open to done. If the task has
+        // a question, completing requires answering yes.
+        function ownerCompletes() {
+          return isOwnerOf(resource.data.profileId)
+            && resource.data.status == 'open'
+            && newDoc().status == 'done'
+            && changed().hasOnly(['status', 'doneAt', 'answer', 'talkFlag', 'weekKey'])
+            && newDoc().doneAt is timestamp
+            && isWeekKey(newDoc().weekKey)
+            && newDoc().talkFlag is bool
+            && ((resource.data.question == null && newDoc().answer == null)
+              || (resource.data.question != null && newDoc().answer == 'yes'));
+        }
+
+        function ownerEditsOpen() {
+          return isOwnerOf(resource.data.profileId)
+            && resource.data.status == 'open'
+            && changed().hasOnly(['talkFlag', 'plan'])
+            && newDoc().talkFlag is bool
+            && validPlan(newDoc());
+        }
+
+        function adminEditsOpen() {
+          return isAdmin()
+            && resource.data.status == 'open'
+            && changed().hasOnly(['title', 'level', 'question'])
+            && text(newDoc().title, 80)
+            && isTier(newDoc().level)
+            && optionalText(newDoc().question, 140);
+        }
+
+        // Every branch requires an open task and excludes createdAt, so writing
+        // a recurring task again can never reopen or replace an existing one.
+        allow update: if ownerCompletes() || ownerEditsOpen() || adminEditsOpen();
+        allow delete: if false;
+      }
+
+      // ---------------------------------------------------------------------
+      // rewards/{taskId}: created only in the batch that completes the task
+
+      match /rewards/{taskId} {
+        allow read: if isAdmin() || isOwnerOf(resource.data.profileId);
+
+        allow create: if isOwnerOf(newDoc().profileId)
+          && newDoc().keys().hasOnly(['profileId', 'weekKey', 'tier', 'openedAt', 'schemaVersion', 'createdAt'])
+          && newDoc().keys().hasAll(['profileId', 'weekKey', 'tier', 'openedAt', 'schemaVersion', 'createdAt'])
+          && validMetaOnCreate()
+          && isTier(newDoc().tier)
+          && newDoc().openedAt == null
+          && get(taskPath(taskId)).data.status == 'open'
+          && getAfter(taskPath(taskId)).data.status == 'done'
+          && getAfter(taskPath(taskId)).data.profileId == newDoc().profileId
+          && getAfter(taskPath(taskId)).data.weekKey == newDoc().weekKey;
+
+        // Opened once, in the batch that creates its collectible.
+        allow update: if isOwnerOf(resource.data.profileId)
+          && resource.data.openedAt == null
+          && changed().hasOnly(['openedAt'])
+          && newDoc().openedAt is timestamp
+          && existsAfter(collectiblePath(taskId));
+
+        allow delete: if false;
+      }
+
+      // ---------------------------------------------------------------------
+      // collectibles/{taskId}: created only in the batch that opens the reward
+
+      match /collectibles/{taskId} {
+        function validNickname(data) {
+          return optionalText(data.nickname, 30);
+        }
+
+        // Readable by every member: the showcase lists other people's.
+        // The interface never shows the owner.
+        allow read: if isMember();
+
+        allow create: if isOwnerOf(newDoc().profileId)
+          && newDoc().keys().hasOnly(['profileId', 'slot', 'tier', 'nickname', 'obtainedWeekKey', 'obtainedAt', 'reserveAt', 'schemaVersion', 'createdAt'])
+          && newDoc().keys().hasAll(['profileId', 'slot', 'tier', 'nickname', 'obtainedWeekKey', 'obtainedAt', 'reserveAt', 'schemaVersion', 'createdAt'])
+          && validMetaOnCreate()
+          && text(newDoc().slot, 60)
+          && newDoc().nickname == null
+          && newDoc().reserveAt == null
+          && newDoc().obtainedAt is timestamp
+          && isWeekKey(newDoc().obtainedWeekKey)
+          && get(rewardPath(taskId)).data.openedAt == null
+          && getAfter(rewardPath(taskId)).data.openedAt != null
+          && newDoc().tier == get(rewardPath(taskId)).data.tier
+          && newDoc().profileId == get(rewardPath(taskId)).data.profileId;
+
+        allow update: if validNickname(newDoc()) && (
+            (isOwnerOf(resource.data.profileId)
+              && changed().hasOnly(['nickname', 'reserveAt'])
+              && (newDoc().reserveAt == null || newDoc().reserveAt is timestamp))
+            || (isAdmin() && changed().hasOnly(['nickname']))
+          );
+
+        allow delete: if false;
+      }
+    }
+  }
+}

@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jnv7.github.io/family-quest/schemas/theme.schema.json",
+  "title": "Theme package: theme.json",
+  "description": "See SPEC.md §8 and docs/architecture.md §6. The folder name under src/themes/ must equal `id`.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "id", "name", "locale", "roles", "tiers", "map", "places", "homeVariants", "character"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,30}$" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+    "locale": { "const": "pt-PT" },
+    "roles": {
+      "description": "Visible names for every role of the neutral glossary (SPEC.md §3).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["world", "profile", "board", "checkin", "home", "vault", "showcase", "reward", "collectible", "party", "reserve"],
+      "properties": {
+        "world": { "$ref": "#/$defs/noun" },
+        "profile": { "$ref": "#/$defs/noun" },
+        "board": { "$ref": "#/$defs/noun" },
+        "checkin": { "$ref": "#/$defs/noun" },
+        "home": { "$ref": "#/$defs/noun" },
+        "vault": { "$ref": "#/$defs/noun" },
+        "showcase": { "$ref": "#/$defs/noun" },
+        "reward": { "$ref": "#/$defs/noun" },
+        "collectible": { "$ref": "#/$defs/noun" },
+        "party": { "$ref": "#/$defs/noun" },
+        "reserve": { "$ref": "#/$defs/noun" }
+      }
+    },
+    "tiers": {
+      "description": "Visible names of the three tiers.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["low", "mid", "high"],
+      "properties": {
+        "low": { "$ref": "#/$defs/label" },
+        "mid": { "$ref": "#/$defs/label" },
+        "high": { "$ref": "#/$defs/label" }
+      }
+    },
+    "map": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["background", "aspectRatio"],
+      "properties": {
+        "background": { "$ref": "#/$defs/art" },
+        "aspectRatio": { "description": "Width divided by height of the map.", "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "places": {
+      "description": "The five tappable places on the map.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["board", "checkin", "home", "vault", "showcase"],
+      "properties": {
+        "board": { "$ref": "#/$defs/place" },
+        "checkin": { "$ref": "#/$defs/place" },
+        "home": { "$ref": "#/$defs/place" },
+        "vault": { "$ref": "#/$defs/place" },
+        "showcase": { "$ref": "#/$defs/place" }
+      }
+    },
+    "homeVariants": {
+      "description": "Look of the home place per profile kind.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adult", "child"],
+      "properties": {
+        "adult": { "$ref": "#/$defs/art" },
+        "child": { "$ref": "#/$defs/art" }
+      }
+    },
+    "character": {
+      "description": "The checkin character and its fixed set of short lines. The engine picks one line of each kind at random.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["art", "lines"],
+      "properties": {
+        "art": { "$ref": "#/$defs/art" },
+        "lines": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["greeting", "congrats", "doubt", "farewell"],
+          "properties": {
+            "greeting": { "$ref": "#/$defs/lines" },
+            "congrats": { "$ref": "#/$defs/lines" },
+            "doubt": { "description": "Said when the answer to the question is no.", "$ref": "#/$defs/lines" },
+            "farewell": { "$ref": "#/$defs/lines" }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "label": { "type": "string", "minLength": 1, "maxLength": 30 },
+    "noun": {
+      "description": "A Portuguese noun. The engine derives articles and contractions from `gender` (docs/architecture.md §6).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["singular", "plural", "gender"],
+      "properties": {
+        "singular": { "$ref": "#/$defs/label" },
+        "plural": { "$ref": "#/$defs/label" },
+        "gender": { "enum": ["m", "f"] }
+      }
+    },
+    "art": {
+      "description": "Either an image file relative to the theme's folder, or an emoji (minimal themes).",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["image"],
+          "properties": { "image": { "type": "string", "pattern": "^assets/[a-z0-9][a-z0-9._/-]*\\.(png|webp|svg)$" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["emoji"],
+          "properties": { "emoji": { "type": "string", "minLength": 1, "maxLength": 16 } }
+        }
+      ]
+    },
+    "place": {
+      "description": "Position and size in percent of the map's width and height (0-100), measured from the top-left corner.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "width", "height", "art", "transition"],
+      "properties": {
+        "x": { "type": "number", "minimum": 0, "maximum": 100 },
+        "y": { "type": "number", "minimum": 0, "maximum": 100 },
+        "width": { "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
+        "height": { "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
+        "art": { "$ref": "#/$defs/art" },
+        "transition": {
+          "description": "The short animation played when the place is tapped.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "durationMs"],
+          "properties": {
+            "kind": { "enum": ["move", "fade", "none"] },
+            "durationMs": { "type": "integer", "minimum": 0, "maximum": 1500 }
+          }
+        }
+      }
+    },
+    "lines": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "items": { "type": "string", "minLength": 1, "maxLength": 80 }
+    }
+  }
+}

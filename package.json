@@ -1,0 +1,40 @@
+{
+  "name": "family-quest",
+  "private": true,
+  "version": "0.1.9",
+  "description": "A family task game with themed collectible rewards.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-family-quest \"vitest run --config vitest.rules.config.ts\"",
+    "lint:imports": "node scripts/lint-imports.ts",
+    "test:emulator": "firebase emulators:exec --only firestore,auth --project demo-family-quest \"vitest run --config vitest.emulator.config.ts\"",
+    "validate-theme": "node scripts/validate-theme.ts",
+    "lint:theme-leak": "node scripts/lint-theme-leak.ts"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "5.0.2",
+    "ajv": "8.20.0",
+    "firebase-tools": "15.32.1",
+    "typescript": "6.0.3",
+    "vite": "8.3.3",
+    "vitest": "5.0.3"
+  },
+  "dependencies": {
+    "firebase": "12.19.0"
+  },
+  "allowScripts": {
+    "@firebase/util": false,
+    "fsevents": false,
+    "protobufjs": false,
+    "re2": false
+  }
+}

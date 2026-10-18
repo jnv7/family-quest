@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jnv7.github.io/family-quest/schemas/locale.schema.json",
+  "title": "Neutral interface text: src/i18n/{locale}.json",
+  "description": "Flat map of message keys to text. Placeholders are described in docs/architecture.md §6. No theme vocabulary is allowed here (lint:theme-leak).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "locale", "messages"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "locale": { "const": "pt-PT" },
+    "messages": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-zA-Z0-9]*(\\.[a-z][a-zA-Z0-9]*)+$" },
+      "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 200 }
+    }
+  }
+}

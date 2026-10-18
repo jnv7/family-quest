@@ -1,6 +1,6 @@
 # Contributing
 
-Project-specific engineering conduct. The generic rules are in `GOVERNANCE.md`, and the product is specified in `SPEC.md`.
+Project-specific engineering conduct. The generic rules are in `GOVERNANCE.md`, the product is specified in `SPEC.md`, and the technical design is in `docs/architecture.md`.
 
 ## Language
 
@@ -24,8 +24,8 @@ Project-specific engineering conduct. The generic rules are in `GOVERNANCE.md`, 
 ## Testing policy
 
 - **Domain logic** in `src/core/` has unit tests (Vitest).
-- **Firestore rules** have emulator tests (`@firebase/rules-unit-testing`) for every rule in `SPEC.md` §5, including the negative cases in §11. Running them locally requires a Java runtime (JDK 21 or later).
-- **Before every commit:** `npm test`, `npm run lint:theme-leak` and `npm run validate-theme` pass. CI runs the same checks.
+- **Firestore rules** have emulator tests (`@firebase/rules-unit-testing`) for every rule in `SPEC.md` §5, including the negative cases in §11. The Firestore emulator needs a Java runtime, so CI is the authoritative run of these tests; running them locally is optional and needs JDK 21 or later. The same goes for the Firestore adapter tests (`npm run test:emulator`). Domain tests need only Node.
+- **Before every commit:** `npm test`, `npm run lint:imports`, `npm run lint:theme-leak` and `npm run validate-theme` pass. CI runs the same checks.
 - **Bugs:** a fix comes with a test that fails without it.
 
 ## Git conventions
@@ -45,9 +45,10 @@ A change is done only when all of these hold:
    | When | Update |
    | --- | --- |
    | Behaviour, data model or rules change | `SPEC.md` |
+| Layers, data flow, adapters or tooling change | `docs/architecture.md` |
    | A major architecture decision is taken (`GOVERNANCE.md` §1) | a new ADR in `docs/adr/`, and its index |
    | Anything user-visible is delivered | `CHANGELOG.md`, under `[Unreleased]` or under the version being delivered |
-   | A delivery or release completes, or scope changes | `ROADMAP.md` (current release, and checkboxes or status) |
+   | A delivery or release completes, or scope changes | `ROADMAP.md` and the release's plan in `docs/plans/` (checkboxes or status), plus `version` in `package.json` |
    | An out-of-scope idea comes up | the radar in `ROADMAP.md` |
    | Setup, scripts or status change | `README.md` |
    | Working rules for Claude Code change | `CLAUDE.md` |

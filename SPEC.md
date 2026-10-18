@@ -68,7 +68,7 @@ All collections live under `worlds/{worldId}`. Every document has `schemaVersion
 - `timezone`: `Europe/Lisbon`; `weekStartsOn`: Monday.
 - `openingDay`: ISO weekday on which the current week's rewards can be opened; default 7 (Sunday). **[decided]**
 - `pendingDays`: how many days a newly obtained collectible stays in its owner's pending list before moving to the reserve; default 1. **[decided]** (value is configurable)
-- `tierOdds`: probability of each reward `tier`, per task `level`. **[proposal]** The `mid` row (65/25/10) comes from the product owner; the other two rows are guesses to be tuned.
+- `tierOdds`: probability of each reward `tier`, per task `level`. **[proposal]** The `mid` row (65/25/10) comes from the product owner; the other two rows are guesses to be tuned. Each row holds integers that sum to 100; the client validates this whenever the ruleset is saved. **[decided]**
 
 | Task `level` | `low` | `mid` | `high` |
 | --- | --- | --- | --- |
@@ -84,24 +84,23 @@ A device in the world. `uid` comes from anonymous authentication.
 
 | Field | Type | Notes |
 | --- | --- | --- |
-| `role` | `admin` or `child` | A device permission: who creates tasks for others and manages profiles |
 | `profileId` | string or null | The device's active profile. Null right after joining; the device chooses it and can switch later |
 
-The role belongs to the device, not to the profile, so choosing an adult profile on a child's device does not grant admin rights. **[proposal]**
+**Admin rights come from the active profile.** A device is `admin` while its active profile is an adult profile. There is no role stored on the device, so changing or resetting a phone loses nothing: the new device joins and picks the adult profile. **[decided]** (ADR 0003) The consequence is accepted under the trust model: a child who picks an adult profile gets admin rights. A device-bound admin with a recovery code is on the radar.
 
 ### `profiles/{profileId}`
 
 | Field | Type | Notes |
 | --- | --- | --- |
 | `displayName` | string | |
-| `kind` | `adult` or `child` | Affects only appearance and limits; the mechanics are the same |
+| `kind` | `adult` or `child` | Immutable. Adult profiles carry admin rights (section 5); otherwise `kind` affects only appearance and limits, and the mechanics are the same |
 | `avatar` | map | Layers as indices (`body`, `hair`, `outfit`, `accessory`). Never an image |
 | `partyIds` | list of ids | Up to `partySize`; the source of truth for the `party` |
-| `archived` | boolean | Profiles are never deleted |
+| `archived` | boolean | Profiles are never deleted. Only child profiles can be archived, so a world always keeps at least one adult profile, and therefore an admin |
 
 ### `taskDefs/{defId}` — recurring task definitions
 
-`title`, `cadence` (`daily`, `weekly`, `monthly`), `level` (`low`, `mid`, `high`), `assignedTo` (list of `profileId`; everyone if empty), `question` (string or null), `big` (boolean; only these can be planned with a day and a trigger), `active`.
+`title`, `cadence` (`daily`, `weekly`, `monthly`), `level` (`low`, `mid`, `high`), `assignedTo` (list of `profileId`; every non-archived profile if empty; archived profiles never get new tasks **[decided]**), `question` (string or null), `big` (boolean; only these can be planned with a day and a trigger), `active`.
 
 ### `tasks/{taskId}`
 
@@ -123,7 +122,7 @@ The role belongs to the device, not to the profile, so choosing an adult profile
 
 Tasks have no due date for now; what counts is completion. **[decided]** Due dates and rescheduling are on the radar.
 
-Recurring task id: `{defId}_{periodKey}_{profileId}`, where `periodKey` is `YYYY-MM-DD` (daily), `YYYY-Www` (weekly, ISO week) or `YYYY-MM` (monthly). Each period yields a new task with a new id. Ad hoc task id: random.
+Recurring task id: `{defId}_{periodKey}_{profileId}`, where `periodKey` is `YYYY-MM-DD` (daily), `YYYY-Www` (weekly, ISO week) or `YYYY-MM` (monthly). The id identifies the period in which the task was generated; a period does not always yield a task (section 6). Ad hoc task id: random.
 
 ### `rewards/{taskId}` and `collectibles/{taskId}`
 
@@ -137,23 +136,26 @@ A completed task produces a `reward` with the task's id. Opening the reward prod
 
 **Anonymous authentication.** Each device has a `uid`. If the device loses its storage it loses its `uid`: it joins again with the code and picks its profile. No data is lost.
 
-**Creating a world.** In one batch, the device creates `worlds/{worldId}` and its own `members/{uid}` with `role: admin`. The rules allow the admin member only for the world's `createdBy`. The app then shows the join link and QR code (below).
+**Creating a world.** In one batch, the device creates `worlds/{worldId}`, the creator's own adult profile, and its `members/{uid}` with that profile active. That makes the creating device admin. The rules allow a membership created with a profile only for the world's `createdBy`, inside that batch. The app then shows the join link and QR code (below).
 
-**Profiles.** An admin creates the profiles of everyone in the world, through the app, with generated ids. **[decided]**
+**Profiles.** An admin creates the profiles of everyone else in the world, through the app, with generated ids. **[decided]**
 
-**Joining a world.** The admin shares a join link, `<app URL>#/join/<worldId>`, also shown as a QR code. The code is in the URL fragment, so it never reaches a server log. Typing the code by hand remains possible. The joining device creates its `members/{uid}` with `role: child` and `profileId: null`, which makes it a member. It can then read the profiles, and it picks one. **[decided]**
+**Joining a world.** The admin shares a join link, `<app URL>#/join/<worldId>`, also shown as a QR code. The code is in the URL fragment, so it never reaches a server log. Typing the code by hand remains possible. The joining device creates its `members/{uid}` with `profileId: null`, which makes it a member. It can then read the profiles, and it picks one. **[decided]**
 
-**Choosing and switching profiles.** It works like Netflix: the device picks a profile and stays on it; it can switch to another profile at any time. The choice is not verified, so security between profiles relies on trust. An optional PIN per profile (0.8) locks the interface only. **[decided]** An admin can promote a device to `admin`; that is how a second adult gets admin rights. **[decided]**
+**Choosing and switching profiles.** It works like Netflix: the device picks a profile and stays on it; it can switch to another profile at any time. The choice is not verified, so security between profiles relies on trust. An optional PIN per profile (0.8) locks the interface only. **[decided]** A second adult gets admin rights by picking their own adult profile. **[decided]**
 
-**Owner.** In the rules, the *owner* of a document is the device whose `members/{uid}.profileId` equals the document's `profileId`.
+**Owner and admin.** In the rules:
+
+- the *owner* of a document is the device whose `members/{uid}.profileId` equals the document's `profileId`;
+- an *admin* is a device whose active profile is a non-archived adult profile.
 
 **Firestore rules** (file `firebase/firestore.rules`, tested in the emulator). Nothing can be deleted, in any collection.
 
 | Collection | Read | Write |
 | --- | --- | --- |
 | `worlds` | members | create: any authenticated user, with `createdBy == uid`; update: `admin`, without changing `themeId` or `createdBy` |
-| `members` | members | create: only its own `uid`, with `profileId` null; `role: child`, or `admin` only for the world's creator; update: the device itself changes only `profileId`, to an existing, non-archived profile; an `admin` changes only `role` |
-| `profiles` | members | create and update: `admin`; the owner updates only `avatar` and `partyIds` |
+| `members` | members | create: only its own `uid`, with `profileId` null, or with the creator's new adult profile inside the world-creating batch; update: the device itself changes only `profileId`, to an existing, non-archived profile |
+| `profiles` | members | create: `admin`, or the world's creator for its own adult profile inside the world-creating batch; update: `admin` changes `displayName`, `avatar` and `archived` (archiving only child profiles), never `kind`; the owner updates only `avatar` and `partyIds` |
 | `taskDefs` | members | `admin` |
 | `tasks` | `admin` or the owner | create ad hoc: `admin` for any profile, or the owner for itself with `origin: app`; create recurring: the owner only, with an id equal to `{defId}_{periodKey}_{profileId}`, for an active `taskDef` assigned to that profile; every new task has `status: open`; update: only the owner completes (`status` from `open` to `done`, together with `doneAt`, `answer`, `talkFlag`, `weekKey`), and the owner may change `talkFlag` and `plan` on an open task; an `admin` may change `title`, `level` and `question` on an open task; nobody changes `status` of a `done` task, nor `profileId`, `source`, `defId`, `periodKey`, `createdBy` or `createdAt` |
 | `rewards` | `admin` or the owner | create: the owner only, never replacing an existing one, and only in the same batch that moves the task with the same id from `open` to `done` (checked with `get` and `getAfter`), with the same `profileId` and `weekKey`; update: the owner, only `openedAt`, once |
@@ -161,17 +163,24 @@ A completed task produces a `reward` with the task's id. Opening the reward prod
 
 The rule "a `done` task never changes `status`", together with the immutable `createdAt`, is essential. Without it, generating recurring tasks again could overwrite completed tasks (section 6).
 
-The rules cannot count documents, and checking the weekday there would use UTC server time at sync. The daily task limit, the `party` size and the opening day are therefore enforced in the client and tested in the domain. The reward `tier` and the collectible `slot` are drawn in the client and cannot be verified by the rules; like profile choice, this relies on trust. **[decided]**
+The rules cannot count documents, and checking the weekday there would use UTC server time at sync. The daily task limit and the opening day are therefore enforced in the client and tested in the domain. The `party` size is enforced in both places: the rules compare the length of `partyIds` with `ruleset.partySize`. The reward `tier` and the collectible `slot` are drawn in the client and cannot be verified by the rules; like profile choice, this relies on trust. **[decided]**
 
 ## 6. Mechanics
 
 **Week.** Monday to Sunday, Lisbon time. `weekKey` uses the ISO week format `YYYY-Www`. The daylight saving change on 25 October 2026 and the turn of the year must be tested. 2026 has 53 ISO weeks, so 1 January 2027 belongs to `2026-W53`.
 
-**Generating recurring tasks.** When the app opens, and when the device switches profile, the client looks at each active `taskDef` that applies to the active profile and creates the task for the current period with the deterministic id from section 4. Before writing, it checks the local cache and skips tasks it already has. If the task exists on the server but not in the cache (for example after a reinstall while offline), the write reaches the server as an update and the rules reject it, because `createdAt` and `status` cannot change. That rejection is expected and silent. Opening the app twice in the same period never duplicates a task, and it never reopens a completed one.
+**Generating recurring tasks.** When the app opens, and when the device switches profile, the client looks at each active `taskDef` that applies to the active profile. It creates the task for the current period, with the deterministic id from section 4, only if both of these hold:
 
-**Open recurring tasks from past periods.** **[proposal]** When its period ends, an open recurring task is no longer shown on the `board`. It is kept, with no failure record shown to anyone.
+- there is no open task from that `taskDef` for that profile, from any period;
+- no task from that `taskDef` for that profile was completed during the current period (the period of its `doneAt`).
 
-**Ad hoc tasks.** An `admin` creates them for any profile. A child creates them only for themselves, within the daily limit. An ad hoc task stays open until it is completed. It may have a `question`.
+There is therefore at most one open task per `taskDef` and profile. Completing an overdue task covers the period in which it is completed. Before writing, it checks the local cache and skips tasks it already has. If the task exists on the server but not in the cache (for example after a reinstall while offline), the write reaches the server as an update and the rules reject it, because `createdAt` and `status` cannot change. That rejection is expected and silent. Opening the app twice in the same period never duplicates a task, and it never reopens a completed one.
+
+**Open recurring tasks from past periods.** **[decided]** A recurring task stays open, and stays on the `board`, until it is completed, even after its period ends. No new copy is created while it is open, and no failure is recorded. This is revisited when due dates are introduced (see the radar in `ROADMAP.md`).
+
+Known edge case: the "no open task" check runs on the local cache, so a device whose cache misses an open task (for example, a fresh install that has not synced yet) can still create a second open task for a new period. The `board` shows only the oldest open task per `taskDef` and profile; any extra task stays stored and appears once the first is completed. **[proposal]**
+
+**Ad hoc tasks.** An `admin` creates them for any profile. A child creates them only for themselves, within the daily limit. The limit counts the ad hoc tasks the child's profile created for itself whose `createdAt` falls on today's date in Lisbon; tasks created by an admin do not count. **[decided]** An ad hoc task stays open until it is completed. It may have a `question`.
 
 **Completing.** Each person completes only their own tasks. **[decided]** In one atomic batch, the client:
 
@@ -184,7 +193,7 @@ The rules cannot count documents, and checking the weekday there would use UTC s
 
 **Opening rewards.** On or after `ruleset.openingDay` (Sunday by default), a person can open the current week's rewards. Rewards from closed weeks can be opened at any time, so if the family skips a Sunday, everything opens on Monday or later. Each person opens their own. Everyone can open at the same time on the same screen, but each person sees only their own result. Opening is one atomic batch that:
 
-- draws a theme catalogue `slot` with the reward's `tier`;
+- draws a theme catalogue `slot` with the reward's `tier`, uniformly among that tier's slots **[decided]**;
 - creates the `collectible` with the same id;
 - sets `openedAt` on the reward.
 
@@ -206,12 +215,12 @@ The main screen is a **map** with five tappable places. Each tap starts a short 
 
 1. **First launch.** Create a world, which shows the join link and QR code, or join with a link or code. Then pick a profile.
 2. **Profile picker.** Netflix-style list of the world's non-archived profiles. Reachable later to switch profile.
-3. **`board`.** Today's open tasks for the active profile and, highlighted, planned `big` tasks for tomorrow and today (the visual alert, 0.3). Entry point for creating a task: adults for any profile, children for themselves.
+3. **`board`.** All open tasks of the active profile, including those from past periods, and, highlighted, planned `big` tasks for tomorrow and today (the visual alert, 0.3). Entry point for creating a task: adults for any profile, children for themselves.
 4. **`checkin`.** Pick an open task, tap done. Shows the question when there is one. "I think I did better" button.
 5. **`home`.** Avatar and `party` of the active profile, plus its pending collectibles. Edit the `party` (remove, add). Name a collectible. Edit the avatar (0.8).
 6. **`vault`.** The active profile's unopened `rewards`. Only that profile's own rewards.
 7. **`showcase`.** The latest 30 from the reserve.
-8. **Management (`admin` only).** Create and archive profiles, create and edit `taskDefs`, view tasks per profile (including `talkFlag`), promote devices to `admin`, show the join link and QR code again. Profiles and worlds are always created through the app, with generated ids, never by editing data by hand. **[decided]**
+8. **Management (`admin` only).** Create and archive profiles, create and edit `taskDefs`, view tasks per profile (including `talkFlag`), show the join link and QR code again. Profiles and worlds are always created through the app, with generated ids, never by editing data by hand. **[decided]**
 
 Adults play like everyone else. The theme can give an adult's `home` a different look (in the pirate theme, a luxury ship).
 
@@ -242,7 +251,10 @@ src/data/       DataStore interface + adapters (firestore, memory)
 src/ui/         screens and components (no framework)
 src/i18n/       neutral interface text per locale
 src/themes/     theme packages
-firebase/       firestore.rules, rules tests, firebase.json
+firebase/       firestore.rules, firestore.indexes.json, rules tests
+schemas/        JSON Schemas for theme, catalogue and locale files
+scripts/        validate-theme, lint:theme-leak and their configuration
+firebase.json   Firebase CLI configuration (at the root, where the CLI expects it)
 .github/        workflows (build, tests, Pages deployment)
 ```
 
@@ -258,7 +270,7 @@ firebase/       firestore.rules, rules tests, firebase.json
 
 ## 11. Tests and verification
 
-- **Domain (Vitest):** week and `periodKey`, including 25 October 2026 and the turn of the year into `2026-W53`; task generation; the draw; `party`, pending and reserve rules; opening-day rules, including a skipped Sunday.
+- **Domain (Vitest):** week and `periodKey`, including 25 October 2026 and the turn of the year into `2026-W53`; task generation, including no new copy while a task from the same `taskDef` is open, and no new task after an overdue one is completed in the current period; the draw; `party`, pending and reserve rules; opening-day rules, including a skipped Sunday.
 - **Draw simulation:** 10,000 draws per `level`, checking the distribution against `tierOdds` within a margin fixed in the test.
 - **Firestore rules** (`@firebase/rules-unit-testing`, emulator). These run in the GitHub Action:
   - a non-member reads nothing;
@@ -271,7 +283,7 @@ firebase/       firestore.rules, rules tests, firebase.json
   - `rewards` and `collectibles` are never replaced;
   - only an `admin` writes `taskDefs`;
   - nothing can be deleted.
-- **`npm run lint:theme-leak`:** fails if it finds theme vocabulary anywhere in `src/`, `firebase/` or `.github/` outside `src/themes/`. Documentation is not scanned. The list of forbidden terms for the pirate theme lives in the script itself (for example: baú, bicho, pirata, farol, papagaio, tripulação, gruta, chest, crew, parrot, lighthouse, pirate, treasure).
+- **`npm run lint:theme-leak`:** fails if it finds theme vocabulary anywhere in `src/`, `firebase/`, `schemas/` or `.github/` outside `src/themes/`. Documentation is not scanned. The forbidden terms are listed per theme in `scripts/theme-leak-terms.json` (for the pirate theme, for example: baú, bicho, pirata, farol, papagaio, tripulação, gruta, chest, crew, parrot, lighthouse, pirate, treasure).
 - **Two real devices** in releases 0.2, 0.5 and 0.6, including airplane mode.
 - **Second minimal theme** (emoji and text) working without touching code or data, in 0.2.
 
@@ -286,8 +298,6 @@ See `ROADMAP.md`. Each release is a minor version developed on its own `release/
 | `tierOdds` for the `low` and `high` levels | Proposal in section 4; awaiting the product owner |
 | Weekly guaranteed minimum | Off by default |
 | What happens when the answer to the question is "no" | Proposal in section 6 |
-| Open recurring tasks from past periods hidden from the `board` | Proposal in section 6 |
-| Device role vs. profile kind as the source of admin rights | Proposal in section 4 |
 | Firestore read quota with real-time listeners | Measure in 0.2 against the free limits |
 
 ## 14. Out of scope (v1)

@@ -5,7 +5,7 @@
 
 A web app (PWA) for one family: daily, weekly, monthly and ad hoc tasks, completed on the phone, with rewards in a themed collection game. A static frontend on GitHub Pages, with data in Firebase (Spark plan, no cost).
 
-**The full specification is in `SPEC.md`; read it before writing code.** The release plan is in `ROADMAP.md`, and architecture decisions are in `docs/adr/`. This file holds only the working rules.
+**The full specification is in `SPEC.md`; read it before writing code.** How the code is built is in `docs/architecture.md`. The release plan is in `ROADMAP.md`, with the current release's deliveries in `docs/plans/`. Architecture decisions are in `docs/adr/`. This file holds only the working rules.
 
 ## Non-negotiable rules
 
