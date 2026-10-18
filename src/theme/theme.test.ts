@@ -76,9 +76,8 @@ describe('formatWith', () => {
 describe('formatMessage', () => {
   it('formats the start page messages with the minimal theme', () => {
     expect(formatMessage(theme, 'app.name')).toBe('Missões da família');
-    expect(formatMessage(theme, 'app.underConstruction')).toBe(
-      'Em construção. Em breve poderás ver o quadro e abrir o cofre.',
-    );
+    expect(formatMessage(theme, 'home.soon')).toBe('O quadro e o resto chegam em breve.');
+    expect(formatMessage(theme, 'start.create')).toBe('Criar uma família');
     expect(formatMessage(theme, 'app.version', { version: '0.1.6' })).toBe('Versão 0.1.6');
   });
 });

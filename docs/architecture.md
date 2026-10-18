@@ -193,7 +193,20 @@ Until 0.6, only themes listed in `scripts/validated-themes.json` are checked (th
   There is no bulk migration, because there are no Cloud Functions.
 - **Rules.** `firestore.rules` checks `schemaVersion == 1`. The rules change in the same commit as `SCHEMA_VERSION`.
 
-## 9. Things the rules cannot guarantee
+## 9. Interface
+
+No framework (`CONTRIBUTING.md`). `src/main.ts` picks the adapter and calls `startApp` (`src/ui/app.ts`).
+
+- **Screens** are functions `(ctx, root, params) => Dispose` in `src/ui/screens/`. A screen builds its elements with `h()` (`src/ui/dom.ts`), subscribes to observers, and returns the function that stops them. The router calls it on every route change.
+- **`AppContext`** (`src/ui/context.ts`) is everything a screen may use: the `DataStore`, the theme, `text()`, `go()`, `notify()` and `settle()`. `settle()` applies the table in §2 to a write's late verdict.
+- **Rendering.** Screens render from observers only. Who the device is (`observeSelf`, `src/ui/self.ts`) comes from the memberships and profiles, so a refused profile choice sends the device back to the picker by itself.
+- **Routes** are hash routes (`src/ui/routes.ts`): `#/`, `#/create`, `#/join[/<worldId>]`, `#/profiles`, `#/home`, `#/manage`, `#/share`. Unknown hashes are the start page. Screens that need a world send the device to the start page if it has none.
+- **Which world.** The device remembers its world id in `localStorage` (`src/ui/worldMemory.ts`; memory only if storage is blocked). On launch, a remembered world skips the start page: if the membership is gone the id is forgotten, and if the membership cannot be checked (offline, nothing cached) the device trusts the saved world.
+- **QR code.** `qrcode-generator` computes the module matrix; `src/ui/qr.ts` draws it as an SVG element. Black on white in any colour scheme, so phones can scan it.
+- **Tests.** Screen tests run in `happy-dom` against the memory adapter, with several devices sharing one backend (`src/ui/app.test.ts`).
+- **Running without Firebase.** `VITE_DATA=memory npm run dev` uses the memory adapter for a single device.
+
+## 10. Things the rules cannot guarantee
 
 The client and the domain tests enforce these (`SPEC.md` §5):
 

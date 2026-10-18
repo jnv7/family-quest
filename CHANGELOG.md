@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-10-18
+
+### Added
+
+- World and profiles:
+  - create a world, which shows the join link, a QR code and the code to type;
+  - join with a link, a scanned QR code, or a typed code;
+  - Netflix-style profile picker, and switching profile later;
+  - management for admins: create profiles, archive and reactivate child profiles, show the invitation again;
+  - a device that already belongs to a world skips the start page.
+- Interface text for these screens in `src/i18n/pt-PT.json`.
+
 ### Changed
 
 - The Firestore adapter now points at the real Firebase project instead of placeholder values (`src/data/firestore/config.ts`).

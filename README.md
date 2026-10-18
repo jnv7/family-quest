@@ -2,7 +2,7 @@
 
 A family game that encourages planning, cooperation and task resolution.
 
-**Status: pre-release.** Nothing is usable yet; release 0.1 (Foundations) is closed and release 0.2 (Core) is next.
+**Status: pre-release.** Release 0.1 (Foundations) is closed; release 0.2 (Core) is in progress.
 
 Family Quest is a PWA where each family member completes their daily, weekly, monthly and ad hoc tasks on their phone, and earns rewards in a themed collection game. It runs on GitHub Pages with Firebase (free Spark plan) and works offline.
 
@@ -29,7 +29,8 @@ Requires Node 24.
 npm ci
 npm run typecheck
 npm test
-npm run dev      # start page on a local server
+npm run dev      # the app on a local server, using the real Firebase project
+VITE_DATA=memory npm run dev   # the same, with no Firebase: one device, data kept in memory
 npm run build    # production build, as published to GitHub Pages
 ```
 
