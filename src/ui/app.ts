@@ -1,14 +1,18 @@
 /** Router and boot of the interface (docs/architecture.md §9). Screens render only from observers. */
+import type { Clock } from '../core/model';
 import type { DataStore } from '../data/DataStore';
 import type { Theme } from '../theme';
 import { formatMessage } from '../theme';
 import { reportSettleError, type AppContext, type Dispose, type Screen, type WorldScreen } from './context';
 import { h } from './dom';
+import type { Navigation } from './navigation';
 import { hashFor, parseHash, type Route } from './routes';
 import { renderCreate } from './screens/create';
-import { renderHome } from './screens/home';
+import { renderBoard } from './screens/board';
 import { renderJoin } from './screens/join';
 import { renderManage } from './screens/manage';
+import { renderMap } from './screens/map';
+import { renderNewTask } from './screens/newTask';
 import { renderProfiles } from './screens/profiles';
 import { renderShare } from './screens/share';
 import { renderStart } from './screens/start';
@@ -21,13 +25,15 @@ export interface AppOptions {
   /** The app's URL without the hash. */
   baseUrl: string;
   world: WorldMemory;
+  clock: Clock;
+  navigation: Navigation;
 }
 
 const NOTICE_MS = 5000;
 
 /** Starts the interface and returns a function that stops it. */
 export async function startApp(options: AppOptions): Promise<() => void> {
-  const { root, store, theme, baseUrl, world } = options;
+  const { root, store, theme, baseUrl, world, clock, navigation } = options;
   const text = (key: string, params?: Record<string, string | number>) => formatMessage(theme, key, params);
 
   const uid = await signInWithRetry(root, store, text);
@@ -43,6 +49,7 @@ export async function startApp(options: AppOptions): Promise<() => void> {
   const ctx: AppContext = {
     store,
     theme,
+    clock,
     uid,
     baseUrl,
     world,
@@ -52,12 +59,12 @@ export async function startApp(options: AppOptions): Promise<() => void> {
     go(route, { replace = false } = {}) {
       const hash = hashFor(route);
       if (replace) {
-        history.replaceState(null, '', hash);
+        navigation.replace(hash);
         render();
-      } else if (location.hash === hash) {
+      } else if (navigation.hash() === hash) {
         render();
       } else {
-        location.hash = hash;
+        navigation.push(hash);
       }
     },
   };
@@ -81,8 +88,12 @@ export async function startApp(options: AppOptions): Promise<() => void> {
         return renderJoin(route.worldId);
       case 'profiles':
         return needsWorld(renderProfiles);
-      case 'home':
-        return needsWorld(renderHome);
+      case 'map':
+        return needsWorld(renderMap);
+      case 'board':
+        return needsWorld(renderBoard);
+      case 'newTask':
+        return needsWorld(renderNewTask);
       case 'manage':
         return needsWorld(renderManage);
       case 'share':
@@ -93,14 +104,14 @@ export async function startApp(options: AppOptions): Promise<() => void> {
   function render(): void {
     dispose();
     root.replaceChildren();
-    dispose = screenFor(parseHash(location.hash))(ctx, root);
+    dispose = screenFor(parseHash(navigation.hash()))(ctx, root);
   }
 
-  window.addEventListener('hashchange', render);
-  await resumeSession(ctx);
+  const stopListening = navigation.onChange(render);
+  await resumeSession(ctx, navigation);
   render();
   return () => {
-    window.removeEventListener('hashchange', render);
+    stopListening();
     dispose();
     root.replaceChildren();
   };
@@ -129,19 +140,19 @@ async function signInWithRetry(
 }
 
 /** A device that already belongs to a world skips the start page. */
-async function resumeSession(ctx: AppContext): Promise<void> {
+async function resumeSession(ctx: AppContext, navigation: Navigation): Promise<void> {
   const worldId = ctx.world.get();
-  if (worldId === null || parseHash(location.hash).name !== 'start') return;
+  if (worldId === null || parseHash(navigation.hash()).name !== 'start') return;
   try {
     const membership = await ctx.store.worlds.getMembership(worldId);
     if (membership === null) {
       ctx.world.clear(); // this device is no longer a member of that world
       return;
     }
-    history.replaceState(null, '', hashFor({ name: membership.profileId ? 'home' : 'profiles' }));
+    navigation.replace(hashFor({ name: membership.profileId ? 'map' : 'profiles' }));
   } catch (error) {
     // Offline with nothing cached: trust the saved world; the screens read from the cache.
     console.warn('Could not check the membership', error);
-    history.replaceState(null, '', hashFor({ name: 'home' }));
+    navigation.replace(hashFor({ name: 'map' }));
   }
 }

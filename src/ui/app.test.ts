@@ -4,18 +4,22 @@ import { createRandomInt } from '../core/random';
 import { createMemoryBackend, createMemoryStore } from '../data/memory';
 import { loadTheme } from '../theme';
 import { startApp } from './app';
+import { memoryNavigation } from './navigation';
 import { createWorldMemory } from './worldMemory';
 
 const BASE_URL = 'https://example.org/family-quest/';
 const randomInt = createRandomInt((array) => crypto.getRandomValues(array));
 const theme = loadTheme('minimal');
 
+/** One clock for every device, so tests can move time. */
+let now = Date.parse('2026-10-20T10:00:00Z');
+const clock = () => now;
+
 let backend = createMemoryBackend();
 let stops: Array<() => void> = [];
 
 /** One device: its own store, remembered world and screen, sharing the backend. */
 async function openDevice(uid: string, options: { hash?: string; savedWorld?: string } = {}) {
-  location.hash = options.hash ?? '';
   const storage = new Map<string, string>();
   const world = createWorldMemory({
     getItem: (k) => storage.get(k) ?? null,
@@ -25,8 +29,8 @@ async function openDevice(uid: string, options: { hash?: string; savedWorld?: st
   if (options.savedWorld) world.set(options.savedWorld);
   const root = document.createElement('main');
   document.body.append(root);
-  const store = createMemoryStore(backend, { uid, clock: () => Date.now(), randomInt });
-  stops.push(await startApp({ root, store, theme, baseUrl: BASE_URL, world }));
+  const store = createMemoryStore(backend, { uid, clock, randomInt });
+  stops.push(await startApp({ root, store, theme, baseUrl: BASE_URL, world, clock, navigation: memoryNavigation(options.hash ?? '') }));
 
   const find = (selector: string, text?: string) =>
     [...root.querySelectorAll<HTMLElement>(selector)].find((el) => text === undefined || el.textContent?.includes(text));
@@ -43,6 +47,16 @@ async function openDevice(uid: string, options: { hash?: string; savedWorld?: st
       await vi.waitFor(() => expect(field(), `field "${label}"`).toBeTruthy());
       field()!.value = value;
     },
+    choose: async (label: string, value: string) => {
+      const field = () => [...root.querySelectorAll('label')].find((l) => l.textContent?.includes(label))?.querySelector('select');
+      await vi.waitFor(() => expect(field(), `select "${label}"`).toBeTruthy());
+      const option = [...field()!.options].find((o) => o.textContent === value);
+      if (!option) throw new Error(`No option "${value}" in "${label}"`);
+      field()!.value = option.value;
+      field()!.dispatchEvent(new Event('change'));
+    },
+    enabled: (text: string) =>
+      vi.waitFor(() => expect((find('button', text) as HTMLButtonElement | undefined)?.disabled, `button "${text}"`).toBe(false)),
     submit: () => root.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true })),
     see: (text: string) => vi.waitFor(() => expect(root.textContent).toContain(text)),
     notSee: (text: string) => vi.waitFor(() => expect(root.textContent).not.toContain(text)),
@@ -50,6 +64,7 @@ async function openDevice(uid: string, options: { hash?: string; savedWorld?: st
 }
 
 beforeEach(() => {
+  now = Date.parse('2026-10-20T10:00:00Z');
   backend = createMemoryBackend();
   vi.spyOn(console, 'error').mockImplementation(() => {});
   vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -164,5 +179,129 @@ describe('coming back', () => {
     const device = await openDevice('stranger-device', { savedWorld: 'y'.repeat(28) });
     await device.see('Criar uma família');
     expect(device.world.get()).toBeNull();
+  });
+});
+
+/** A world with an admin ("Alex") on one device and a child profile ("Sam") on another. */
+async function familyWithChild() {
+  const { admin, worldId } = await createFamily();
+  await admin.click('button', 'Continuar');
+  await admin.click('button', 'Gerir');
+  await admin.type('Nome', 'Sam');
+  admin.submit();
+  await admin.see('Sam');
+  await admin.click('button', 'Voltar');
+
+  const child = await openDevice('child-device', { hash: `#/join/${worldId}` });
+  await child.click('button.profile', 'Sam');
+  await child.see('Olá, Sam!');
+  return { admin, child, worldId };
+}
+
+/** Opens the board and the new-task form, fills it and creates the task. */
+async function createTask(device: Awaited<ReturnType<typeof openDevice>>, title: string, forWho?: string) {
+  await device.click('button.place', 'Quadro');
+  await device.click('button', 'Nova tarefa');
+  await device.type('O que é para fazer?', title);
+  if (forWho) await device.choose('Para quem', forWho);
+  await device.enabled('Criar tarefa');
+  device.submit();
+  await device.see('As tuas tarefas');
+}
+
+describe('the map', () => {
+  it('lays out the five places of the theme, and only the board leads somewhere yet', async () => {
+    const { admin } = await createFamily();
+    await admin.click('button', 'Continuar');
+    await admin.see('Olá, Alex!');
+
+    const places = [...admin.root.querySelectorAll<HTMLButtonElement>('button.place')];
+    expect(places.map((p) => p.querySelector('.place-name')?.textContent)).toEqual([
+      'Quadro',
+      'Registo',
+      'Casa',
+      'Cofre',
+      'Vitrina',
+    ]);
+    expect(places.filter((p) => !p.disabled).map((p) => p.textContent)).toEqual([expect.stringContaining('Quadro')]);
+    expect(places[0]!.style.left).toBe('8%'); // position comes from theme.json
+
+    await admin.click('button.place', 'Quadro');
+    await admin.see('As tuas tarefas'); // after the short animation
+  });
+});
+
+describe('the board and ad hoc tasks', () => {
+  it('shows a task an adult creates for themself, and says when there is nothing to do', async () => {
+    const { admin } = await familyWithChild();
+    await admin.click('button.place', 'Quadro');
+    await admin.see('Nada por fazer');
+
+    await admin.click('button', 'Nova tarefa');
+    await admin.type('O que é para fazer?', 'Regar as plantas');
+    await admin.enabled('Criar tarefa');
+    admin.submit();
+    await admin.see('Regar as plantas');
+    await admin.notSee('Nada por fazer');
+    expect(document.body.textContent).toContain('Tarefa criada.');
+  });
+
+  it('lets an adult create a task for a child, who sees it on their own device', async () => {
+    const { admin, child } = await familyWithChild();
+    await createTask(admin, 'Arrumar o quarto', 'Sam');
+    await admin.notSee('Arrumar o quarto'); // it is Sam's task, not Alex's
+
+    await child.click('button.place', 'Quadro');
+    await child.see('Arrumar o quarto');
+  });
+
+  it('lists the oldest task first', async () => {
+    const { admin } = await familyWithChild();
+    await createTask(admin, 'Primeira');
+    now += 60_000;
+    await admin.click('button', 'Nova tarefa');
+    await admin.type('O que é para fazer?', 'Segunda');
+    await admin.enabled('Criar tarefa');
+    admin.submit();
+    await admin.see('Segunda');
+    expect([...admin.root.querySelectorAll('.tasks li')].map((li) => li.textContent)).toEqual(['Primeira', 'Segunda']);
+  });
+
+  it('lets a child create tasks only for themselves', async () => {
+    const { child } = await familyWithChild();
+    await child.click('button.place', 'Quadro');
+    await child.click('button', 'Nova tarefa');
+    await child.type('O que é para fazer?', 'Ler um livro');
+    expect([...child.root.querySelectorAll('label')].some((l) => l.textContent?.includes('Para quem') && !l.hidden)).toBe(false);
+    await child.enabled('Criar tarefa');
+    child.submit();
+    await child.see('Ler um livro');
+  });
+
+  it('stops a child after three tasks in a day, and allows more the next day', async () => {
+    const { admin, child } = await familyWithChild();
+    await createTask(admin, 'Do adulto', 'Sam'); // created by an admin: does not count
+
+    await child.click('button.place', 'Quadro');
+    for (const title of ['Uma', 'Duas', 'Três']) {
+      await child.click('button', 'Nova tarefa');
+      await child.type('O que é para fazer?', title);
+      await child.enabled('Criar tarefa');
+      child.submit();
+      await child.see(title);
+    }
+
+    await child.click('button', 'Nova tarefa');
+    await child.see('Hoje já criaste as tuas tarefas');
+    expect(child.root.querySelector('form')?.hidden).toBe(true);
+    expect(child.root.textContent).not.toMatch(/\d/); // no counts are shown
+
+    now += 24 * 3_600_000; // the next day in Lisbon
+    await child.click('button', 'Voltar');
+    await child.click('button', 'Nova tarefa');
+    await child.type('O que é para fazer?', 'Quarta');
+    await child.enabled('Criar tarefa');
+    child.submit();
+    await child.see('Quarta');
   });
 });

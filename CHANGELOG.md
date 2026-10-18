@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.2] — 2026-10-19
+
+### Added
+
+- The map, the main screen after choosing a profile: five places laid out by the theme, with the theme's tap animation. Only the `board` leads somewhere yet; the other places are shown dimmed.
+- The `board`: the open tasks of the active profile, oldest first.
+- Creating ad hoc tasks: an adult creates for any profile, a child for themselves, with an optional verification question. A child can create three a day (Lisbon time), and tasks an adult creates for them do not count; no counts are shown.
+- Interface text for these screens in `src/i18n/pt-PT.json`.
+
+### Changed
+
+- The placeholder screen after choosing a profile is replaced by the map (route `map`).
+- The interface reads the current route through an injected `Navigation`, so tests can run several devices at once.
+
 ## [0.2.1] — 2026-10-18
 
 ### Added

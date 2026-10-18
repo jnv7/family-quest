@@ -3,6 +3,15 @@ import type { Catalog, Theme, ThemeFile } from './types';
 const themeFiles = import.meta.glob<ThemeFile>('../themes/*/theme.json', { eager: true, import: 'default' });
 const catalogFiles = import.meta.glob<Catalog>('../themes/*/catalog.json', { eager: true, import: 'default' });
 
+const assetUrls = import.meta.glob<string>('../themes/*/assets/**/*', { eager: true, query: '?url', import: 'default' });
+
+/** The URL of an image of the theme, given its path in `theme.json` (such as `assets/map.webp`). */
+export function assetUrl(themeId: string, path: string): string {
+  const url = assetUrls[`../themes/${themeId}/${path}`];
+  if (!url) throw new Error(`Theme "${themeId}" has no asset "${path}"`);
+  return url;
+}
+
 const folderOf = (path: string): string => path.split('/').at(-2) ?? '';
 
 /**

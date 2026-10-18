@@ -33,13 +33,13 @@ export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
     form,
     h('div', { class: 'stack' },
       h('button', { onClick: () => ctx.go({ name: 'share' }) }, ctx.text('manage.invite')),
-      h('button', { onClick: () => ctx.go({ name: 'home' }) }, ctx.text('app.back')),
+      h('button', { onClick: () => ctx.go({ name: 'map' }) }, ctx.text('app.back')),
     ),
   );
 
   return observeSelf(ctx, worldId, ({ profiles, isAdmin }) => {
     if (!isAdmin) {
-      ctx.go({ name: 'home' }, { replace: true });
+      ctx.go({ name: 'map' }, { replace: true });
       return;
     }
     list.replaceChildren(

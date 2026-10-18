@@ -1,4 +1,4 @@
-import type { Uid, WorldId } from '../core/model';
+import type { Clock, Uid, WorldId } from '../core/model';
 import { DataStoreError, type DataStore } from '../data/DataStore';
 import type { MessageParams, Theme } from '../theme';
 import type { Route } from './routes';
@@ -10,6 +10,7 @@ export type Dispose = () => void;
 export interface AppContext {
   store: DataStore;
   theme: Theme;
+  clock: Clock;
   /** The signed-in device. */
   uid: Uid;
   /** The app's own URL without the hash, used to build join links. */

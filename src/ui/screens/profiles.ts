@@ -16,7 +16,7 @@ export const renderProfiles: WorldScreen = (ctx, root, { worldId }) => {
             class: 'profile',
             onClick: () => {
               ctx.settle(ctx.store.worlds.chooseProfile(worldId, profile.id).settled);
-              ctx.go({ name: 'home' });
+              ctx.go({ name: 'map' });
             },
           },
             h('span', { class: 'avatar', 'aria-hidden': 'true' }, [...profile.displayName][0]?.toUpperCase() ?? ''),

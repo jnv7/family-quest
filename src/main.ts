@@ -4,6 +4,7 @@ import { createRandomInt } from './core/random';
 import type { DataStore } from './data/DataStore';
 import { formatMessage, loadTheme } from './theme';
 import { startApp } from './ui/app';
+import { browserNavigation } from './ui/navigation';
 import { createWorldMemory } from './ui/worldMemory';
 
 /** Only one theme exists for now; later releases read the theme from the world. */
@@ -44,4 +45,6 @@ void startApp({
   theme,
   baseUrl: `${location.origin}${location.pathname}`,
   world: createWorldMemory(localStorageOrNull()),
+  clock: Date.now,
+  navigation: browserNavigation(),
 });

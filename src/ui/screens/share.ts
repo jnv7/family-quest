@@ -24,7 +24,7 @@ export const renderShare: WorldScreen = (ctx, root, { worldId }) => {
     h('p', { class: 'code' }, ctx.text('share.code', { code: worldId })),
     h('div', { class: 'stack' },
       h('button', { onClick: () => void copy() }, ctx.text('share.copy')),
-      h('button', { class: 'primary', onClick: () => ctx.go({ name: 'home' }) }, ctx.text('share.continue')),
+      h('button', { class: 'primary', onClick: () => ctx.go({ name: 'map' }) }, ctx.text('share.continue')),
     ),
     status,
   );

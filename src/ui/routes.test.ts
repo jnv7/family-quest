@@ -10,7 +10,10 @@ describe('parseHash', () => {
     ['#/nonsense', { name: 'start' }],
     ['#/create', { name: 'create' }],
     ['#/profiles', { name: 'profiles' }],
-    ['#/home', { name: 'home' }],
+    ['#/map', { name: 'map' }],
+    ['#/board', { name: 'board' }],
+    ['#/new-task', { name: 'newTask' }],
+    ['#/home', { name: 'start' }],
     ['#/manage', { name: 'manage' }],
     ['#/share', { name: 'share' }],
     ['#/join', { name: 'join', worldId: null }],
@@ -20,7 +23,7 @@ describe('parseHash', () => {
   });
 
   it('round-trips with hashFor', () => {
-    const routes: Route[] = [{ name: 'start' }, { name: 'home' }, { name: 'join', worldId: ID }, { name: 'join', worldId: null }];
+    const routes: Route[] = [{ name: 'start' }, { name: 'map' }, { name: 'newTask' }, { name: 'join', worldId: ID }, { name: 'join', worldId: null }];
     for (const route of routes) expect(parseHash(hashFor(route))).toEqual(route);
   });
 });
