@@ -82,12 +82,15 @@ Auto-ids never contain `_`, so recurring ids stay unambiguous.
   });
   ```
 
-- **Converters.** One `FirestoreDataConverter` per collection does the following:
-  - maps `Timestamp` ↔ `Millis` and adds `id` from the document id;
-  - rejects documents whose `schemaVersion` it does not know. The document is skipped, and `console.error` is called with its path. It is never silently coerced.
+- **Converters** (`converters.ts`). One `encode*` and one `decode*` function per collection do the following:
+  - map `Timestamp` ↔ `Millis`, and add `id` from the document id (or drop it when writing);
+  - reject documents whose `schemaVersion` they do not know. The document is skipped, and `console.error` is called with its path. It is never silently coerced.
 - **Paths.** Collection paths are built in one module (`paths.ts`). No other file writes a path string.
 - **Errors.** Firebase errors are mapped to `DataStoreError` codes in one function. `permission-denied` maps to `permission-denied`; `failed-precondition` and `unavailable` map to `unavailable`.
-- **Active profile.** The adapter reads the device's membership (`members/{uid}`) to know the active profile, which it needs for `createdBy` and to know whose tasks to complete. It keeps the membership observed while a world is open.
+- **Active profile.** The adapter reads the device's membership (`members/{uid}`) to know the active profile, which it needs for `createdBy`. It reads from the local cache first and falls back to the server (`readDoc`). The cache is authoritative for the membership because only this device writes it, and a stale read is harmless: the rules decide. Observing the membership instead was rejected because a listener started right after creating a world or joining can reach the server before the write and fail with `permission-denied`.
+- **Reads before writes.** Operations that must read first (`createAdhocTask`, `completeTask`) do so from the cache, so they never wait for the network. They validate in the domain (`invalid-argument`) before writing anything.
+- **Indexes.** The two task queries (open tasks by profile, all tasks by profile) need the composite indexes in `firebase/firestore.indexes.json`. The emulator does not require them, so a new query means a new index in the same change.
+- **Joining.** The rules refuse a membership only when the world does not exist (or the device is already a member, which is checked first), so a refused join is reported as `not-found`.
 
 ### Memory (`src/data/memory/`)
 
@@ -105,7 +108,7 @@ Auto-ids never contain `_`, so recurring ids stay unambiguous.
 
 ### Contract tests
 
-`src/data/datastore.contract.ts` exports a test suite that takes a factory of `DataStore`s. It runs against the memory adapter with `npm test`, and against the Firestore adapter with the emulator in CI (the auth emulator is needed too). Every behaviour of the interface is tested there once, for both adapters.
+`src/data/datastore.contract.ts` exports a test suite that takes a factory of `DataStore`s. It runs against the memory adapter with `npm test`, and against the Firestore adapter with the emulators in CI (`npm run test:emulator`; each device is its own Firebase app, so it has its own anonymous user). Every behaviour of the interface is tested there once, for both adapters.
 
 ## 6. Themes and interface text
 

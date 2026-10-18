@@ -30,7 +30,7 @@ npm run typecheck
 npm test
 ```
 
-The Firestore rules tests (`npm run test:rules`) need Java for the emulator, so they run in CI. See [CONTRIBUTING.md](CONTRIBUTING.md).
+The Firestore rules tests (`npm run test:rules`) and the Firestore adapter tests (`npm run test:emulator`) need Java for the emulators, so they run in CI. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence
 

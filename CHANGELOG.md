@@ -10,6 +10,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Admin rights come from the device's active adult profile instead of a role stored on the device (ADR 0003). Creating a world also creates the creator's adult profile. Adult profiles cannot be archived, and a profile's kind never changes.
 
+## [0.1.5] — 2026-10-18
+
+### Added
+
+- Firestore `DataStore` adapter: persistent multi-tab cache, converters that skip documents with an unknown `schemaVersion`, error mapping, and a placeholder `firebaseConfig` (`src/data/firestore/`).
+- `npm run test:emulator`, which runs the shared contract suite against the Firestore and Auth emulators in CI.
+- `npm run lint:imports`, which fails if a file outside `src/data/firestore/` imports `firebase/*`.
+- Composite indexes for the task queries.
+
 ## [0.1.4] — 2026-10-18
 
 ### Added

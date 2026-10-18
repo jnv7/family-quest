@@ -317,10 +317,10 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
           expect(watch2.value).toHaveLength(1);
         });
 
-        const first = child.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: false });
-        const second = child2.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: true });
-        await first.settled;
-        await rejectsWith(second, 'permission-denied');
+        // The second device may or may not have seen the first completion yet;
+        // either way the server must refuse it. Sequential so the winner is known.
+        await child.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: false }).settled;
+        await rejectsWith(child2.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: true }), 'permission-denied');
 
         await eventually(() => {
           expect(watch1.value?.[0]).toMatchObject({ status: 'done', talkFlag: false });

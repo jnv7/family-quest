@@ -1,7 +1,7 @@
 {
   "name": "family-quest",
   "private": true,
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "A family task game with themed collectible rewards.",
   "license": "MIT",
   "type": "module",
@@ -11,7 +11,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:rules": "firebase emulators:exec --only firestore --project demo-family-quest \"vitest run --config vitest.rules.config.ts\""
+    "test:rules": "firebase emulators:exec --only firestore --project demo-family-quest \"vitest run --config vitest.rules.config.ts\"",
+    "lint:imports": "node scripts/lint-imports.ts",
+    "test:emulator": "firebase emulators:exec --only firestore,auth --project demo-family-quest \"vitest run --config vitest.emulator.config.ts\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "5.0.2",
