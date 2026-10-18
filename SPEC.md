@@ -169,7 +169,7 @@ The rules cannot count documents, and checking the weekday there would use UTC s
 
 **Generating recurring tasks.** When the app opens, and when the device switches profile, the client looks at each active `taskDef` that applies to the active profile and creates the task for the current period with the deterministic id from section 4. Before writing, it checks the local cache and skips tasks it already has. If the task exists on the server but not in the cache (for example after a reinstall while offline), the write reaches the server as an update and the rules reject it, because `createdAt` and `status` cannot change. That rejection is expected and silent. Opening the app twice in the same period never duplicates a task, and it never reopens a completed one.
 
-**Open recurring tasks from past periods.** **[proposal]** When its period ends, an open recurring task is no longer shown on the `board`. It is kept, with no failure record shown to anyone.
+**Open recurring tasks from past periods.** **[decided]** A recurring task stays open, and stays on the `board`, until it is completed, even after its period ends. There is no failure record. Each new period still produces its own task, so an uncompleted daily task can appear once per day missed. This is revisited when due dates are introduced (see the radar in `ROADMAP.md`).
 
 **Ad hoc tasks.** An `admin` creates them for any profile. A child creates them only for themselves, within the daily limit. An ad hoc task stays open until it is completed. It may have a `question`.
 
@@ -206,7 +206,7 @@ The main screen is a **map** with five tappable places. Each tap starts a short 
 
 1. **First launch.** Create a world, which shows the join link and QR code, or join with a link or code. Then pick a profile.
 2. **Profile picker.** Netflix-style list of the world's non-archived profiles. Reachable later to switch profile.
-3. **`board`.** Today's open tasks for the active profile and, highlighted, planned `big` tasks for tomorrow and today (the visual alert, 0.3). Entry point for creating a task: adults for any profile, children for themselves.
+3. **`board`.** All open tasks of the active profile, including those from past periods, and, highlighted, planned `big` tasks for tomorrow and today (the visual alert, 0.3). Entry point for creating a task: adults for any profile, children for themselves.
 4. **`checkin`.** Pick an open task, tap done. Shows the question when there is one. "I think I did better" button.
 5. **`home`.** Avatar and `party` of the active profile, plus its pending collectibles. Edit the `party` (remove, add). Name a collectible. Edit the avatar (0.8).
 6. **`vault`.** The active profile's unopened `rewards`. Only that profile's own rewards.
@@ -286,7 +286,6 @@ See `ROADMAP.md`. Each release is a minor version developed on its own `release/
 | `tierOdds` for the `low` and `high` levels | Proposal in section 4; awaiting the product owner |
 | Weekly guaranteed minimum | Off by default |
 | What happens when the answer to the question is "no" | Proposal in section 6 |
-| Open recurring tasks from past periods hidden from the `board` | Proposal in section 6 |
 | Device role vs. profile kind as the source of admin rights | Proposal in section 4 |
 | Firestore read quota with real-time listeners | Measure in 0.2 against the free limits |
 

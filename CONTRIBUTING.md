@@ -24,7 +24,7 @@ Project-specific engineering conduct. The generic rules are in `GOVERNANCE.md`, 
 ## Testing policy
 
 - **Domain logic** in `src/core/` has unit tests (Vitest).
-- **Firestore rules** have emulator tests (`@firebase/rules-unit-testing`) for every rule in `SPEC.md` §5, including the negative cases in §11. Running them locally requires a Java runtime (JDK 21 or later).
+- **Firestore rules** have emulator tests (`@firebase/rules-unit-testing`) for every rule in `SPEC.md` §5, including the negative cases in §11. The Firestore emulator needs a Java runtime, so CI is the authoritative run of these tests; running them locally is optional and needs JDK 21 or later. Domain tests need only Node.
 - **Before every commit:** `npm test`, `npm run lint:theme-leak` and `npm run validate-theme` pass. CI runs the same checks.
 - **Bugs:** a fix comes with a test that fails without it.
 
