@@ -135,7 +135,7 @@ Themes are bundled at build time (`import.meta.glob('../themes/*/theme.json', { 
 | `{@reward.a}` | Indefinite article + noun | um baú |
 | `{@reward.of}` / `{@reward.ofPlural}` | "de" + article + noun | do baú / dos baús |
 | `{@reward.in}` / `{@reward.inPlural}` | "em" + article + noun | no baú / nos baús |
-| `{^...}` | Same as above, first letter upper-cased | `{^@reward.the}` → O baú |
+| `{^...}` | Same as above, first letter upper-cased (also works on `{name}`) | `{^@reward.the}` → O baú |
 
 Articles come from the noun's `gender`:
 

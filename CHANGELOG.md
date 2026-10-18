@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Admin rights come from the device's active adult profile instead of a role stored on the device (ADR 0003). Creating a world also creates the creator's adult profile. Adult profiles cannot be archived, and a profile's kind never changes.
 
+## [0.1.6] — 2026-10-18
+
+### Added
+
+- Theme module: `loadTheme` and `formatMessage`, which fills neutral messages with the theme's names and derives Portuguese articles and contractions from each noun's gender (`src/theme/`).
+- Minimal theme (emoji art, three slots per tier) and the start page messages in `src/i18n/pt-PT.json`. An empty folder is reserved for the pirate theme.
+- `npm run validate-theme`, with the five checks of `docs/architecture.md` §6 and a broken fixture for each; it runs in CI.
+
 ## [0.1.5] — 2026-10-18
 
 ### Added

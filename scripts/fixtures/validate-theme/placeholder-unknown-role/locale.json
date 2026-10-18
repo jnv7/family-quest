@@ -1,0 +1,9 @@
+{
+  "$schema": "../../schemas/locale.schema.json",
+  "locale": "pt-PT",
+  "messages": {
+    "app.name": "Missões {@dragon.of}",
+    "app.underConstruction": "Em construção. Em breve poderás ver {@board.the} e abrir {@vault.the}.",
+    "app.version": "Versão {version}"
+  }
+}

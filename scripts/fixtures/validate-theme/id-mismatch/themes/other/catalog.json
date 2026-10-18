@@ -1,0 +1,77 @@
+{
+  "$schema": "../../../schemas/catalog.schema.json",
+  "slots": [
+    {
+      "slot": "cat",
+      "tier": "low",
+      "name": "Gato",
+      "art": {
+        "emoji": "🐱"
+      }
+    },
+    {
+      "slot": "dog",
+      "tier": "low",
+      "name": "Cão",
+      "art": {
+        "emoji": "🐶"
+      }
+    },
+    {
+      "slot": "rabbit",
+      "tier": "low",
+      "name": "Coelho",
+      "art": {
+        "emoji": "🐰"
+      }
+    },
+    {
+      "slot": "fox",
+      "tier": "mid",
+      "name": "Raposa",
+      "art": {
+        "emoji": "🦊"
+      }
+    },
+    {
+      "slot": "panda",
+      "tier": "mid",
+      "name": "Panda",
+      "art": {
+        "emoji": "🐼"
+      }
+    },
+    {
+      "slot": "lion",
+      "tier": "mid",
+      "name": "Leão",
+      "art": {
+        "emoji": "🦁"
+      }
+    },
+    {
+      "slot": "unicorn",
+      "tier": "high",
+      "name": "Unicórnio",
+      "art": {
+        "emoji": "🦄"
+      }
+    },
+    {
+      "slot": "dragon",
+      "tier": "high",
+      "name": "Dragão",
+      "art": {
+        "emoji": "🐉"
+      }
+    },
+    {
+      "slot": "butterfly",
+      "tier": "high",
+      "name": "Borboleta",
+      "art": {
+        "emoji": "🦋"
+      }
+    }
+  ]
+}
