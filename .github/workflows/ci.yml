@@ -26,6 +26,9 @@ jobs:
       - name: Layer check
         run: npm run lint:imports
 
+      - name: Theme leak lint
+        run: npm run lint:theme-leak
+
       - name: Theme validation
         run: npm run validate-theme
 

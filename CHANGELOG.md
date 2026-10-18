@@ -10,6 +10,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Admin rights come from the device's active adult profile instead of a role stored on the device (ADR 0003). Creating a world also creates the creator's adult profile. Adult profiles cannot be archived, and a profile's kind never changes.
 
+## [0.1.7] — 2026-10-18
+
+### Added
+
+- `npm run lint:theme-leak`: fails when theme vocabulary appears outside `src/themes/`, matching whole words in any case and with Portuguese accents. The forbidden terms live in `scripts/theme-leak-terms.json`. It runs in CI.
+
 ## [0.1.6] — 2026-10-18
 
 ### Added
