@@ -4,5 +4,6 @@ Each major decision (`GOVERNANCE.md` §1) is recorded here as `NNNN-short-title.
 
 | # | Title | Status |
 | --- | --- | --- |
-| [0001](0001-founding-decisions.md) | Founding decisions | Accepted |
+| [0001](0001-founding-decisions.md) | Founding decisions | Accepted (decision 6, roles: superseded by 0003) |
 | [0002](0002-data-access-contract.md) | Data access contract and write semantics | Accepted |
+| [0003](0003-admin-rights-from-profile.md) | Admin rights come from the active profile | Accepted |

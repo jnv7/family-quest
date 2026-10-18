@@ -7,6 +7,7 @@ rules_version = '2';
 // - Nothing is ever deleted.
 // - Every document carries schemaVersion == 1 and createdAt, which never change.
 // - "Owner" means the device whose member.profileId equals the document's profileId.
+// - "Admin" means a device whose active profile is a non-archived adult profile.
 // - Batches (writeBatch) are checked with get() for the state before the batch
 //   and getAfter() for the state after it. No transactions are used.
 //
@@ -51,11 +52,22 @@ service cloud.firestore {
       function me() {
         return get(memberPath(request.auth.uid)).data;
       }
-      function isAdmin() {
-        return isMember() && me().role == 'admin';
-      }
       function activeProfileId() {
         return me().profileId;
+      }
+      // Admin rights come from the active profile: any non-archived adult profile.
+      function isAdmin() {
+        return isMember()
+          && activeProfileId() != null
+          && get(profilePath(activeProfileId())).data.kind == 'adult'
+          && get(profilePath(activeProfileId())).data.archived == false;
+      }
+      // True only inside the batch that creates this world, for its creator.
+      function isCreatingWorld() {
+        return signedIn()
+          && !exists(worldPath())
+          && existsAfter(worldPath())
+          && getAfter(worldPath()).data.createdBy == request.auth.uid;
       }
       function isOwnerOf(profileId) {
         return isMember() && activeProfileId() != null && activeProfileId() == profileId;
@@ -126,31 +138,24 @@ service cloud.firestore {
       match /members/{uid} {
         allow read: if isMember();
 
-        // A device creates only its own membership, with no profile yet.
-        // Admin only for the world's creator (also within the creating batch).
+        // A device creates only its own membership, with no profile yet. The
+        // world's creator, in the creating batch, starts on its own adult profile.
         allow create: if signedIn()
           && uid == request.auth.uid
           && existsAfter(worldPath())
-          && newDoc().keys().hasOnly(['role', 'profileId', 'schemaVersion', 'createdAt'])
-          && newDoc().keys().hasAll(['role', 'profileId', 'schemaVersion', 'createdAt'])
-          && newDoc().profileId == null
+          && newDoc().keys().hasOnly(['profileId', 'schemaVersion', 'createdAt'])
+          && newDoc().keys().hasAll(['profileId', 'schemaVersion', 'createdAt'])
           && validMetaOnCreate()
-          && (newDoc().role == 'child'
-            || (newDoc().role == 'admin' && getAfter(worldPath()).data.createdBy == request.auth.uid));
+          && (newDoc().profileId == null
+            || (isCreatingWorld()
+              && newDoc().profileId is string
+              && getAfter(profilePath(newDoc().profileId)).data.kind == 'adult'));
 
-        // The device switches its own profile; an admin changes another device's role.
-        // The creator of the world always stays admin.
-        allow update: if (
-            uid == request.auth.uid
-            && isMember()
-            && changed().hasOnly(['profileId'])
-            && isActiveProfile(newDoc().profileId)
-          ) || (
-            isAdmin()
-            && changed().hasOnly(['role'])
-            && newDoc().role in ['admin', 'child']
-            && uid != get(worldPath()).data.createdBy
-          );
+        // The device switches its own profile (Netflix-style).
+        allow update: if uid == request.auth.uid
+          && isMember()
+          && changed().hasOnly(['profileId'])
+          && isActiveProfile(newDoc().profileId);
 
         allow delete: if false;
       }
@@ -164,20 +169,26 @@ service cloud.firestore {
             && data.kind in ['adult', 'child']
             && data.avatar is map
             && data.partyIds is list
-            && data.partyIds.size() <= get(worldPath()).data.ruleset.partySize
+            && data.partyIds.size() <= getAfter(worldPath()).data.ruleset.partySize
             && data.archived is bool;
         }
 
         allow read: if isMember();
-        allow create: if isAdmin()
+        // An admin creates profiles; the world's creator creates its own adult
+        // profile in the batch that creates the world.
+        allow create: if (isAdmin() || (isCreatingWorld() && newDoc().kind == 'adult'))
           && newDoc().keys().hasOnly(['displayName', 'kind', 'avatar', 'partyIds', 'archived', 'schemaVersion', 'createdAt'])
           && newDoc().keys().hasAll(['displayName', 'kind', 'avatar', 'partyIds', 'archived', 'schemaVersion', 'createdAt'])
           && validProfile(newDoc())
           && newDoc().partyIds.size() == 0
           && newDoc().archived == false
           && validMetaOnCreate();
+        // `kind` never changes and adult profiles are never archived, so every
+        // world always keeps at least one adult profile, and therefore an admin.
         allow update: if validProfile(newDoc()) && (
-            (isAdmin() && changed().hasOnly(['displayName', 'kind', 'avatar', 'archived']))
+            (isAdmin()
+              && changed().hasOnly(['displayName', 'avatar', 'archived'])
+              && (newDoc().archived == false || resource.data.kind == 'child'))
             || (isOwnerOf(profileId) && changed().hasOnly(['avatar', 'partyIds']))
           );
         allow delete: if false;

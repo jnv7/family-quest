@@ -5,6 +5,8 @@
  * Operations are named by intent and use domain types only; no Firebase type
  * appears in this file or in any caller.
  *
+ * "Admin only" means: the device's active profile is an adult profile.
+ *
  * Scope: operations needed up to release 0.2. Recurring task definitions
  * (0.3) and rewards, collectibles and the party (0.6) are added by those
  * releases, as separate sub-interfaces.
@@ -15,7 +17,6 @@ import type {
   Profile,
   ProfileId,
   ProfileKind,
-  Role,
   Task,
   TaskId,
   TaskLevel,
@@ -86,6 +87,8 @@ export class DataStoreError extends Error {
 export interface CreateWorldInput {
   name: string;
   themeId: string;
+  /** Name of the creator's own adult profile, created in the same batch. */
+  creatorDisplayName: string;
 }
 
 export interface CreateProfileInput {
@@ -121,12 +124,13 @@ export interface SessionStore {
 
 export interface WorldStore {
   /**
-   * Creates the world and this device's admin membership in one batch.
+   * Creates, in one batch, the world, the creator's adult profile and this
+   * device's membership on that profile, which makes the device admin.
    * The world id is random, at least `LIMITS.worldIdMinLength` characters.
    */
-  createWorld(input: CreateWorldInput): Write<{ worldId: WorldId }>;
+  createWorld(input: CreateWorldInput): Write<{ worldId: WorldId; profileId: ProfileId }>;
 
-  /** Joins as a `child` device with no profile. A no-op if already a member. */
+  /** Joins with no active profile. A no-op if already a member. */
   joinWorld(worldId: WorldId): Promise<Member>;
 
   /** This device's membership, or null if it is not a member. */
@@ -140,14 +144,14 @@ export interface WorldStore {
 
   /** Admin only. */
   createProfile(worldId: WorldId, input: CreateProfileInput): Write<{ profileId: ProfileId }>;
-  /** Admin only. Profiles are never deleted. */
+  /** Admin only, and only child profiles. Profiles are never deleted. */
   setProfileArchived(worldId: WorldId, profileId: ProfileId, archived: boolean): Write;
 
-  /** Sets this device's active profile (Netflix-style picker). */
+  /**
+   * Sets this device's active profile (Netflix-style picker). Choosing an
+   * adult profile gives the device admin rights.
+   */
   chooseProfile(worldId: WorldId, profileId: ProfileId): Write;
-
-  /** Admin only. The world's creator always stays admin. */
-  setMemberRole(worldId: WorldId, uid: Uid, role: Role): Write;
 }
 
 export interface TaskStore {

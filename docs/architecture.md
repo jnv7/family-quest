@@ -94,7 +94,7 @@ Auto-ids never contain `_`, so recurring ids stay unambiguous.
 - **Purpose:** tests, and UI development without Firebase.
 - **Structure:** `createMemoryBackend()` is the shared "server". `createMemoryStore(backend, { uid, clock })` is one device, so two-device scenarios run in a single test.
 - **Invariants:** at the level of `DataStore` operations, it enforces the same checks as `firestore.rules`:
-  - role and ownership (an admin-only operation by a child device rejects with `permission-denied`);
+  - admin rights and ownership (an admin-only operation from a device whose active profile is not an adult profile rejects with `permission-denied`);
   - create never replaces;
   - a `done` task never changes;
   - a reward only comes with its task's completion;

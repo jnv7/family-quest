@@ -1,6 +1,6 @@
 # 0001 — Founding decisions
 
-- **Status:** Accepted
+- **Status:** Accepted. Decision 6, "Roles", is superseded by [ADR 0003](0003-admin-rights-from-profile.md).
 - **Date:** 2026-10-18
 - **Decided by:** product owner
 

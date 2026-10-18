@@ -41,9 +41,9 @@ const ruleset = {
   guarantee: null,
 };
 
-// Devices
+// Devices. A device is admin while its active profile is an adult profile.
 const ADMIN = 'uid-admin'; // world creator, profile pAdult
-const ADMIN2 = 'uid-admin2'; // promoted admin, profile pAdult2
+const ADMIN2 = 'uid-admin2'; // profile pAdult2
 const CHILD = 'uid-child'; // profile pChild
 const CHILD2 = 'uid-child2'; // profile pChild2
 const FRESH = 'uid-fresh'; // member without a profile yet
@@ -108,11 +108,11 @@ beforeEach(async () => {
     const db = ctx.firestore() as unknown as Firestore;
     const seed: Array<[string, Record<string, unknown>]> = [
       [p(), { name: 'Test world', themeId: 'minimal', createdBy: ADMIN, ruleset, ...meta }],
-      [p('members', ADMIN), { role: 'admin', profileId: 'pAdult', ...meta }],
-      [p('members', ADMIN2), { role: 'admin', profileId: 'pAdult2', ...meta }],
-      [p('members', CHILD), { role: 'child', profileId: 'pChild', ...meta }],
-      [p('members', CHILD2), { role: 'child', profileId: 'pChild2', ...meta }],
-      [p('members', FRESH), { role: 'child', profileId: null, ...meta }],
+      [p('members', ADMIN), { profileId: 'pAdult', ...meta }],
+      [p('members', ADMIN2), { profileId: 'pAdult2', ...meta }],
+      [p('members', CHILD), { profileId: 'pChild', ...meta }],
+      [p('members', CHILD2), { profileId: 'pChild2', ...meta }],
+      [p('members', FRESH), { profileId: null, ...meta }],
       [p('profiles', 'pAdult'), profile('Adult', 'adult')],
       [p('profiles', 'pAdult2'), profile('Adult two', 'adult')],
       [p('profiles', 'pChild'), profile('Child', 'child')],
@@ -173,12 +173,28 @@ describe('worlds', () => {
   const NEW_W = 'world0000000000000000000002';
   const newWorld = (createdBy: string) => ({ name: 'New world', themeId: 'minimal', createdBy, ruleset, ...meta });
 
-  it('a device creates a world and its own admin membership in one batch', async () => {
-    const db = as(STRANGER);
+  function createWorldBatch(db: Firestore, kind: 'adult' | 'child' = 'adult') {
     const batch = writeBatch(db);
     batch.set(doc(db, 'worlds', NEW_W), newWorld(STRANGER));
-    batch.set(doc(db, 'worlds', NEW_W, 'members', STRANGER), { role: 'admin', profileId: null, ...meta });
-    await assertSucceeds(batch.commit());
+    batch.set(doc(db, 'worlds', NEW_W, 'profiles', 'pCreator'), profile('Creator', kind));
+    batch.set(doc(db, 'worlds', NEW_W, 'members', STRANGER), { profileId: 'pCreator', ...meta });
+    return batch.commit();
+  }
+
+  it("a device creates a world, its creator's adult profile and its membership in one batch", async () => {
+    await assertSucceeds(createWorldBatch(as(STRANGER)));
+    // The creator is admin from then on.
+    await assertSucceeds(setDoc(doc(as(STRANGER), 'worlds', NEW_W, 'profiles', 'pKid'), profile('Kid', 'child')));
+  });
+
+  it("the creator's first profile must be an adult profile", async () => {
+    await assertFails(createWorldBatch(as(STRANGER), 'child'));
+  });
+
+  it('the creation shortcut does not work on an existing world', async () => {
+    const db = as(STRANGER);
+    await assertFails(setDoc(doc(db, p('profiles', 'pSneaky')), profile('Sneaky', 'adult')));
+    await assertFails(setDoc(doc(db, p('members', STRANGER)), { profileId: 'pAdult', ...meta }));
   });
 
   it('rejects a world created on behalf of someone else', async () => {
@@ -202,19 +218,19 @@ describe('worlds', () => {
 
 describe('members', () => {
   it('a device joins as child with no profile', async () => {
-    await assertSucceeds(setDoc(doc(as(STRANGER), p('members', STRANGER)), { role: 'child', profileId: null, ...meta }));
+    await assertSucceeds(setDoc(doc(as(STRANGER), p('members', STRANGER)), { profileId: null, ...meta }));
   });
 
-  it('a joining device cannot make itself admin, pick a profile at creation, or join for someone else', async () => {
+  it('a joining device cannot pick a profile at creation, add fields, or join for someone else', async () => {
     const db = as(STRANGER);
-    await assertFails(setDoc(doc(db, p('members', STRANGER)), { role: 'admin', profileId: null, ...meta }));
-    await assertFails(setDoc(doc(db, p('members', STRANGER)), { role: 'child', profileId: 'pChild', ...meta }));
-    await assertFails(setDoc(doc(db, p('members', 'uid-other')), { role: 'child', profileId: null, ...meta }));
+    await assertFails(setDoc(doc(db, p('members', STRANGER)), { profileId: 'pChild', ...meta }));
+    await assertFails(setDoc(doc(db, p('members', STRANGER)), { profileId: null, role: 'admin', ...meta }));
+    await assertFails(setDoc(doc(db, p('members', 'uid-other')), { profileId: null, ...meta }));
   });
 
   it('cannot join a world that does not exist', async () => {
     const db = as(STRANGER);
-    await assertFails(setDoc(doc(db, 'worlds', 'world0000000000000000000099', 'members', STRANGER), { role: 'child', profileId: null, ...meta }));
+    await assertFails(setDoc(doc(db, 'worlds', 'world0000000000000000000099', 'members', STRANGER), { profileId: null, ...meta }));
   });
 
   it('a device chooses and switches its own profile (Netflix-style)', async () => {
@@ -222,21 +238,25 @@ describe('members', () => {
     await assertSucceeds(updateDoc(doc(as(CHILD), p('members', CHILD)), { profileId: 'pAdult' }));
   });
 
-  it('a device cannot choose an archived or missing profile, nor change its own role', async () => {
+  it('a device cannot choose an archived or missing profile', async () => {
     const db = as(FRESH);
     await assertFails(updateDoc(doc(db, p('members', FRESH)), { profileId: 'pArchived' }));
     await assertFails(updateDoc(doc(db, p('members', FRESH)), { profileId: 'missing' }));
-    await assertFails(updateDoc(doc(db, p('members', FRESH)), { role: 'admin' }));
+  });
+
+  it('admin rights follow the active profile', async () => {
+    const db = as(CHILD);
+    await assertFails(setDoc(doc(db, p('taskDefs', 'defX')), taskDef()));
+    await assertSucceeds(updateDoc(doc(db, p('members', CHILD)), { profileId: 'pAdult2' }));
+    await assertSucceeds(setDoc(doc(db, p('taskDefs', 'defX')), taskDef()));
+  });
+
+  it('a device without a profile is not admin', async () => {
+    await assertFails(setDoc(doc(as(FRESH), p('taskDefs', 'defX')), taskDef()));
   });
 
   it("a device cannot change another device's profile", async () => {
     await assertFails(updateDoc(doc(as(CHILD), p('members', CHILD2)), { profileId: 'pChild' }));
-  });
-
-  it('an admin promotes a device, but nobody demotes the world creator', async () => {
-    await assertSucceeds(updateDoc(doc(as(ADMIN), p('members', CHILD)), { role: 'admin' }));
-    await assertFails(updateDoc(doc(as(ADMIN2), p('members', ADMIN)), { role: 'child' }));
-    await assertFails(updateDoc(doc(as(CHILD2), p('members', CHILD2)), { role: 'admin' }));
   });
 
   it('nobody deletes a member', async () => {
@@ -250,9 +270,15 @@ describe('profiles', () => {
     await assertFails(setDoc(doc(as(CHILD), p('profiles', 'pNew2')), profile('New', 'child')));
   });
 
-  it('an admin archives a profile; nobody deletes one', async () => {
+  it("an admin archives a child's profile; nobody deletes one", async () => {
     await assertSucceeds(updateDoc(doc(as(ADMIN), p('profiles', 'pChild2')), { archived: true }));
     await assertFails(deleteDoc(doc(as(ADMIN), p('profiles', 'pChild2'))));
+  });
+
+  it('a world never loses its last admin: kind never changes and adult profiles are never archived', async () => {
+    await assertFails(updateDoc(doc(as(ADMIN), p('profiles', 'pAdult2')), { archived: true }));
+    await assertFails(updateDoc(doc(as(ADMIN), p('profiles', 'pAdult2')), { kind: 'child' }));
+    await assertFails(updateDoc(doc(as(ADMIN), p('profiles', 'pChild')), { kind: 'adult' }));
   });
 
   it('the owner changes only avatar and party of its own profile', async () => {

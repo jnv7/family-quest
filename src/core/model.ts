@@ -53,9 +53,6 @@ export type TaskLevel = Tier;
 export const CADENCES = ['daily', 'weekly', 'monthly'] as const;
 export type Cadence = (typeof CADENCES)[number];
 
-export const ROLES = ['admin', 'child'] as const;
-export type Role = (typeof ROLES)[number];
-
 export const PROFILE_KINDS = ['adult', 'child'] as const;
 export type ProfileKind = (typeof PROFILE_KINDS)[number];
 
@@ -128,10 +125,12 @@ export interface World extends DocMeta {
   ruleset: Ruleset;
 }
 
-/** `worlds/{worldId}/members/{uid}`: one device. */
+/**
+ * `worlds/{worldId}/members/{uid}`: one device.
+ * A device has admin rights while its active profile is an adult profile.
+ */
 export interface Member extends DocMeta {
   uid: Uid;
-  role: Role;
   /** The device's active profile; null right after joining. */
   profileId: ProfileId | null;
 }
@@ -150,11 +149,12 @@ export const DEFAULT_AVATAR: Avatar = { body: 0, hair: 0, outfit: 0, accessory: 
 export interface Profile extends DocMeta {
   id: ProfileId;
   displayName: string;
+  /** Immutable. Adult profiles carry admin rights and are never archived. */
   kind: ProfileKind;
   avatar: Avatar;
   /** Source of truth for the party; at most `ruleset.partySize`. */
   partyIds: TaskId[];
-  /** Profiles are never deleted, only archived. */
+  /** Profiles are never deleted; only child profiles can be archived. */
   archived: boolean;
 }
 
