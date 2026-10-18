@@ -5,7 +5,7 @@ export type FillRandom = (array: Uint32Array<ArrayBuffer>) => void;
 
 const UINT32_RANGE = 2 ** 32;
 const WORLD_ID_LENGTH = 28;
-const WORLD_ID_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+const ID_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 
 /** Builds an unbiased `RandomInt` by rejection sampling over 32-bit values. */
 export function createRandomInt(fill: FillRandom): RandomInt {
@@ -24,9 +24,14 @@ export function createRandomInt(fill: FillRandom): RandomInt {
   };
 }
 
+/** A random id of `length` characters from `[A-Za-z0-9]`. */
+export function randomId(randomInt: RandomInt, length: number): string {
+  let id = '';
+  for (let i = 0; i < length; i++) id += ID_ALPHABET[randomInt(ID_ALPHABET.length)];
+  return id;
+}
+
 /** A world id doubles as the access code (SPEC.md §4), so it is long and random. */
 export function randomWorldId(randomInt: RandomInt): WorldId {
-  let id = '';
-  for (let i = 0; i < WORLD_ID_LENGTH; i++) id += WORLD_ID_ALPHABET[randomInt(WORLD_ID_ALPHABET.length)];
-  return id;
+  return randomId(randomInt, WORLD_ID_LENGTH);
 }

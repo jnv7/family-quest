@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Admin rights come from the device's active adult profile instead of a role stored on the device (ADR 0003). Creating a world also creates the creator's adult profile. Adult profiles cannot be archived, and a profile's kind never changes.
 
+## [0.1.4] — 2026-10-18
+
+### Added
+
+- In-memory `DataStore` adapter, with a shared backend that enforces the same checks as the Firestore rules at the level of intents (`src/data/memory/`).
+- Contract test suite that every adapter must pass, run here against the memory adapter (`src/data/datastore.contract.ts`).
+- `randomId` for generated document ids.
+
 ## [0.1.3] — 2026-10-18
 
 ### Added
