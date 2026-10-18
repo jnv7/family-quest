@@ -1,7 +1,7 @@
 {
   "name": "family-quest",
   "private": true,
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "A family task game with themed collectible rewards.",
   "license": "MIT",
   "type": "module",
@@ -9,6 +9,9 @@
     "node": ">=24"
   },
   "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:rules": "firebase emulators:exec --only firestore --project demo-family-quest \"vitest run --config vitest.rules.config.ts\"",

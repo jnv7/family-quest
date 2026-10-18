@@ -10,6 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Admin rights come from the device's active adult profile instead of a role stored on the device (ADR 0003). Creating a world also creates the creator's adult profile. Adult profiles cannot be archived, and a profile's kind never changes.
 
+## [0.1.8] — 2026-10-18
+
+### Added
+
+- Start page with the app name, an "under construction" text and the version, all text from the locale file and the minimal theme (`index.html`, `src/main.ts`).
+- Vite build for GitHub Pages (`npm run dev`, `npm run build`, `npm run preview`) and a CI job that publishes `main` and `release/*` to Pages.
+
 ## [0.1.7] — 2026-10-18
 
 ### Added
