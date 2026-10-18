@@ -115,7 +115,7 @@ Ideas that are outside the current release. They are neither implemented on own 
 
 | Idea | Origin |
 | --- | --- |
-| Due dates on tasks, and rescheduling without penalty; with them, decide what happens to open recurring tasks from past periods (today they stay on the `board`) | Deferred by the product owner, 2026-10-18 |
+| Due dates on tasks, and rescheduling without penalty; with them, decide what happens to open recurring tasks from past periods (today they stay on the `board` and block new copies) | Deferred by the product owner, 2026-10-18 |
 | An admin can revoke a device (remove a member), for a leaked join code | Spec review, 2026-10-18 |
 | Weekly guaranteed minimum (`ruleset.guarantee`) | `SPEC.md` §13 |
 | Switching the theme of an existing world | `SPEC.md` §14 |

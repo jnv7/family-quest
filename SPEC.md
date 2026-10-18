@@ -123,7 +123,7 @@ The role belongs to the device, not to the profile, so choosing an adult profile
 
 Tasks have no due date for now; what counts is completion. **[decided]** Due dates and rescheduling are on the radar.
 
-Recurring task id: `{defId}_{periodKey}_{profileId}`, where `periodKey` is `YYYY-MM-DD` (daily), `YYYY-Www` (weekly, ISO week) or `YYYY-MM` (monthly). Each period yields a new task with a new id. Ad hoc task id: random.
+Recurring task id: `{defId}_{periodKey}_{profileId}`, where `periodKey` is `YYYY-MM-DD` (daily), `YYYY-Www` (weekly, ISO week) or `YYYY-MM` (monthly). The id identifies the period in which the task was generated; a period does not always yield a task (section 6). Ad hoc task id: random.
 
 ### `rewards/{taskId}` and `collectibles/{taskId}`
 
@@ -167,9 +167,16 @@ The rules cannot count documents, and checking the weekday there would use UTC s
 
 **Week.** Monday to Sunday, Lisbon time. `weekKey` uses the ISO week format `YYYY-Www`. The daylight saving change on 25 October 2026 and the turn of the year must be tested. 2026 has 53 ISO weeks, so 1 January 2027 belongs to `2026-W53`.
 
-**Generating recurring tasks.** When the app opens, and when the device switches profile, the client looks at each active `taskDef` that applies to the active profile and creates the task for the current period with the deterministic id from section 4. Before writing, it checks the local cache and skips tasks it already has. If the task exists on the server but not in the cache (for example after a reinstall while offline), the write reaches the server as an update and the rules reject it, because `createdAt` and `status` cannot change. That rejection is expected and silent. Opening the app twice in the same period never duplicates a task, and it never reopens a completed one.
+**Generating recurring tasks.** When the app opens, and when the device switches profile, the client looks at each active `taskDef` that applies to the active profile. It creates the task for the current period, with the deterministic id from section 4, only if both of these hold:
 
-**Open recurring tasks from past periods.** **[decided]** A recurring task stays open, and stays on the `board`, until it is completed, even after its period ends. There is no failure record. Each new period still produces its own task, so an uncompleted daily task can appear once per day missed. This is revisited when due dates are introduced (see the radar in `ROADMAP.md`).
+- there is no open task from that `taskDef` for that profile, from any period;
+- no task from that `taskDef` for that profile was completed during the current period (the period of its `doneAt`).
+
+There is therefore at most one open task per `taskDef` and profile. Completing an overdue task covers the period in which it is completed. Before writing, it checks the local cache and skips tasks it already has. If the task exists on the server but not in the cache (for example after a reinstall while offline), the write reaches the server as an update and the rules reject it, because `createdAt` and `status` cannot change. That rejection is expected and silent. Opening the app twice in the same period never duplicates a task, and it never reopens a completed one.
+
+**Open recurring tasks from past periods.** **[decided]** A recurring task stays open, and stays on the `board`, until it is completed, even after its period ends. No new copy is created while it is open, and no failure is recorded. This is revisited when due dates are introduced (see the radar in `ROADMAP.md`).
+
+Known edge case: the "no open task" check runs on the local cache, so a device whose cache misses an open task (for example, a fresh install that has not synced yet) can still create a second open task for a new period. The `board` shows only the oldest open task per `taskDef` and profile; any extra task stays stored and appears once the first is completed. **[proposal]**
 
 **Ad hoc tasks.** An `admin` creates them for any profile. A child creates them only for themselves, within the daily limit. An ad hoc task stays open until it is completed. It may have a `question`.
 
@@ -258,7 +265,7 @@ firebase/       firestore.rules, rules tests, firebase.json
 
 ## 11. Tests and verification
 
-- **Domain (Vitest):** week and `periodKey`, including 25 October 2026 and the turn of the year into `2026-W53`; task generation; the draw; `party`, pending and reserve rules; opening-day rules, including a skipped Sunday.
+- **Domain (Vitest):** week and `periodKey`, including 25 October 2026 and the turn of the year into `2026-W53`; task generation, including no new copy while a task from the same `taskDef` is open, and no new task after an overdue one is completed in the current period; the draw; `party`, pending and reserve rules; opening-day rules, including a skipped Sunday.
 - **Draw simulation:** 10,000 draws per `level`, checking the distribution against `tierOdds` within a margin fixed in the test.
 - **Firestore rules** (`@firebase/rules-unit-testing`, emulator). These run in the GitHub Action:
   - a non-member reads nothing;
