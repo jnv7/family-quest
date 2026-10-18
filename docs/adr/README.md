@@ -5,4 +5,4 @@ Each major decision (`GOVERNANCE.md` §1) is recorded here as `NNNN-short-title.
 | # | Title | Status |
 | --- | --- | --- |
 | [0001](0001-founding-decisions.md) | Founding decisions | Accepted |
-| [0002](0002-data-access-contract.md) | Data access contract and write semantics | Proposed |
+| [0002](0002-data-access-contract.md) | Data access contract and write semantics | Accepted |

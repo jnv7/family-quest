@@ -1,8 +1,9 @@
 # 0002 — Data access contract and write semantics
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-18
-- **Proposed by:** tech lead; awaiting the product owner
+- **Proposed by:** tech lead
+- **Accepted by:** product owner, 2026-10-18
 
 ## Context
 

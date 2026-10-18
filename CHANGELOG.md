@@ -14,7 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `DataStore` interface, with its write and observer semantics (`src/data/DataStore.ts`).
 - Firestore security rules, with emulator tests run in CI.
 - JSON Schemas for theme, catalogue and locale files.
-- Architecture guide, the delivery plan for 0.1, and ADR 0002 (proposed).
+- Architecture guide, the delivery plan for 0.1, and ADR 0002 (data access contract).
 - CI workflow: type check, unit tests and rules tests.
 - Project documentation:
   - specification;

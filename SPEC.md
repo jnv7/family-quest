@@ -68,7 +68,7 @@ All collections live under `worlds/{worldId}`. Every document has `schemaVersion
 - `timezone`: `Europe/Lisbon`; `weekStartsOn`: Monday.
 - `openingDay`: ISO weekday on which the current week's rewards can be opened; default 7 (Sunday). **[decided]**
 - `pendingDays`: how many days a newly obtained collectible stays in its owner's pending list before moving to the reserve; default 1. **[decided]** (value is configurable)
-- `tierOdds`: probability of each reward `tier`, per task `level`. **[proposal]** The `mid` row (65/25/10) comes from the product owner; the other two rows are guesses to be tuned. Each row holds integers that sum to 100; the client validates this whenever the ruleset is saved. **[proposal]**
+- `tierOdds`: probability of each reward `tier`, per task `level`. **[proposal]** The `mid` row (65/25/10) comes from the product owner; the other two rows are guesses to be tuned. Each row holds integers that sum to 100; the client validates this whenever the ruleset is saved. **[decided]**
 
 | Task `level` | `low` | `mid` | `high` |
 | --- | --- | --- | --- |
@@ -101,7 +101,7 @@ The role belongs to the device, not to the profile, so choosing an adult profile
 
 ### `taskDefs/{defId}` — recurring task definitions
 
-`title`, `cadence` (`daily`, `weekly`, `monthly`), `level` (`low`, `mid`, `high`), `assignedTo` (list of `profileId`; every non-archived profile if empty; archived profiles never get new tasks **[proposal]**), `question` (string or null), `big` (boolean; only these can be planned with a day and a trigger), `active`.
+`title`, `cadence` (`daily`, `weekly`, `monthly`), `level` (`low`, `mid`, `high`), `assignedTo` (list of `profileId`; every non-archived profile if empty; archived profiles never get new tasks **[decided]**), `question` (string or null), `big` (boolean; only these can be planned with a day and a trigger), `active`.
 
 ### `tasks/{taskId}`
 
@@ -178,7 +178,7 @@ There is therefore at most one open task per `taskDef` and profile. Completing a
 
 Known edge case: the "no open task" check runs on the local cache, so a device whose cache misses an open task (for example, a fresh install that has not synced yet) can still create a second open task for a new period. The `board` shows only the oldest open task per `taskDef` and profile; any extra task stays stored and appears once the first is completed. **[proposal]**
 
-**Ad hoc tasks.** An `admin` creates them for any profile. A child creates them only for themselves, within the daily limit. The limit counts the ad hoc tasks the child's profile created for itself whose `createdAt` falls on today's date in Lisbon; tasks created by an admin do not count. **[proposal]** An ad hoc task stays open until it is completed. It may have a `question`.
+**Ad hoc tasks.** An `admin` creates them for any profile. A child creates them only for themselves, within the daily limit. The limit counts the ad hoc tasks the child's profile created for itself whose `createdAt` falls on today's date in Lisbon; tasks created by an admin do not count. **[decided]** An ad hoc task stays open until it is completed. It may have a `question`.
 
 **Completing.** Each person completes only their own tasks. **[decided]** In one atomic batch, the client:
 
@@ -191,7 +191,7 @@ Known edge case: the "no open task" check runs on the local cache, so a device w
 
 **Opening rewards.** On or after `ruleset.openingDay` (Sunday by default), a person can open the current week's rewards. Rewards from closed weeks can be opened at any time, so if the family skips a Sunday, everything opens on Monday or later. Each person opens their own. Everyone can open at the same time on the same screen, but each person sees only their own result. Opening is one atomic batch that:
 
-- draws a theme catalogue `slot` with the reward's `tier`, uniformly among that tier's slots **[proposal]**;
+- draws a theme catalogue `slot` with the reward's `tier`, uniformly among that tier's slots **[decided]**;
 - creates the `collectible` with the same id;
 - sets `openedAt` on the reward.
 
@@ -297,7 +297,6 @@ See `ROADMAP.md`. Each release is a minor version developed on its own `release/
 | Weekly guaranteed minimum | Off by default |
 | What happens when the answer to the question is "no" | Proposal in section 6 |
 | Device role vs. profile kind as the source of admin rights | Proposal in section 4 |
-| Small rules: `tierOdds` rows sum to 100; archived profiles get no tasks; what the child daily limit counts; uniform slot draw | Proposals in sections 4 and 6 |
 | Firestore read quota with real-time listeners | Measure in 0.2 against the free limits |
 
 ## 14. Out of scope (v1)
