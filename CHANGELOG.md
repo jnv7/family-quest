@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- The Firestore adapter read the clock after an asynchronous cache read, so `createdAt`, `doneAt` and the completion week could be later than the moment of the tap. They are now fixed at the call. This also made the task order test flaky in CI.
+
 ### Changed
 
 - Admin rights come from the device's active adult profile instead of a role stored on the device (ADR 0003). Creating a world also creates the creator's adult profile. Adult profiles cannot be archived, and a profile's kind never changes.

@@ -93,6 +93,10 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
     return uid;
   };
 
+  /**
+   * Metadata stamped with the time of the call. Operations take it before
+   * their first `await`, so a slow cache read never moves the timestamp.
+   */
   const newDoc = (): DocMeta => ({ schemaVersion: SCHEMA_VERSION, createdAt: clock() });
 
   /** Runs a write; whatever it throws reaches `settled` as a `DataStoreError`. */
@@ -273,13 +277,14 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
 
       createAdhocTask(worldId, input) {
         const taskId = doc(tasksCollection(db, worldId)).id;
+        const meta = newDoc();
         return write({ taskId }, async () => {
           checkText('Title', input.title, LIMITS.title);
           if (input.question !== null) checkText('Question', input.question, LIMITS.question);
           const member = decodeMember(await readDoc(memberDoc(db, worldId, requireUid())));
           if (!member?.profileId) throw denied('Choose a profile first');
           const task: Task = {
-            ...newDoc(),
+            ...meta,
             id: taskId,
             profileId: input.profileId,
             title: input.title,
@@ -301,8 +306,9 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
         });
       },
 
-      completeTask: (worldId, taskId, input) =>
-        write(undefined, async () => {
+      completeTask: (worldId, taskId, input) => {
+        const doneAt = clock();
+        return write(undefined, async () => {
           const [worldSnapshot, taskSnapshot] = await Promise.all([
             readDoc(worldDoc(db, worldId)),
             readDoc(taskDoc(db, worldId, taskId)),
@@ -312,7 +318,6 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
           if (!world || !task) throw new DataStoreError('not-found', `Task ${taskId} does not exist`);
           if (task.question !== null && input.answer !== 'yes') throw invalid('A task with a question is completed by answering yes');
           if (task.question === null && input.answer !== null) throw invalid('A task without a question has no answer');
-          const doneAt = clock();
           await updateDoc(
             taskDoc(db, worldId, taskId),
             encodeTaskCompletion({
@@ -322,7 +327,8 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
               weekKey: weekKey(doneAt, world.ruleset.timezone),
             }),
           );
-        }),
+        });
+      },
 
       setTalkFlag: (worldId, taskId, talkFlag) =>
         write(undefined, () => updateDoc(taskDoc(db, worldId, taskId), { talkFlag })),

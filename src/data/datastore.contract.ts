@@ -226,6 +226,19 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
         watch.close();
       });
 
+      it('stamps the time of the call, not of the write', async () => {
+        const { admin, worldId, childProfileId } = await setup();
+        now = START + 5000;
+        const created = admin.tasks.createAdhocTask(worldId, adhoc(childProfileId));
+        now = START + 60_000; // time passes before the adapter finishes the write
+        await created.settled;
+
+        const watch = new Watch<Task[]>((v, e) => admin.tasks.observeTasks(worldId, childProfileId, v, e));
+        await eventually(() => expect(watch.value).toHaveLength(1));
+        expect(watch.value?.[0]?.createdAt).toBe(START + 5000);
+        watch.close();
+      });
+
       it('lets a child create one for itself only', async () => {
         const { child, worldId, adminProfileId, childProfileId } = await setup();
         await child.tasks.createAdhocTask(worldId, adhoc(childProfileId)).settled;
@@ -277,6 +290,23 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
           answer: null,
           weekKey: weekKey(now, DEFAULT_RULESET.timezone),
         });
+        watch.close();
+      });
+
+      it('fixes the time and week at the moment of the call', async () => {
+        const { admin, child, worldId, childProfileId } = await setup();
+        const task = admin.tasks.createAdhocTask(worldId, adhoc(childProfileId));
+        await task.settled;
+
+        now = Date.parse('2026-10-25T22:30:00Z'); // Sunday evening, week 43
+        const completion = child.tasks.completeTask(worldId, task.result.taskId, { answer: null, talkFlag: false });
+        const tapped = now;
+        now = Date.parse('2026-10-26T09:00:00Z'); // Monday, week 44, before the write finishes
+        await completion.settled;
+
+        const watch = new Watch<Task[]>((v, e) => child.tasks.observeTasks(worldId, childProfileId, v, e));
+        await eventually(() => expect(watch.value?.[0]?.status).toBe('done'));
+        expect(watch.value?.[0]).toMatchObject({ doneAt: tapped, weekKey: '2026-W43' });
         watch.close();
       });
 
