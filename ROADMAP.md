@@ -4,11 +4,11 @@ Each release is one minor version, developed on its own `release/0.x` branch (`G
 
 The behaviour each release implements is specified in `SPEC.md`.
 
-**Current release: 0.1 — Foundations** (all deliveries done, awaiting the product owner's acceptance; delivery plan in [docs/plans/0.1.md](docs/plans/0.1.md)).
+**Last closed release: 0.1 — Foundations** (2026-10-18, tag `v0.1`; [release notes](docs/release-notes/0.1.md)). **Next: 0.2 — Core**, not started.
 
 ## Release plan
 
-### 0.1 — Foundations
+### 0.1 — Foundations (closed)
 
 Scope:
 

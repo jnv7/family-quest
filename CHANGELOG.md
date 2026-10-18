@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.9] — 2026-10-18
+
 ### Fixed
 
 - The Firestore adapter read the clock after an asynchronous cache read, so `createdAt`, `doneAt` and the completion week could be later than the moment of the tap. They are now fixed at the call. This also made the task order test flaky in CI.

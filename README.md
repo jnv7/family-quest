@@ -2,7 +2,7 @@
 
 A family game that encourages planning, cooperation and task resolution.
 
-**Status: pre-release.** Nothing is usable yet; release 0.1 (Foundations) is complete and waiting for acceptance by the product owner.
+**Status: pre-release.** Nothing is usable yet; release 0.1 (Foundations) is closed and release 0.2 (Core) is next.
 
 Family Quest is a PWA where each family member completes their daily, weekly, monthly and ad hoc tasks on their phone, and earns rewards in a themed collection game. It runs on GitHub Pages with Firebase (free Spark plan) and works offline.
 
@@ -13,6 +13,7 @@ Family Quest is a PWA where each family member completes their daily, weekly, mo
 | [SPEC.md](SPEC.md) | Product and technical specification |
 | [ROADMAP.md](ROADMAP.md) | Release plan and idea radar |
 | [CHANGELOG.md](CHANGELOG.md) | What each version delivered |
+| [docs/release-notes/](docs/release-notes/) | What each closed release means for its users |
 | [docs/architecture.md](docs/architecture.md) | How the code is built: layers, data flow, adapters, themes |
 | [docs/plans/](docs/plans/) | Delivery plan of the current release |
 | [docs/adr/](docs/adr/) | Architecture decision records |
