@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.5] — 2026-10-19
+
+Completes the scope of release 0.3.
+
+### Added
+
+- The visual alert. The board place on the map glows softly when a planned task is due: strongly for today, gently for tomorrow (today wins). On the board, those tasks get a marker on their side. The effect is neutral, the same in every theme, respects reduced motion, and has no text and no notification. It goes out when the task is done or the plan is cleared.
+- Domain: `planAlert` and `taskPlanAlert`, with the day turn-over tested in Lisbon time.
+
 ## [0.3.4] — 2026-10-19
 
 ### Added

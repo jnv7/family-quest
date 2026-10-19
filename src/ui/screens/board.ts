@@ -1,3 +1,4 @@
+import { taskPlanAlert } from '../../core/alerts';
 import { dateKey, lastDayOfPeriod } from '../../core/calendar';
 import { LIMITS, type ProfileId, type Task, type TaskDef, type TaskId, type World } from '../../core/model';
 import { validatePlan } from '../../core/plan';
@@ -82,7 +83,8 @@ export const renderBoard: WorldScreen = (ctx, root, { worldId }) => {
       ...shown.map((task) => {
         const def = task.defId === null ? undefined : defs.get(task.defId);
         const canPlan = def?.big === true && timeZone !== null;
-        return h('li', { class: 'board-task' },
+        const due = world ? taskPlanAlert(task, ctx.clock(), world.ruleset.timezone) : null;
+        return h('li', { class: `board-task${due ? ` planned-${due}` : ''}` },
           h('span', {}, task.title),
           task.plan && h('small', { class: 'plan' }, `${dayLabel(task.plan.date)} · ${task.plan.trigger}`),
           canPlan && planning !== task.id &&

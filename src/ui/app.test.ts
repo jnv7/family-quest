@@ -361,6 +361,35 @@ describe('planning a big task', () => {
     expect(planOf(worldId)).toBeNull();
   });
 
+  it('lights the board on the map when a plan is due today or tomorrow, and stops once the task is done', async () => {
+    const { child } = await bigTaskFamily();
+    const alert = () => child.find('button.place', 'Quadro')?.getAttribute('data-alert') ?? null;
+
+    await child.click('button', 'Planear');
+    fill(child, 'Que dia?', '2026-10-21'); // tomorrow: the clock says 2026-10-20
+    await child.click('.suggestions button', 'Depois do jantar');
+    submitPlan(child);
+    await child.see('21 de outubro');
+    await child.notSee('Planeada'); // no scolding text, only the light
+    expect(child.find('li.planned-tomorrow')).toBeDefined();
+    await child.click('button', 'Voltar');
+    await vi.waitFor(() => expect(alert()).toBe('tomorrow'));
+
+    await child.click('button.place', 'Quadro');
+    await child.click('button', 'Mudar o plano');
+    fill(child, 'Que dia?', '2026-10-20');
+    submitPlan(child);
+    await child.see('20 de outubro');
+    expect(child.find('li.planned-today')).toBeDefined();
+    await child.click('button', 'Voltar');
+    await vi.waitFor(() => expect(alert()).toBe('today'));
+
+    await child.click('button.place', 'Registo');
+    await child.click('button', 'Feito');
+    await child.click('button', 'Voltar');
+    await vi.waitFor(() => expect(alert()).toBeNull());
+  });
+
   it('does not save a day after the end of the period', async () => {
     const { child, worldId } = await bigTaskFamily();
     await child.click('button', 'Planear');
