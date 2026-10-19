@@ -207,7 +207,7 @@ Until 0.6, only themes listed in `scripts/validated-themes.json` are checked (th
 
 - **`firebaseConfig`** lives in `src/data/firestore/config.ts`. It is committed: it is public by design (ADR 0001); the product owner provides the values.
 - **Emulator ports:** Firestore 8080, Auth 9099. The project id is `demo-family-quest`, so no real project can be touched by mistake.
-- **GitHub Pages.** Vite `base: '/family-quest/'`. Routing uses the URL hash only (`#/join/<worldId>`, `#/board`, ...); there is no History API, because GitHub Pages cannot rewrite paths.
+- **GitHub Pages.** Vite `base: '/family-quest/'`. The live address is `https://www.jnvasconcelos.com/family-quest/`: the owner's GitHub Pages site has a custom domain, and `jnv7.github.io` redirects to it. The code never hard-codes the address; links are built from `location`. The origin defines each device's local storage, its anonymous sign-in and its installed app. Changing or dropping the custom domain would make every device join again (no data is lost), so treat the domain as stable and decide any change in an ADR. Routing uses the URL hash only (`#/join/<worldId>`, `#/board`, ...); there is no History API, because GitHub Pages cannot rewrite paths.
 - **Service worker** (0.2.4, ADR 0004): `vite-plugin-pwa` precaches the app shell and the bundled themes' art. Firestore keeps its own data cache; the service worker never caches Firestore traffic. The manifest is built by `scripts/pwa-manifest.ts`, with its text from the locale file, and the icons are in `public/icons/`. The worker is generated only by `npm run build`, so `npm run dev` never registers one.
 
 ## 8. Schema versions

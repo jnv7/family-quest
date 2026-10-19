@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [0.2.5] — 2026-10-19
 
-Completes 0.2.4 with the two items the product owner moved there from the radar, and delivers the theme of the world.
+Completes 0.2.4 with two items from the radar (moved there by the developer, and accepted afterwards by the product owner), and delivers the theme of the world.
 
 ### Added
 
