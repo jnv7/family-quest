@@ -119,6 +119,8 @@ Ideas that are outside the current release. They are neither implemented on own 
 | An admin can revoke a device (remove a member), for a leaked join code | Spec review, 2026-10-18 |
 | Device-bound admin rights with an admin recovery code, so a child picking an adult profile does not get admin rights (alternative B in ADR 0003) | Deferred by the product owner, 2026-10-18 |
 | Weekly guaranteed minimum (`ruleset.guarantee`) | `SPEC.md` §13 |
+| Installed app name and icon follow the world's theme. One static manifest per theme (`manifest-{themeId}.webmanifest`, with its own `id`, name and icons, generated from `theme.json` at build time), swapped into the page before install. The join link carries the theme id (not secret), so the page is themed before joining. iOS never updates an installed icon, so the theme must be set before installing. Candidate for 0.2.4 | Product owner, 2026-10-19 |
+| In-app "install" button: on Android, the `beforeinstallprompt` event; on iOS there is no API, so a short themed instruction (Share → Add to Home Screen). Hidden when already installed (`display-mode: standalone`). Candidate for 0.2.4 | Product owner, 2026-10-19 |
 | Switching the theme of an existing world | `SPEC.md` §14 |
 | Family meter and paired tasks | `SPEC.md` §14 |
 | API integration (`origin: api`) | `SPEC.md` §14 |
