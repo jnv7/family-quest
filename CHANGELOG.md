@@ -6,6 +6,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.5] — 2026-10-19
+
+Completes the scope of release 0.3.
+
+### Added
+
+- The visual alert. The board place on the map glows softly when a planned task is due: strongly for today, gently for tomorrow (today wins). On the board, those tasks get a marker on their side. The effect is neutral, the same in every theme, respects reduced motion, and has no text and no notification. It goes out when the task is done or the plan is cleared.
+- Domain: `planAlert` and `taskPlanAlert`, with the day turn-over tested in Lisbon time.
+
+## [0.3.4] — 2026-10-19
+
+### Added
+
+- Planning big tasks. On the board, an open task from a big definition has a "plan" button: pick a day (from today to the last day of its week or month) and a trigger, written or chosen from three suggestions. The plan can be changed or cleared at will, with no penalty and no record.
+- `setPlan` in the `DataStore` contract, with both adapters and the contract suite. Only the owner can set it, only on an open task from a big definition, and a day outside the period or a bad trigger is refused with `invalid-argument` before any write.
+- Domain: `validatePlan` and `lastDayOfPeriod`. A task of a past period has no day left, so it cannot be planned.
+
+## [0.3.3] — 2026-10-19
+
+### Added
+
+- Recurring tasks now appear. When the app opens, and after every profile switch, the device waits up to 5 seconds for the profile's tasks to come from the server (so it never generates from an empty cache), then creates the day's, week's or month's tasks the profile is due, once. Opening the app again creates nothing.
+- `createRecurringTasks` and `whenTasksSynced` in the `DataStore` contract, with both adapters and the contract suite: one write per task, so one refusal never blocks the others; a refusal by the rules (another device got there first, or the definition changed) is silent.
+
+### Changed
+
+- The board and the check-in show at most one open task per recurring definition, the oldest; the others stay stored and appear as the first is completed (`visibleOpenTasks`).
+
+## [0.3.2] — 2026-10-19
+
+### Added
+
+- The generation rule, as pure domain code (`recurringTasksToCreate`): which recurring tasks a profile needs now, for the current day, week or month in Europe/Lisbon. An overdue task completed today covers today; a second open task per definition is never planned; it is idempotent. Nothing creates the tasks yet (0.3.3).
+
+## [0.3.1] — 2026-10-19
+
+First delivery of release 0.3.
+
+### Added
+
+- Management has a "recurring tasks" section (admins only): list the definitions with the inactive ones dimmed, create and edit them (title, cadence, level, for whom, optional question, "big"), and deactivate or reactivate them. There is no delete.
+- Data access for definitions: `TaskDefStore` in the `DataStore` contract (`observeTaskDefs`, `createTaskDef`, `updateTaskDef`), with the Firestore and memory adapters and the shared contract suite. A title or question over its limit is refused with `invalid-argument` before any write; a device on a child profile gets `permission-denied`.
+- `taskDefProblem` in the domain, the one field check both adapters use.
+
 ## [0.2.6] — 2026-10-19
 
 Closes release 0.2.

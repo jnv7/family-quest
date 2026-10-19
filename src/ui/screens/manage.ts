@@ -2,8 +2,9 @@ import { LIMITS, type ProfileKind } from '../../core/model';
 import type { WorldScreen } from '../context';
 import { h } from '../dom';
 import { observeSelf } from '../self';
+import { createTaskDefsSection } from './taskDefs';
 
-/** Management, for admins only (SPEC.md §7.8): profiles now, task definitions later. */
+/** Management, for admins only (SPEC.md §7.8): profiles and recurring task definitions. */
 export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
   const list = h('ul', { class: 'rows' });
 
@@ -25,23 +26,27 @@ export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
     form.reset();
   });
 
+  const recurring = createTaskDefsSection(ctx, worldId);
+
   root.append(
     h('h1', {}, ctx.text('manage.title')),
     h('h2', {}, ctx.text('manage.profiles')),
     list,
     h('h2', {}, ctx.text('manage.newProfile')),
     form,
+    recurring.element,
     h('div', { class: 'stack' },
       h('button', { onClick: () => ctx.go({ name: 'share' }) }, ctx.text('manage.invite')),
       h('button', { onClick: () => ctx.go({ name: 'map' }) }, ctx.text('app.back')),
     ),
   );
 
-  return observeSelf(ctx, worldId, ({ profiles, isAdmin }) => {
+  const stopSelf = observeSelf(ctx, worldId, ({ profiles, isAdmin }) => {
     if (!isAdmin) {
       ctx.go({ name: 'map' }, { replace: true });
       return;
     }
+    recurring.setProfiles(profiles);
     list.replaceChildren(
       ...profiles.map((profile) =>
         h('li', {},
@@ -55,4 +60,8 @@ export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
       ),
     );
   });
+  return () => {
+    stopSelf();
+    recurring.dispose();
+  };
 };

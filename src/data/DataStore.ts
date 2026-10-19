@@ -7,17 +7,21 @@
  *
  * "Admin only" means: the device's active profile is an adult profile.
  *
- * Scope: operations needed up to release 0.2. Recurring task definitions
- * (0.3) and rewards, collectibles and the party (0.6) are added by those
- * releases, as separate sub-interfaces.
+ * Scope: operations needed up to release 0.3. Rewards, collectibles and the
+ * party (0.6) are added by that release, as separate sub-interfaces.
  */
+import type { NewRecurringTask } from '../core/generation';
 import type {
   Answer,
+  Cadence,
   Member,
+  Plan,
   Profile,
   ProfileId,
   ProfileKind,
   Task,
+  TaskDef,
+  TaskDefId,
   TaskId,
   TaskLevel,
   Uid,
@@ -103,6 +107,16 @@ export interface CreateAdhocTaskInput {
   question: string | null;
 }
 
+export interface TaskDefInput {
+  title: string;
+  cadence: Cadence;
+  level: TaskLevel;
+  /** Empty means every non-archived profile. */
+  assignedTo: ProfileId[];
+  question: string | null;
+  big: boolean;
+}
+
 export interface CompleteTaskInput {
   /** `yes` when the task has a question; null otherwise. */
   answer: Answer | null;
@@ -175,10 +189,44 @@ export interface TaskStore {
 
   /** Sets or clears the "I think I did better" flag on an open task of the active profile. */
   setTalkFlag(worldId: WorldId, taskId: TaskId, talkFlag: boolean): Write;
+
+  /**
+   * Owner only, on an open task whose definition is `big`. `null` clears the plan.
+   * A plan the domain refuses (`validatePlan`) is `invalid-argument`, before any write.
+   */
+  setPlan(worldId: WorldId, taskId: TaskId, plan: Plan | null): Write;
+
+  /**
+   * Creates each task with its deterministic id, one write per task (not one
+   * batch: a rejected task must not block the others). Rejections with
+   * `permission-denied` or `already-exists` are expected and silent (SPEC.md §10);
+   * `settled` rejects only on any other error.
+   */
+  createRecurringTasks(worldId: WorldId, tasks: readonly NewRecurringTask[]): Write;
+
+  /**
+   * Resolves once this profile's tasks have been read from the server at least
+   * once since the app started. It never resolves while offline.
+   * Firestore: onSnapshot with includeMetadataChanges, until metadata.fromCache is false.
+   */
+  whenTasksSynced(worldId: WorldId, profileId: ProfileId): Promise<void>;
+}
+
+export interface TaskDefStore {
+  /** Every definition, active and inactive, ordered by title. */
+  observeTaskDefs(worldId: WorldId, onValue: Observer<TaskDef[]>, onError?: ObserverError): Unsubscribe;
+  /** Admin only. Created active. */
+  createTaskDef(worldId: WorldId, input: TaskDefInput): Write<{ defId: TaskDefId }>;
+  /**
+   * Admin only. Definitions are never deleted: deactivate them with `active: false`.
+   * Tasks already created keep the title, level and question they copied.
+   */
+  updateTaskDef(worldId: WorldId, defId: TaskDefId, patch: Partial<TaskDefInput & { active: boolean }>): Write;
 }
 
 export interface DataStore {
   readonly session: SessionStore;
   readonly worlds: WorldStore;
   readonly tasks: TaskStore;
+  readonly taskDefs: TaskDefStore;
 }

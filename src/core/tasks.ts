@@ -46,3 +46,21 @@ export function adhocPermission({ creator, targetProfileId, creatorTasks, now, r
   const created = adhocCreatedForSelfToday(creator.id, creatorTasks, now, ruleset.timezone);
   return created >= ruleset.childDailyTaskLimit ? 'limit-reached' : 'allowed';
 }
+
+/**
+ * The open tasks a person sees, oldest first (SPEC.md §6 and §7): every ad hoc task, and
+ * only the oldest open task of each recurring definition. A second one can exist when a
+ * device generated from an incomplete cache; it stays stored and shows once the first is done.
+ */
+export function visibleOpenTasks(tasks: readonly Task[]): Task[] {
+  const oldestFirst = tasks
+    .filter((task) => task.status === 'open')
+    .sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const seen = new Set<string>();
+  return oldestFirst.filter((task) => {
+    if (task.defId === null) return true;
+    if (seen.has(task.defId)) return false;
+    seen.add(task.defId);
+    return true;
+  });
+}

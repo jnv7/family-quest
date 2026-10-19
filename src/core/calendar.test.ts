@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dateKey, isoWeekday, monthKey, periodKey, weekKey } from './calendar';
+import { dateKey, isoWeekday, lastDayOfPeriod, monthKey, periodKey, weekKey } from './calendar';
 import type { IsoWeekday } from './model';
 
 const LISBON = 'Europe/Lisbon';
@@ -52,5 +52,46 @@ describe('calendar time zones', () => {
 describe('periodKey', () => {
   it('fails explicitly on an unknown cadence', () => {
     expect(() => periodKey('yearly' as never, 0, LISBON)).toThrow('Unknown cadence');
+  });
+});
+
+describe('lastDayOfPeriod', () => {
+  it('is the day itself for a daily period', () => {
+    expect(lastDayOfPeriod('daily', '2026-10-19')).toBe('2026-10-19');
+  });
+
+  it('is the Sunday of the ISO week', () => {
+    expect(lastDayOfPeriod('weekly', '2026-W43')).toBe('2026-10-25');
+    expect(lastDayOfPeriod('weekly', '2026-W42')).toBe('2026-10-18');
+    expect(lastDayOfPeriod('weekly', '2026-W01')).toBe('2026-01-04');
+    expect(lastDayOfPeriod('weekly', '2026-W13')).toBe('2026-03-29'); // the clocks go forward that night
+  });
+
+  it('follows the turn of the year: 2026 has 53 weeks', () => {
+    expect(lastDayOfPeriod('weekly', '2026-W53')).toBe('2027-01-03');
+    expect(lastDayOfPeriod('weekly', '2027-W01')).toBe('2027-01-10');
+    expect(lastDayOfPeriod('weekly', '2025-W52')).toBe('2025-12-28');
+  });
+
+  it('is the last day of the month, leap years included', () => {
+    expect(lastDayOfPeriod('monthly', '2026-10')).toBe('2026-10-31');
+    expect(lastDayOfPeriod('monthly', '2026-02')).toBe('2026-02-28');
+    expect(lastDayOfPeriod('monthly', '2028-02')).toBe('2028-02-29');
+    expect(lastDayOfPeriod('monthly', '2026-12')).toBe('2026-12-31');
+  });
+
+  it('agrees with weekKey: the last day of a week is still in that week, the next day is not', () => {
+    for (const key of ['2026-W43', '2026-W53', '2027-W01', '2026-W09']) {
+      const last = lastDayOfPeriod('weekly', key);
+      const noon = (date: string) => Date.parse(`${date}T12:00:00Z`);
+      expect(weekKey(noon(last), LISBON)).toBe(key);
+      expect(weekKey(noon(last) + 86_400_000, LISBON)).not.toBe(key);
+    }
+  });
+
+  it('throws on a key that is not of the cadence', () => {
+    expect(() => lastDayOfPeriod('daily', '2026-W43')).toThrow();
+    expect(() => lastDayOfPeriod('weekly', '2026-10')).toThrow();
+    expect(() => lastDayOfPeriod('monthly', '2026-10-19')).toThrow();
   });
 });

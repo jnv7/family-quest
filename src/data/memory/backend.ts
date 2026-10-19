@@ -2,7 +2,7 @@
  * The shared "server" of the memory adapter: committed state plus the check
  * that every batch must pass, standing in for `firestore.rules`.
  */
-import type { Member, Profile, Task, Uid, World, WorldId } from '../../core/model';
+import type { Member, Profile, Task, TaskDef, Uid, World, WorldId } from '../../core/model';
 import type { DataStoreError, Unsubscribe } from '../DataStore';
 
 export interface WorldState {
@@ -10,6 +10,7 @@ export interface WorldState {
   members: Map<Uid, Member>;
   profiles: Map<string, Profile>;
   tasks: Map<string, Task>;
+  taskDefs: Map<string, TaskDef>;
 }
 
 export type MemoryState = Map<WorldId, WorldState>;
@@ -22,7 +23,9 @@ export type Op =
   | { worldId: WorldId; collection: 'profiles'; id: string; create: Profile }
   | { worldId: WorldId; collection: 'profiles'; id: string; patch: Partial<Profile> }
   | { worldId: WorldId; collection: 'tasks'; id: string; create: Task }
-  | { worldId: WorldId; collection: 'tasks'; id: string; patch: Partial<Task> };
+  | { worldId: WorldId; collection: 'tasks'; id: string; patch: Partial<Task> }
+  | { worldId: WorldId; collection: 'taskDefs'; id: string; create: TaskDef }
+  | { worldId: WorldId; collection: 'taskDefs'; id: string; patch: Partial<TaskDef> };
 
 /** An atomic group of writes, with the server-side check that may refuse all of them. */
 export interface Batch {
@@ -49,6 +52,7 @@ export function applyOps(state: MemoryState, ops: readonly Op[]): void {
         members: new Map(),
         profiles: new Map(),
         tasks: new Map(),
+        taskDefs: new Map(),
       });
       continue;
     }

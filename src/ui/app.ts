@@ -5,6 +5,7 @@ import type { Theme } from '../theme';
 import { formatMessage, hasTheme, loadTheme } from '../theme';
 import { reportSettleError, type AppContext, type Dispose, type Screen, type WorldScreen } from './context';
 import { h } from './dom';
+import { createGenerator } from './generation';
 import type { Installer } from './install';
 import type { Navigation } from './navigation';
 import { applyThemeToPage } from './pageTheme';
@@ -140,6 +141,9 @@ export async function startApp(options: AppOptions): Promise<() => void> {
     }
   }
 
+  // Recurring tasks are generated for the active profile, whichever screen is showing.
+  const generator = createGenerator(ctx);
+
   // The world's own theme is the truth: follow it, and remember it for the next launch.
   let watchedWorld: string | null = null;
   let stopWatchingWorld: Dispose = () => {};
@@ -165,6 +169,7 @@ export async function startApp(options: AppOptions): Promise<() => void> {
     const route = parseHash(navigation.hash());
     if (route.name === 'join' && route.themeId) useTheme(route.themeId); // a join link is themed before joining
     followWorldTheme();
+    generator.follow(world.get());
     dispose = screenFor(route)(ctx, root);
   }
 
@@ -177,6 +182,7 @@ export async function startApp(options: AppOptions): Promise<() => void> {
   return () => {
     stopListening();
     stopWatchingWorld();
+    generator.stop();
     dispose();
     root.replaceChildren();
   };

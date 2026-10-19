@@ -7,6 +7,10 @@
  * observers show the server state again.
  */
 import { weekKey } from '../../core/calendar';
+import { taskDefProblem } from '../../core/taskDefs';
+import { assertPlanAllowed } from '../plan';
+import { newRecurringTaskProblem, settleRecurringWrites } from '../recurring';
+import type { NewRecurringTask } from '../../core/generation';
 import {
   DEFAULT_AVATAR,
   DEFAULT_RULESET,
@@ -19,6 +23,8 @@ import {
   type ProfileId,
   type RandomInt,
   type Task,
+  type TaskDef,
+  type TaskDefId,
   type TaskId,
   type Uid,
   type World,
@@ -31,6 +37,7 @@ import {
   type CreateAdhocTaskInput,
   type CreateProfileInput,
   type CreateWorldInput,
+  type TaskDefInput,
   type DataStore,
   type Observer,
   type ObserverError,
@@ -457,8 +464,146 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
             check: (state) => checkOwnerOfOpenTask(state, worldId, taskId, uid),
           };
         }),
+
+      setPlan: (worldId, taskId, plan) =>
+        submit(undefined, (view, uid) => {
+          const ws = requireWorld(view, worldId);
+          const task = requireTask(view, worldId, taskId);
+          const def = task.defId === null ? null : (ws.taskDefs.get(task.defId) ?? null);
+          assertPlanAllowed(task, def, plan, clock(), ws.world.ruleset.timezone);
+          return {
+            ops: [{ worldId, collection: 'tasks', id: taskId, patch: { plan: plan === null ? null : { ...plan } } }],
+            check: (state) => checkOwnerOfOpenTask(state, worldId, taskId, uid),
+          };
+        }),
+
+      createRecurringTasks(worldId, tasks) {
+        const writes = tasks.map((input) =>
+          submit(undefined, (view, uid) => {
+            const problem = newRecurringTaskProblem(input);
+            if (problem) throw invalid(problem);
+            const { active } = requireAccess(view, worldId, uid);
+            if (!active) throw denied('Choose a profile first');
+            // Already here (open or done): leave it alone, like the rules refuse to rewrite it.
+            if (requireWorld(view, worldId).tasks.has(input.id)) {
+              throw new DataStoreError('already-exists', `Task ${input.id} already exists`);
+            }
+            const task: Task = {
+              ...newDoc(),
+              id: input.id,
+              profileId: input.profileId,
+              title: input.title,
+              level: input.level,
+              question: input.question,
+              source: 'recurring',
+              defId: input.defId,
+              periodKey: input.periodKey,
+              createdBy: active.id,
+              origin: 'app',
+              plan: null,
+              status: 'open',
+              doneAt: null,
+              answer: null,
+              talkFlag: false,
+              weekKey: null,
+            };
+            return {
+              ops: [{ worldId, collection: 'tasks', id: task.id, create: task }],
+              check: (state) => checkRecurringCreate(state, worldId, uid, task),
+            };
+          }),
+        );
+        return { result: undefined, settled: settleRecurringWrites(writes.map((write) => write.settled)) };
+      },
+
+      async whenTasksSynced(worldId, profileId) {
+        // The memory adapter has no cache apart from its pending writes: it is always in sync.
+        const uid = requireUid();
+        await Promise.resolve();
+        const access = accessOf(backend.state, worldId, uid);
+        if (!access || !canReadTasksOf(access, profileId)) throw denied('Tasks of another profile');
+      },
+    },
+
+    taskDefs: {
+      observeTaskDefs: (worldId, onValue, onError) =>
+        observeAsMember(
+          worldId,
+          ({ ws }) => ({ value: [...ws.taskDefs.values()].sort(byTitleThenId) }),
+          onValue,
+          onError,
+        ),
+
+      createTaskDef(worldId, input: TaskDefInput) {
+        const defId = autoId();
+        return submit({ defId }, (view, uid) => {
+          const problem = taskDefProblem(input);
+          if (problem) throw invalid(problem);
+          requireWorld(view, worldId);
+          const def: TaskDef = {
+            ...newDoc(),
+            id: defId,
+            title: input.title,
+            cadence: input.cadence,
+            level: input.level,
+            assignedTo: [...input.assignedTo],
+            question: input.question,
+            big: input.big,
+            active: true,
+          };
+          return {
+            ops: [{ worldId, collection: 'taskDefs', id: defId, create: def }],
+            check: (state) => (accessOf(state, worldId, uid)?.isAdmin ? null : denied('Only an admin creates task definitions')),
+          };
+        });
+      },
+
+      updateTaskDef: (worldId, defId, patch) =>
+        submit(undefined, (view, uid) => {
+          const problem = taskDefProblem(patch);
+          if (problem) throw invalid(problem);
+          if (!requireWorld(view, worldId).taskDefs.has(defId)) throw notFound(`Task definition ${defId} does not exist`);
+          return {
+            ops: [{ worldId, collection: 'taskDefs', id: defId, patch: definedFields(patch) }],
+            check: (state) => {
+              const access = accessOf(state, worldId, uid);
+              if (!access?.isAdmin) return denied('Only an admin changes task definitions');
+              if (!access.ws.taskDefs.has(defId)) return notFound(`Task definition ${defId} does not exist`);
+              return null;
+            },
+          };
+        }),
     },
   };
+}
+
+/**
+ * What the rules require of a recurring task (`validRecurring` in firestore.rules): a new id,
+ * the owner's active profile, and an active definition assigned to that profile, copied exactly.
+ */
+function checkRecurringCreate(state: MemoryState, worldId: WorldId, uid: Uid, task: Task): DataStoreError | null {
+  const access = accessOf(state, worldId, uid);
+  if (!access?.active || access.active.id !== task.createdBy) return denied('Choose a profile first');
+  if (access.ws.tasks.has(task.id)) return denied('A task that exists is never rewritten');
+  if (access.active.id !== task.profileId || access.active.archived) return denied('Only the owner creates a recurring task');
+  const def = task.defId === null ? undefined : access.ws.taskDefs.get(task.defId);
+  if (!def || !def.active) return denied('The definition does not exist or is not active');
+  if (def.assignedTo.length > 0 && !def.assignedTo.includes(task.profileId)) return denied('The definition is not assigned to this profile');
+  if (task.title !== def.title || task.level !== def.level || task.question !== def.question) {
+    return denied('A recurring task copies its definition');
+  }
+  return null;
+}
+
+/** Firestore orders by title, then by document id; the memory adapter does the same. */
+function byTitleThenId(a: TaskDef, b: TaskDef): number {
+  if (a.title !== b.title) return a.title < b.title ? -1 : 1;
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
+/** A patch without the keys set to `undefined`, which must not overwrite anything. */
+function definedFields<T extends object>(patch: T): T {
+  return Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined)) as T;
 }
 
 /** Only the owner changes a task, and only while it is open. */

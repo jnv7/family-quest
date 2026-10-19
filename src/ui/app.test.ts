@@ -182,6 +182,233 @@ describe('managing profiles', () => {
   });
 });
 
+describe('managing recurring tasks', () => {
+  /** Opens the management screen of a world with a child profile "Sam", and returns the recurring-task form helpers. */
+  async function openRecurring() {
+    const { admin, worldId } = await createFamily();
+    await admin.click('button', 'Continuar');
+    await admin.click('button', 'Gerir');
+    await admin.type('Nome', 'Sam');
+    admin.submit();
+    await admin.see('Sam');
+    const form = () => admin.root.querySelectorAll('form')[1]!;
+    const save = () => form().dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    return { admin, worldId, form, save };
+  }
+
+  it('creates a definition, dims it when deactivated, and brings it back', async () => {
+    const { admin, form, save } = await openRecurring();
+    await admin.see('Ainda não há tarefas recorrentes.');
+
+    await admin.click('button', 'Nova tarefa recorrente');
+    expect(form().hidden).toBe(false);
+    await admin.type('O que é para fazer?', 'Arrumar o quarto');
+    save();
+    await admin.see('Arrumar o quarto · Todos os dias');
+    expect(form().hidden).toBe(true);
+
+    await admin.click('li button', 'Desativar');
+    await admin.see('(desativada)');
+    expect(admin.find('li.inactive', 'Arrumar o quarto')).toBeDefined();
+
+    await admin.click('li button', 'Ativar');
+    await admin.notSee('(desativada)');
+  });
+
+  it('assigns a definition to chosen profiles, and edits it', async () => {
+    const { admin, form, save } = await openRecurring();
+    await admin.click('button', 'Nova tarefa recorrente');
+    await admin.type('O que é para fazer?', 'Regar as plantas');
+    await admin.choose('Repete', 'Todas as semanas');
+    await admin.choose('Dificuldade', 'Difícil');
+    const sam = [...form().querySelectorAll('label.check')].find((l) => l.textContent?.includes('Sam'))!;
+    (sam.querySelector('input') as HTMLInputElement).checked = true;
+    save();
+    await admin.see('Regar as plantas · Todas as semanas');
+
+    await admin.click('li button', 'Editar');
+    expect((form().querySelector('input[type=text]') as HTMLInputElement).value).toBe('Regar as plantas');
+    expect(((form().querySelector('label.check input[value]:checked') as HTMLInputElement | null)?.parentElement?.textContent) ?? '').toContain('Sam');
+    await admin.type('O que é para fazer?', 'Regar o jardim');
+    save();
+    await admin.see('Regar o jardim');
+    await admin.notSee('Regar as plantas');
+  });
+});
+
+type Device = Awaited<ReturnType<typeof openDevice>>;
+
+/** On the map of an admin device: creates a daily recurring task for everyone, and comes back to the map. */
+async function addRecurring(device: Device, title: string) {
+  await device.click('button', 'Gerir');
+  await device.click('button', 'Nova tarefa recorrente');
+  await device.type('O que é para fazer?', title);
+  device.root.querySelectorAll('form')[1]!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+  await device.see(`${title} · Todos os dias`);
+  await device.click('button', 'Voltar');
+}
+
+describe('recurring tasks on the board', () => {
+  const tasksOf = (worldId: string) => [...backend.state.get(worldId)!.tasks.values()];
+
+  it('creates today’s task once when the app opens, and opening it again creates nothing', async () => {
+    const { admin, worldId } = await familyWithChild();
+    await addRecurring(admin, 'Arrumar o quarto');
+    expect(tasksOf(worldId)).toHaveLength(0); // generated on open and on profile switch, not while editing
+
+    const first = await openDevice('child-device', { savedWorld: worldId });
+    await first.click('button.place', 'Quadro');
+    await first.see('Arrumar o quarto');
+    expect(tasksOf(worldId)).toHaveLength(1);
+    expect(tasksOf(worldId)[0]).toMatchObject({ source: 'recurring', periodKey: '2026-10-20', status: 'open' });
+
+    const again = await openDevice('child-device', { savedWorld: worldId });
+    await again.click('button.place', 'Quadro');
+    await again.see('Arrumar o quarto');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(tasksOf(worldId)).toHaveLength(1);
+  });
+
+  it('generates the tasks of the profile the device switches to', async () => {
+    const { admin, worldId } = await familyWithChild();
+    await addRecurring(admin, 'Regar as plantas');
+    const profileIds = [...backend.state.get(worldId)!.profiles.values()];
+    const sam = profileIds.find((p) => p.displayName === 'Sam')!;
+    const alex = profileIds.find((p) => p.displayName === 'Alex')!;
+
+    await admin.click('button', 'Trocar de perfil');
+    await admin.click('button.profile', 'Sam');
+    await vi.waitFor(() => expect(tasksOf(worldId).map((t) => t.profileId)).toEqual([sam.id]));
+
+    await admin.click('button', 'Trocar de perfil');
+    await admin.click('button.profile', 'Alex');
+    await vi.waitFor(() => expect(tasksOf(worldId).map((t) => t.profileId).sort()).toEqual([alex.id, sam.id].sort()));
+  });
+
+  it('shows only the oldest open task of a definition, on the board and in the check-in', async () => {
+    const { admin, worldId } = await familyWithChild();
+    await addRecurring(admin, 'Fazer a cama');
+    const ws = backend.state.get(worldId)!;
+    const defId = [...ws.taskDefs.keys()][0]!;
+    const sam = [...ws.profiles.values()].find((p) => p.displayName === 'Sam')!;
+
+    // A device whose cache missed the first task generated a second one for a later period.
+    const extra = createMemoryStore(backend, { uid: 'child-device', clock, randomInt });
+    await extra.session.signIn();
+    const task = (periodKey: string) => ({ id: `${defId}_${periodKey}_${sam.id}`, defId, periodKey, profileId: sam.id, title: 'Fazer a cama', level: 'mid' as const, question: null });
+    now -= 86_400_000;
+    await extra.tasks.createRecurringTasks(worldId, [task('2026-10-19')]).settled;
+    now += 86_400_000;
+    await extra.tasks.createRecurringTasks(worldId, [task('2026-10-20')]).settled;
+    expect(tasksOf(worldId)).toHaveLength(2);
+
+    const child = await openDevice('child-device', { savedWorld: worldId });
+    await child.click('button.place', 'Quadro');
+    await child.see('Fazer a cama');
+    expect(child.root.querySelectorAll('ul.tasks li')).toHaveLength(1);
+
+    await child.click('button', 'Voltar');
+    await child.click('button.place', 'Registo');
+    await child.see('Fazer a cama');
+    expect(child.root.querySelectorAll('li.checkin-task')).toHaveLength(1);
+  });
+});
+
+describe('planning a big task', () => {
+  /** A monthly big definition, so the task has until the end of the month (2026-10-31). */
+  async function bigTaskFamily() {
+    const { admin, worldId } = await familyWithChild();
+    await admin.click('button', 'Gerir');
+    await admin.click('button', 'Nova tarefa recorrente');
+    await admin.type('O que é para fazer?', 'Limpar a garagem');
+    await admin.choose('Repete', 'Todos os meses');
+    (admin.root.querySelector('label.check input') as HTMLInputElement).checked = true; // "big"
+    admin.root.querySelectorAll('form')[1]!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    await admin.see('Limpar a garagem');
+    const child = await openDevice('child-device', { savedWorld: worldId });
+    await child.click('button.place', 'Quadro');
+    await child.see('Limpar a garagem');
+    return { admin, child, worldId };
+  }
+
+  const planOf = (worldId: string) => [...backend.state.get(worldId)!.tasks.values()][0]!.plan;
+  const fill = (device: Device, label: string, value: string) => {
+    const field = [...device.root.querySelectorAll('label')].find((l) => l.textContent?.includes(label))!.querySelector('input')!;
+    field.value = value;
+  };
+  const submitPlan = (device: Device) =>
+    device.root.querySelector('form.plan-form')!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+
+  it('sets, shows, changes and clears a plan, with a suggested trigger', async () => {
+    const { child, worldId } = await bigTaskFamily();
+
+    await child.click('button', 'Planear');
+    fill(child, 'Que dia?', '2026-10-28');
+    await child.click('.suggestions button', 'Depois do jantar');
+    submitPlan(child);
+    await child.see('28 de outubro · Depois do jantar');
+    expect(planOf(worldId)).toEqual({ date: '2026-10-28', trigger: 'Depois do jantar' });
+
+    await child.click('button', 'Mudar o plano');
+    fill(child, 'Que dia?', '2026-10-30');
+    submitPlan(child);
+    await child.see('30 de outubro');
+    expect(planOf(worldId)?.date).toBe('2026-10-30');
+
+    await child.click('button', 'Mudar o plano');
+    await child.click('button', 'Tirar o plano');
+    await child.notSee('30 de outubro');
+    expect(planOf(worldId)).toBeNull();
+  });
+
+  it('lights the board on the map when a plan is due today or tomorrow, and stops once the task is done', async () => {
+    const { child } = await bigTaskFamily();
+    const alert = () => child.find('button.place', 'Quadro')?.getAttribute('data-alert') ?? null;
+
+    await child.click('button', 'Planear');
+    fill(child, 'Que dia?', '2026-10-21'); // tomorrow: the clock says 2026-10-20
+    await child.click('.suggestions button', 'Depois do jantar');
+    submitPlan(child);
+    await child.see('21 de outubro');
+    await child.notSee('Planeada'); // no scolding text, only the light
+    expect(child.find('li.planned-tomorrow')).toBeDefined();
+    await child.click('button', 'Voltar');
+    await vi.waitFor(() => expect(alert()).toBe('tomorrow'));
+
+    await child.click('button.place', 'Quadro');
+    await child.click('button', 'Mudar o plano');
+    fill(child, 'Que dia?', '2026-10-20');
+    submitPlan(child);
+    await child.see('20 de outubro');
+    expect(child.find('li.planned-today')).toBeDefined();
+    await child.click('button', 'Voltar');
+    await vi.waitFor(() => expect(alert()).toBe('today'));
+
+    await child.click('button.place', 'Registo');
+    await child.click('button', 'Feito');
+    await child.click('button', 'Voltar');
+    await vi.waitFor(() => expect(alert()).toBeNull());
+  });
+
+  it('does not save a day after the end of the period', async () => {
+    const { child, worldId } = await bigTaskFamily();
+    await child.click('button', 'Planear');
+    fill(child, 'Que dia?', '2026-11-02');
+    fill(child, 'Quando é que te lembras?', 'Depois do jantar');
+    submitPlan(child);
+    expect(planOf(worldId)).toBeNull();
+  });
+
+  it('offers no plan on a task that is not big', async () => {
+    const { admin } = await familyWithChild();
+    await addRecurring(admin, 'Arrumar o quarto');
+    const child = await openDevice('child-device', { savedWorld: admin.world.get()! });
+    await child.click('button.place', 'Quadro');
+    await child.see('Arrumar o quarto');
+    expect(child.find('button', 'Planear')).toBeUndefined();
+  });
+});
+
 describe('coming back', () => {
   it('goes straight to the home of the remembered profile', async () => {
     const { admin, worldId } = await createFamily();

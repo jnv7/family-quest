@@ -155,6 +155,33 @@ button.profile {
   min-height: 2.5rem;
 }
 
+.rows li.inactive span {
+  opacity: 0.55;
+}
+
+label.check {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+label.check input {
+  min-height: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+}
+
+fieldset {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  font-size: 0.9rem;
+}
+
 .notice {
   position: fixed;
   left: 1rem;
@@ -321,4 +348,46 @@ button.better[aria-pressed='true'] {
   opacity: 1;
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 18%, Canvas);
+}
+
+/* The plan alert (SPEC.md §7): neutral, the same in every theme, two intensities. */
+button.place[data-alert] {
+  animation: alert-glow 2.4s ease-in-out infinite;
+}
+
+button.place[data-alert='today'] {
+  --alert-color: var(--accent);
+  --alert-size: 0.9rem;
+}
+
+button.place[data-alert='tomorrow'] {
+  --alert-color: var(--accent);
+  --alert-size: 0.4rem;
+}
+
+@keyframes alert-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow: 0 0 var(--alert-size) calc(var(--alert-size) / 2) var(--alert-color);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button.place[data-alert] {
+    animation: none;
+    box-shadow: 0 0 var(--alert-size) calc(var(--alert-size) / 2) var(--alert-color);
+  }
+}
+
+.rows li.planned-today {
+  border-left: 0.3rem solid var(--accent);
+  padding-left: 0.5rem;
+}
+
+.rows li.planned-tomorrow {
+  border-left: 0.3rem solid var(--line);
+  padding-left: 0.5rem;
 }
