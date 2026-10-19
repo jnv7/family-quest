@@ -15,6 +15,7 @@ import type {
   Answer,
   Cadence,
   Member,
+  Plan,
   Profile,
   ProfileId,
   ProfileKind,
@@ -188,6 +189,12 @@ export interface TaskStore {
 
   /** Sets or clears the "I think I did better" flag on an open task of the active profile. */
   setTalkFlag(worldId: WorldId, taskId: TaskId, talkFlag: boolean): Write;
+
+  /**
+   * Owner only, on an open task whose definition is `big`. `null` clears the plan.
+   * A plan the domain refuses (`validatePlan`) is `invalid-argument`, before any write.
+   */
+  setPlan(worldId: WorldId, taskId: TaskId, plan: Plan | null): Write;
 
   /**
    * Creates each task with its deterministic id, one write per task (not one

@@ -25,6 +25,7 @@ import {
 import { signInAnonymously, type Auth } from 'firebase/auth';
 import { weekKey } from '../../core/calendar';
 import { taskDefProblem } from '../../core/taskDefs';
+import { assertPlanAllowed } from '../plan';
 import { newRecurringTaskProblem, settleRecurringWrites } from '../recurring';
 import {
   DEFAULT_AVATAR,
@@ -340,6 +341,26 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
 
       setTalkFlag: (worldId, taskId, talkFlag) =>
         write(undefined, () => updateDoc(taskDoc(db, worldId, taskId), { talkFlag })),
+
+      setPlan: (worldId, taskId, plan) => {
+        const now = clock();
+        return write(undefined, async () => {
+          const [worldSnapshot, taskSnapshot] = await Promise.all([
+            readDoc(worldDoc(db, worldId)),
+            readDoc(taskDoc(db, worldId, taskId)),
+          ]);
+          const world = worldSnapshot.exists() ? decodeWorld(worldSnapshot) : null;
+          const task = taskSnapshot.exists() ? decodeTask(taskSnapshot) : null;
+          if (!world || !task) throw new DataStoreError('not-found', `Task ${taskId} does not exist`);
+          let def: TaskDef | null = null;
+          if (task.defId !== null) {
+            const defSnapshot = await readDoc(taskDefDoc(db, worldId, task.defId));
+            def = defSnapshot.exists() ? decodeTaskDef(defSnapshot) : null;
+          }
+          assertPlanAllowed(task, def, plan, now, world.ruleset.timezone);
+          await updateDoc(taskDoc(db, worldId, taskId), { plan });
+        });
+      },
 
       createRecurringTasks(worldId, tasks) {
         const meta = newDoc();

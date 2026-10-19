@@ -680,6 +680,88 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
       });
     });
 
+    describe('plan', () => {
+      /** A big monthly task (period 2026-10) for `profileId`, created through the recurring path. */
+      async function bigTask(admin: DataStore, owner: DataStore, worldId: string, profileId: ProfileId, big = true) {
+        const created = admin.taskDefs.createTaskDef(worldId, {
+          title: 'Clean the garage',
+          cadence: 'monthly',
+          level: 'high',
+          assignedTo: [],
+          question: null,
+          big,
+        });
+        await created.settled;
+        const id = `${created.result.defId}_2026-10_${profileId}`;
+        await owner.tasks.createRecurringTasks(worldId, [
+          { id, defId: created.result.defId, periodKey: '2026-10', profileId, title: 'Clean the garage', level: 'high', question: null },
+        ]).settled;
+        return id;
+      }
+
+      it('is set and cleared by the owner, and every device sees it', async () => {
+        const { admin, child, child2, worldId, childProfileId } = await setup();
+        const taskId = await bigTask(admin, child, worldId, childProfileId);
+        const mine = new Watch<Task[]>((v, e) => child2.tasks.observeTasks(worldId, childProfileId, v, e));
+        const theirs = new Watch<Task[]>((v, e) => admin.tasks.observeTasks(worldId, childProfileId, v, e));
+
+        await child.tasks.setPlan(worldId, taskId, { date: '2026-10-25', trigger: 'after dinner' }).settled;
+        for (const watch of [mine, theirs]) {
+          await eventually(() => expect(watch.value?.[0]?.plan).toEqual({ date: '2026-10-25', trigger: 'after dinner' }));
+        }
+
+        // Changing it, and clearing it, leave nothing behind.
+        await child.tasks.setPlan(worldId, taskId, { date: '2026-10-31', trigger: 'on Saturday' }).settled;
+        await eventually(() => expect(mine.value?.[0]?.plan).toEqual({ date: '2026-10-31', trigger: 'on Saturday' }));
+        await child.tasks.setPlan(worldId, taskId, null).settled;
+        for (const watch of [mine, theirs]) await eventually(() => expect(watch.value?.[0]?.plan).toBeNull());
+        mine.close();
+        theirs.close();
+      });
+
+      it('is refused to anyone but the owner, with permission-denied', async () => {
+        const { admin, child, newcomer, worldId, childProfileId } = await setup();
+        const taskId = await bigTask(admin, child, worldId, childProfileId);
+        const plan = { date: '2026-10-25', trigger: 'after dinner' };
+
+        await rejectsWith(admin.tasks.setPlan(worldId, taskId, plan), 'permission-denied');
+        await rejectsWith(newcomer.tasks.setPlan(worldId, taskId, plan), 'permission-denied');
+
+        const watch = new Watch<Task[]>((v, e) => child.tasks.observeTasks(worldId, childProfileId, v, e));
+        await eventually(() => expect(watch.value?.[0]?.plan).toBeNull());
+        watch.close();
+      });
+
+      it('is refused on a task that is not big, with invalid-argument, before any write', async () => {
+        const { admin, child, worldId, childProfileId } = await setup();
+        const plan = { date: '2026-10-25', trigger: 'after dinner' };
+
+        const notBig = await bigTask(admin, child, worldId, childProfileId, false);
+        await rejectsWith(child.tasks.setPlan(worldId, notBig, plan), 'invalid-argument');
+
+        const adhocTask = child.tasks.createAdhocTask(worldId, adhoc(childProfileId));
+        await adhocTask.settled;
+        await rejectsWith(child.tasks.setPlan(worldId, adhocTask.result.taskId, plan), 'invalid-argument');
+      });
+
+      it('is refused with a day outside the period or a bad trigger, with invalid-argument', async () => {
+        const { admin, child, worldId, childProfileId } = await setup();
+        const taskId = await bigTask(admin, child, worldId, childProfileId);
+
+        await rejectsWith(child.tasks.setPlan(worldId, taskId, { date: '2026-10-17', trigger: 'yesterday' }), 'invalid-argument');
+        await rejectsWith(child.tasks.setPlan(worldId, taskId, { date: '2026-11-01', trigger: 'next month' }), 'invalid-argument');
+        await rejectsWith(child.tasks.setPlan(worldId, taskId, { date: '2026-10-25', trigger: '' }), 'invalid-argument');
+        await rejectsWith(child.tasks.setPlan(worldId, taskId, { date: '2026-10-25', trigger: 'x'.repeat(LIMITS.trigger + 1) }), 'invalid-argument');
+      });
+
+      it('cannot be set on a task that is done', async () => {
+        const { admin, child, worldId, childProfileId } = await setup();
+        const taskId = await bigTask(admin, child, worldId, childProfileId);
+        await child.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: false }).settled;
+        await rejectsWith(child.tasks.setPlan(worldId, taskId, { date: '2026-10-25', trigger: 'after dinner' }), 'permission-denied');
+      });
+    });
+
     describe('no false state', () => {
       it('shows the backend state on every device after a rejected write', async () => {
         const { admin, child, worldId } = await setup();

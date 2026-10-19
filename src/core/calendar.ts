@@ -73,3 +73,40 @@ export function periodKey(cadence: Cadence, instant: Millis, timeZone: string): 
       throw new Error(`Unknown cadence: ${String(cadence)}`);
   }
 }
+
+const toDateKey = (utcMillis: number): DateKey => {
+  const date = new Date(utcMillis);
+  return `${pad(date.getUTCFullYear(), 4)}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
+};
+
+/**
+ * The last calendar day of a period, inclusive: the day itself, the Sunday of an ISO
+ * week, or the last day of a month. Throws on a key that does not belong to the cadence.
+ */
+export function lastDayOfPeriod(cadence: Cadence, key: PeriodKey): DateKey {
+  const bad = () => new Error(`Not a ${cadence} period key: ${key}`);
+  switch (cadence) {
+    case 'daily': {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) throw bad();
+      return key;
+    }
+    case 'weekly': {
+      const match = /^(\d{4})-W(\d{2})$/.exec(key);
+      if (!match) throw bad();
+      const year = Number(match[1]);
+      const week = Number(match[2]);
+      // January 4th is always in week 1; the week runs Monday to Sunday.
+      const jan4 = Date.UTC(year, 0, 4);
+      const mondayOfWeek1 = jan4 - (weekdayOf({ year, month: 1, day: 4 }) - 1) * MS_PER_DAY;
+      return toDateKey(mondayOfWeek1 + ((week - 1) * 7 + 6) * MS_PER_DAY);
+    }
+    case 'monthly': {
+      const match = /^(\d{4})-(\d{2})$/.exec(key);
+      if (!match) throw bad();
+      // Day 0 of the next month is the last day of this one.
+      return toDateKey(Date.UTC(Number(match[1]), Number(match[2]), 0));
+    }
+    default:
+      throw new Error(`Unknown cadence: ${String(cadence)}`);
+  }
+}

@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.4] — 2026-10-19
+
+### Added
+
+- Planning big tasks. On the board, an open task from a big definition has a "plan" button: pick a day (from today to the last day of its week or month) and a trigger, written or chosen from three suggestions. The plan can be changed or cleared at will, with no penalty and no record.
+- `setPlan` in the `DataStore` contract, with both adapters and the contract suite. Only the owner can set it, only on an open task from a big definition, and a day outside the period or a bad trigger is refused with `invalid-argument` before any write.
+- Domain: `validatePlan` and `lastDayOfPeriod`. A task of a past period has no day left, so it cannot be planned.
+
 ## [0.3.3] — 2026-10-19
 
 ### Added

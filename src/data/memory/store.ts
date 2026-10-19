@@ -8,6 +8,7 @@
  */
 import { weekKey } from '../../core/calendar';
 import { taskDefProblem } from '../../core/taskDefs';
+import { assertPlanAllowed } from '../plan';
 import { newRecurringTaskProblem, settleRecurringWrites } from '../recurring';
 import type { NewRecurringTask } from '../../core/generation';
 import {
@@ -460,6 +461,18 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
           requireTask(view, worldId, taskId);
           return {
             ops: [{ worldId, collection: 'tasks', id: taskId, patch: { talkFlag } }],
+            check: (state) => checkOwnerOfOpenTask(state, worldId, taskId, uid),
+          };
+        }),
+
+      setPlan: (worldId, taskId, plan) =>
+        submit(undefined, (view, uid) => {
+          const ws = requireWorld(view, worldId);
+          const task = requireTask(view, worldId, taskId);
+          const def = task.defId === null ? null : (ws.taskDefs.get(task.defId) ?? null);
+          assertPlanAllowed(task, def, plan, clock(), ws.world.ruleset.timezone);
+          return {
+            ops: [{ worldId, collection: 'tasks', id: taskId, patch: { plan: plan === null ? null : { ...plan } } }],
             check: (state) => checkOwnerOfOpenTask(state, worldId, taskId, uid),
           };
         }),
