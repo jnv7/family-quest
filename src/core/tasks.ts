@@ -1,3 +1,4 @@
+import { isAdmin } from './access';
 import { dateKey } from './calendar';
 import type { Millis, Profile, ProfileId, Ruleset, Task } from './model';
 
@@ -40,7 +41,7 @@ export function adhocCreatedForSelfToday(
  * client enforces the limit (SPEC.md §5).
  */
 export function adhocPermission({ creator, targetProfileId, creatorTasks, now, ruleset }: AdhocCheck): AdhocPermission {
-  if (creator.kind === 'adult') return 'allowed';
+  if (isAdmin(creator)) return 'allowed';
   if (targetProfileId !== creator.id) return 'not-allowed';
   const created = adhocCreatedForSelfToday(creator.id, creatorTasks, now, ruleset.timezone);
   return created >= ruleset.childDailyTaskLimit ? 'limit-reached' : 'allowed';

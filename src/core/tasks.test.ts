@@ -79,6 +79,11 @@ describe('adhocPermission', () => {
     expect(check({ creator: profile('mum', 'adult'), targetProfileId: 'mum', creatorTasks: many })).toBe('allowed');
   });
 
+  it('follows the one definition of admin: an archived adult profile is not an admin', () => {
+    const archived = { ...profile('mum', 'adult'), archived: true };
+    expect(check({ creator: archived, targetProfileId: 'kid' })).toBe('not-allowed');
+  });
+
   it('lets a child create for itself under the limit', () => {
     const two = [task({ createdAt: NOW }), task({ createdAt: NOW })];
     expect(check({ creatorTasks: two })).toBe('allowed');
