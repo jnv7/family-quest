@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.2] — 2026-10-19
+
+### Added
+
+- The generation rule, as pure domain code (`recurringTasksToCreate`): which recurring tasks a profile needs now, for the current day, week or month in Europe/Lisbon. An overdue task completed today covers today; a second open task per definition is never planned; it is idempotent. Nothing creates the tasks yet (0.3.3).
+
 ## [0.3.1] — 2026-10-19
 
 First delivery of release 0.3.
