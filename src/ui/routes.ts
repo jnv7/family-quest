@@ -9,6 +9,7 @@ export type Route =
   | { name: 'profiles' }
   | { name: 'map' }
   | { name: 'board' }
+  | { name: 'checkin' }
   | { name: 'newTask' }
   | { name: 'manage' }
   | { name: 'share' };
@@ -19,6 +20,7 @@ const SEGMENTS = {
   profiles: 'profiles',
   map: 'map',
   board: 'board',
+  checkin: 'checkin',
   newTask: 'new-task',
   manage: 'manage',
   share: 'share',

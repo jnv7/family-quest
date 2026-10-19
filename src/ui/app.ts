@@ -1,5 +1,5 @@
 /** Router and boot of the interface (docs/architecture.md §9). Screens render only from observers. */
-import type { Clock } from '../core/model';
+import type { Clock, RandomInt } from '../core/model';
 import type { DataStore } from '../data/DataStore';
 import type { Theme } from '../theme';
 import { formatMessage } from '../theme';
@@ -9,6 +9,7 @@ import type { Navigation } from './navigation';
 import { hashFor, parseHash, type Route } from './routes';
 import { renderCreate } from './screens/create';
 import { renderBoard } from './screens/board';
+import { renderCheckin } from './screens/checkin';
 import { renderJoin } from './screens/join';
 import { renderManage } from './screens/manage';
 import { renderMap } from './screens/map';
@@ -26,6 +27,7 @@ export interface AppOptions {
   baseUrl: string;
   world: WorldMemory;
   clock: Clock;
+  randomInt: RandomInt;
   navigation: Navigation;
 }
 
@@ -33,7 +35,7 @@ const NOTICE_MS = 5000;
 
 /** Starts the interface and returns a function that stops it. */
 export async function startApp(options: AppOptions): Promise<() => void> {
-  const { root, store, theme, baseUrl, world, clock, navigation } = options;
+  const { root, store, theme, baseUrl, world, clock, randomInt, navigation } = options;
   const text = (key: string, params?: Record<string, string | number>) => formatMessage(theme, key, params);
 
   const uid = await signInWithRetry(root, store, text);
@@ -50,6 +52,7 @@ export async function startApp(options: AppOptions): Promise<() => void> {
     store,
     theme,
     clock,
+    randomInt,
     uid,
     baseUrl,
     world,
@@ -92,6 +95,8 @@ export async function startApp(options: AppOptions): Promise<() => void> {
         return needsWorld(renderMap);
       case 'board':
         return needsWorld(renderBoard);
+      case 'checkin':
+        return needsWorld(renderCheckin);
       case 'newTask':
         return needsWorld(renderNewTask);
       case 'manage':

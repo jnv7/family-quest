@@ -46,5 +46,6 @@ void startApp({
   baseUrl: `${location.origin}${location.pathname}`,
   world: createWorldMemory(localStorageOrNull()),
   clock: Date.now,
+  randomInt: createRandomInt((array) => crypto.getRandomValues(array)),
   navigation: browserNavigation(),
 });

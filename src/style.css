@@ -260,3 +260,65 @@ small {
     transition: none !important;
   }
 }
+
+/* Check-in */
+
+.character {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.character-art {
+  font-size: 3rem;
+  line-height: 1;
+}
+
+img.character-art {
+  width: 4rem;
+  height: 4rem;
+  object-fit: contain;
+}
+
+.bubble {
+  margin: 0;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  min-height: 2.5rem;
+}
+
+.rows li.checkin-task {
+  display: grid;
+  justify-content: stretch;
+  justify-items: stretch;
+  gap: 0.5rem;
+  padding: 0.75rem 0;
+}
+
+.task-title {
+  font-weight: 600;
+}
+
+.question {
+  margin: 0;
+}
+
+.answers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+button.better {
+  min-height: 2.25rem;
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
+button.better[aria-pressed='true'] {
+  opacity: 1;
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, Canvas);
+}

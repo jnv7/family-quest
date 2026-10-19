@@ -68,6 +68,12 @@
     "level.mid": "Normal",
     "level.high": "Difícil",
     "notice.taskCreated": "Tarefa criada.",
-    "error.load": "Não foi possível carregar. Verifica a ligação e tenta de novo."
+    "error.load": "Não foi possível carregar. Verifica a ligação e tenta de novo.",
+    "checkin.title": "{^@checkin}",
+    "checkin.done": "Feito",
+    "checkin.yes": "Sim",
+    "checkin.no": "Não",
+    "checkin.better": "Acho que fiz melhor. Quero falar com os meus pais.",
+    "checkin.empty": "Nada para concluir por agora."
   }
 }

@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.3] — 2026-10-19
+
+### Added
+
+- The `checkin`, where a task is completed in two taps from the map: the place, then the task's own button ("done", or "yes" when the task has a question). The theme's character greets, congratulates, answers kindly to a "no" and says goodbye when there is nothing left.
+- A task with a question shows it with "yes" and "no". "No" leaves the task open and records nothing (the proposal in `SPEC.md` §6, still to be confirmed).
+- "I think I did better, I want to talk to my parents" on each open task; the completion keeps the flag.
+
 ### Changed
 
 - A child creating a task only names it. The difficulty, the verification question and "for whom" are for adults only (`SPEC.md` §6).

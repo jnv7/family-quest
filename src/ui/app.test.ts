@@ -34,7 +34,7 @@ async function openDevice(
   const root = document.createElement('main');
   document.body.append(root);
   const store = (options.wrap ?? ((s) => s))(createMemoryStore(backend, { uid, clock, randomInt }));
-  stops.push(await startApp({ root, store, theme, baseUrl: BASE_URL, world, clock, navigation: memoryNavigation(options.hash ?? '') }));
+  stops.push(await startApp({ root, store, theme, baseUrl: BASE_URL, world, clock, randomInt, navigation: memoryNavigation(options.hash ?? '') }));
 
   const find = (selector: string, text?: string) =>
     [...root.querySelectorAll<HTMLElement>(selector)].find((el) => text === undefined || el.textContent?.includes(text));
@@ -214,7 +214,7 @@ async function createTask(device: Awaited<ReturnType<typeof openDevice>>, title:
 }
 
 describe('the map', () => {
-  it('lays out the five places of the theme, and only the board leads somewhere yet', async () => {
+  it('lays out the five places of the theme, and only the board and the check-in lead somewhere yet', async () => {
     const { admin } = await createFamily();
     await admin.click('button', 'Continuar');
     await admin.see('Olá, Alex!');
@@ -227,7 +227,7 @@ describe('the map', () => {
       'Cofre',
       'Vitrina',
     ]);
-    expect(places.filter((p) => !p.disabled).map((p) => p.textContent)).toEqual([expect.stringContaining('Quadro')]);
+    expect(places.filter((p) => !p.disabled).map((p) => p.querySelector('.place-name')?.textContent)).toEqual(['Quadro', 'Registo']);
     expect(places[0]!.style.left).toBe('8%'); // position comes from theme.json
 
     await admin.click('button.place', 'Quadro');
@@ -362,5 +362,74 @@ describe('when data cannot be loaded', () => {
     await device.click('button.place', 'Quadro');
     await device.see('Não foi possível carregar');
     expect(device.world.get()).toBe(worldId);
+  });
+});
+
+describe('the check-in', () => {
+  const lines = theme.character.lines;
+  const bubble = (device: Awaited<ReturnType<typeof openDevice>>) => device.root.querySelector('.bubble')?.textContent ?? '';
+  const storedTask = (worldId: string) => [...backend.state.get(worldId)!.tasks.values()].at(-1)!;
+
+  it('completes a task in two taps from the map, and the character congratulates', async () => {
+    const { admin, child, worldId } = await familyWithChild();
+    await createTask(admin, 'Arrumar o quarto', 'Sam');
+    await child.see('Olá, Sam!');
+
+    await child.click('button.place', 'Registo'); // tap 1
+    await child.see('Arrumar o quarto');
+    expect(lines.greeting).toContain(bubble(child));
+    await child.click('button', 'Feito'); // tap 2
+
+    await child.notSee('Arrumar o quarto');
+    expect(lines.congrats).toContain(bubble(child));
+    expect(storedTask(worldId)).toMatchObject({ status: 'done', doneAt: now, weekKey: '2026-W43', answer: null, talkFlag: false });
+  });
+
+  it('shows the question, completes on yes, and on no leaves the task open with a friendly line', async () => {
+    const { admin, child, worldId } = await familyWithChild();
+    await admin.click('button.place', 'Quadro');
+    await admin.click('button', 'Nova tarefa');
+    await admin.type('O que é para fazer?', 'Lavar os dentes');
+    await admin.type('Pergunta de verificação', 'Lavaste mesmo?');
+    await admin.choose('Para quem', 'Sam');
+    await admin.enabled('Criar tarefa');
+    admin.submit();
+    await admin.see('As tuas tarefas');
+
+    await child.click('button.place', 'Registo');
+    await child.see('Lavaste mesmo?');
+    expect(child.find('button', 'Feito')).toBeUndefined(); // a question needs an answer
+
+    await child.click('button', 'Não');
+    expect(lines.doubt).toContain(bubble(child));
+    expect(storedTask(worldId)).toMatchObject({ status: 'open', answer: null }); // nothing is recorded
+    expect(child.root.textContent).toContain('Lavaste mesmo?');
+
+    await child.click('button', 'Sim');
+    await child.notSee('Lavaste mesmo?');
+    expect(storedTask(worldId)).toMatchObject({ status: 'done', answer: 'yes' });
+  });
+
+  it('keeps "I think I did better" on the task, and it is there when the task is completed', async () => {
+    const { admin, child, worldId } = await familyWithChild();
+    await createTask(admin, 'Ler um capítulo', 'Sam');
+
+    await child.click('button.place', 'Registo');
+    await child.click('button.better', 'Acho que fiz melhor');
+    await vi.waitFor(() => expect(storedTask(worldId).talkFlag).toBe(true));
+    await vi.waitFor(() => expect(child.find('button.better')?.getAttribute('aria-pressed')).toBe('true'));
+
+    await child.click('button', 'Feito');
+    await child.notSee('Ler um capítulo');
+    expect(storedTask(worldId)).toMatchObject({ status: 'done', talkFlag: true });
+  });
+
+  it('says goodbye when there is nothing to complete, and never shows other people’s tasks', async () => {
+    const { admin, child } = await familyWithChild();
+    await createTask(admin, 'Só para mim'); // Alex's own task
+    await child.click('button.place', 'Registo');
+    await child.see('Nada para concluir');
+    expect(lines.farewell).toContain(bubble(child));
+    expect(child.root.textContent).not.toContain('Só para mim');
   });
 });

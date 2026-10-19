@@ -187,9 +187,9 @@ Known edge case: the "no open task" check runs on the local cache, so a device w
 - moves the task to `done`, with `doneAt`, `answer`, `talkFlag` and the `weekKey` of the completion;
 - creates the `reward` with the same id, with a `tier` drawn from `tierOdds[level]` using `crypto.getRandomValues`.
 
-**Verification question.** If the task has a `question`, the `checkin` character asks it as yes or no. Answering "yes" completes the task. **[open]** What happens on "no". Proposal: the task stays open, the character says a friendly themed line, and no failure is recorded.
+**Verification question.** If the task has a `question`, the `checkin` character asks it as yes or no, next to the task, so answering "yes" is the single tap that completes it (two taps from the map). Answering "yes" completes the task. **[open]** What happens on "no". Proposal: the task stays open, the character says a friendly themed line, and no failure is recorded.
 
-**"I think I did better".** A button in the `checkin` sets `talkFlag` to true. Adults see the flagged tasks. There are no points, states or multipliers.
+**"I think I did better".** A button on each task in the `checkin` toggles `talkFlag` while the task is open, and the completion keeps its value. Adults see the flagged tasks. There are no points, states or multipliers.
 
 **Opening rewards.** On or after `ruleset.openingDay` (Sunday by default), a person can open the current week's rewards. Rewards from closed weeks can be opened at any time, so if the family skips a Sunday, everything opens on Monday or later. Each person opens their own. Everyone can open at the same time on the same screen, but each person sees only their own result. Opening is one atomic batch that:
 
