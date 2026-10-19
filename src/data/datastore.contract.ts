@@ -7,6 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { weekKey } from '../core/calendar';
+import type { NewRecurringTask } from '../core/generation';
 import { DEFAULT_RULESET, LIMITS, type Clock, type Millis, type Profile, type ProfileId, type Task, type TaskDef } from '../core/model';
 import { DataStoreError, type DataStore, type DataStoreErrorCode, type TaskDefInput, type Unsubscribe, type Write } from './DataStore';
 
@@ -525,6 +526,157 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
         await eventually(() => expect(watch.value).toHaveLength(1));
         expect(watch.value?.[0]).toMatchObject({ title: 'Old title', level: 'mid' });
         watch.close();
+      });
+    });
+
+    describe('recurring tasks', () => {
+      /** A daily definition for everyone, and the task it yields for `profileId` today. */
+      async function withDef(admin: DataStore, worldId: string, profileId: ProfileId, overrides: Partial<TaskDefInput> = {}) {
+        const created = admin.taskDefs.createTaskDef(worldId, {
+          title: 'Make the bed',
+          cadence: 'daily',
+          level: 'low',
+          assignedTo: [],
+          question: 'Did you make it?',
+          big: false,
+          ...overrides,
+        });
+        await created.settled;
+        const defId = created.result.defId;
+        const task: NewRecurringTask = {
+          id: `${defId}_2026-10-18_${profileId}`,
+          defId,
+          periodKey: '2026-10-18',
+          profileId,
+          title: overrides.title ?? 'Make the bed',
+          level: overrides.level ?? 'low',
+          question: overrides.question === undefined ? 'Did you make it?' : overrides.question,
+        };
+        return { defId, task };
+      }
+
+      it('creates the task for its owner, with the values of the definition', async () => {
+        const { admin, child, worldId, childProfileId } = await setup();
+        const { task } = await withDef(admin, worldId, childProfileId);
+
+        await child.tasks.createRecurringTasks(worldId, [task]).settled;
+
+        const watch = new Watch<Task[]>((v, e) => child.tasks.observeOpenTasks(worldId, childProfileId, v, e));
+        await eventually(() => expect(watch.value).toHaveLength(1));
+        expect(watch.value?.[0]).toMatchObject({
+          id: task.id,
+          profileId: childProfileId,
+          title: 'Make the bed',
+          level: 'low',
+          question: 'Did you make it?',
+          source: 'recurring',
+          defId: task.defId,
+          periodKey: '2026-10-18',
+          createdBy: childProfileId,
+          origin: 'app',
+          plan: null,
+          status: 'open',
+        });
+        watch.close();
+      });
+
+      it('leaves a task that exists unchanged, open or done, and settles', async () => {
+        const { admin, child, worldId, childProfileId } = await setup();
+        const { task } = await withDef(admin, worldId, childProfileId, { question: null });
+        const watch = new Watch<Task[]>((v, e) => child.tasks.observeTasks(worldId, childProfileId, v, e));
+
+        await child.tasks.createRecurringTasks(worldId, [task]).settled;
+        await child.tasks.setTalkFlag(worldId, task.id, true).settled;
+        now += 1000;
+        await child.tasks.createRecurringTasks(worldId, [task]).settled;
+        await eventually(() => expect(watch.value).toHaveLength(1));
+        expect(watch.value?.[0]).toMatchObject({ status: 'open', talkFlag: true, createdAt: START });
+
+        await child.tasks.completeTask(worldId, task.id, { answer: null, talkFlag: true }).settled;
+        now += 1000;
+        await child.tasks.createRecurringTasks(worldId, [task]).settled;
+        await eventually(() => expect(watch.value?.[0]).toMatchObject({ status: 'done', talkFlag: true, createdAt: START }));
+        expect(watch.value).toHaveLength(1);
+        watch.close();
+      });
+
+      it('ends with one task when two devices of the same profile generate at once', async () => {
+        const { admin, child, child2, worldId, childProfileId } = await setup();
+        const { task } = await withDef(admin, worldId, childProfileId);
+
+        await Promise.all([
+          child.tasks.createRecurringTasks(worldId, [task]).settled,
+          child2.tasks.createRecurringTasks(worldId, [task]).settled,
+        ]);
+
+        for (const device of [child, child2]) {
+          const watch = new Watch<Task[]>((v, e) => device.tasks.observeTasks(worldId, childProfileId, v, e));
+          await eventually(() => expect(watch.value).toHaveLength(1));
+          watch.close();
+        }
+      });
+
+      it('creates the other tasks even when one is refused', async () => {
+        const { admin, child, worldId, childProfileId } = await setup();
+        const first = await withDef(admin, worldId, childProfileId, { title: 'A' });
+        const second = await withDef(admin, worldId, childProfileId, { title: 'B' });
+        const inactive = await withDef(admin, worldId, childProfileId, { title: 'C' });
+        await admin.taskDefs.updateTaskDef(worldId, inactive.defId, { active: false }).settled;
+
+        await child.tasks.createRecurringTasks(worldId, [first.task, inactive.task, second.task]).settled;
+
+        const watch = new Watch<Task[]>((v, e) => child.tasks.observeTasks(worldId, childProfileId, v, e));
+        await eventually(() => expect(watch.value?.map((t) => t.title).sort()).toEqual(['A', 'B']));
+        watch.close();
+      });
+
+      it('refuses silently a definition edited after the device cached it, and creates it with the new values next time', async () => {
+        const { admin, child, worldId, childProfileId } = await setup();
+        const { defId, task } = await withDef(admin, worldId, childProfileId);
+        const defs = new Watch<TaskDef[]>((v, e) => child.taskDefs.observeTaskDefs(worldId, v, e));
+        await eventually(() => expect(defs.value?.[0]?.title).toBe('Make the bed'));
+
+        // The admin edits it; the child, still holding the old values, tries to create the task.
+        await admin.taskDefs.updateTaskDef(worldId, defId, { title: 'Make the bed well' }).settled;
+        await child.tasks.createRecurringTasks(worldId, [task]).settled;
+
+        const tasks = new Watch<Task[]>((v, e) => child.tasks.observeTasks(worldId, childProfileId, v, e));
+        await eventually(() => expect(tasks.value).toEqual([]));
+
+        // After syncing, the next generation uses the new values.
+        await eventually(() => expect(defs.value?.[0]?.title).toBe('Make the bed well'));
+        await child.tasks.createRecurringTasks(worldId, [{ ...task, title: 'Make the bed well' }]).settled;
+        await eventually(() => expect(tasks.value?.map((t) => t.title)).toEqual(['Make the bed well']));
+        defs.close();
+        tasks.close();
+      });
+
+      it('refuses silently a task for another profile, or from an inactive or unassigned definition', async () => {
+        const { admin, child, worldId, childProfileId, adminProfileId } = await setup();
+        const forAdmin = await withDef(admin, worldId, adminProfileId);
+        const inactive = await withDef(admin, worldId, childProfileId, { title: 'Off' });
+        await admin.taskDefs.updateTaskDef(worldId, inactive.defId, { active: false }).settled;
+        const unassigned = await withDef(admin, worldId, childProfileId, { title: 'Not mine', assignedTo: [adminProfileId] });
+
+        await child.tasks.createRecurringTasks(worldId, [forAdmin.task, inactive.task, unassigned.task]).settled;
+
+        for (const profileId of [adminProfileId, childProfileId]) {
+          const watch = new Watch<Task[]>((v, e) => admin.tasks.observeTasks(worldId, profileId, v, e));
+          await eventually(() => expect(watch.value).toEqual([]));
+          watch.close();
+        }
+      });
+
+      it('rejects a task whose id does not match, or whose title is too long, with invalid-argument', async () => {
+        const { admin, child, worldId, childProfileId } = await setup();
+        const { task } = await withDef(admin, worldId, childProfileId);
+        await rejectsWith(child.tasks.createRecurringTasks(worldId, [{ ...task, id: 'another-id' }]), 'invalid-argument');
+        await rejectsWith(child.tasks.createRecurringTasks(worldId, [{ ...task, title: 'x'.repeat(LIMITS.title + 1) }]), 'invalid-argument');
+      });
+
+      it('resolves when the profile’s tasks have been read from the server', async () => {
+        const { child, worldId, childProfileId } = await setup();
+        await child.tasks.whenTasksSynced(worldId, childProfileId);
       });
     });
 

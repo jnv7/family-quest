@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Profile, Task } from './model';
-import { adhocCreatedForSelfToday, adhocPermission } from './tasks';
+import { adhocCreatedForSelfToday, adhocPermission, visibleOpenTasks } from './tasks';
 
 const TZ = 'Europe/Lisbon';
 const ruleset = { timezone: TZ, childDailyTaskLimit: 3 } as const;
@@ -107,5 +107,31 @@ describe('adhocPermission', () => {
   it('uses the limit from the ruleset', () => {
     const one = [task({ createdAt: NOW })];
     expect(check({ creatorTasks: one, ruleset: { timezone: TZ, childDailyTaskLimit: 1 } })).toBe('limit-reached');
+  });
+});
+
+describe('visibleOpenTasks', () => {
+  const recurring = (id: string, defId: string, createdAt: number, over: Partial<Task> = {}) =>
+    task({ id, defId, periodKey: 'p', source: 'recurring', createdAt, ...over });
+
+  it('shows only the oldest open task of a definition, and every ad hoc task, oldest first', () => {
+    const tasks = [
+      recurring('newer', 'd1', 30),
+      task({ id: 'adhoc-late', createdAt: 40 }),
+      recurring('older', 'd1', 10),
+      task({ id: 'adhoc-early', createdAt: 20 }),
+      recurring('other', 'd2', 25),
+    ];
+    expect(visibleOpenTasks(tasks).map((t) => t.id)).toEqual(['older', 'adhoc-early', 'other', 'adhoc-late']);
+  });
+
+  it('ignores done tasks, so the next one of a definition shows once the oldest is done', () => {
+    const tasks = [recurring('first', 'd1', 10, { status: 'done', doneAt: 15 }), recurring('second', 'd1', 20)];
+    expect(visibleOpenTasks(tasks).map((t) => t.id)).toEqual(['second']);
+  });
+
+  it('breaks a tie in creation time by id, so every device picks the same task', () => {
+    const tasks = [recurring('b', 'd1', 10), recurring('a', 'd1', 10)];
+    expect(visibleOpenTasks(tasks).map((t) => t.id)).toEqual(['a']);
   });
 });

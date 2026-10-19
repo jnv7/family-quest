@@ -1,4 +1,5 @@
 import type { ProfileId, Task } from '../../core/model';
+import { visibleOpenTasks } from '../../core/tasks';
 import type { WorldScreen } from '../context';
 import { h } from '../dom';
 import { observeWithRetry } from '../observe';
@@ -37,7 +38,7 @@ export const renderBoard: WorldScreen = (ctx, root, { worldId }) => {
     stopTasks();
     watchedProfile = profile.id;
     stopTasks = observeWithRetry(ctx, problem, (onError) =>
-      ctx.store.tasks.observeOpenTasks(worldId, profile.id, show, onError),
+      ctx.store.tasks.observeOpenTasks(worldId, profile.id, (tasks) => show(visibleOpenTasks(tasks)), onError),
     );
   });
   return () => {

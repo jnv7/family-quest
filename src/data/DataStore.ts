@@ -10,6 +10,7 @@
  * Scope: operations needed up to release 0.3. Rewards, collectibles and the
  * party (0.6) are added by that release, as separate sub-interfaces.
  */
+import type { NewRecurringTask } from '../core/generation';
 import type {
   Answer,
   Cadence,
@@ -187,6 +188,21 @@ export interface TaskStore {
 
   /** Sets or clears the "I think I did better" flag on an open task of the active profile. */
   setTalkFlag(worldId: WorldId, taskId: TaskId, talkFlag: boolean): Write;
+
+  /**
+   * Creates each task with its deterministic id, one write per task (not one
+   * batch: a rejected task must not block the others). Rejections with
+   * `permission-denied` or `already-exists` are expected and silent (SPEC.md §10);
+   * `settled` rejects only on any other error.
+   */
+  createRecurringTasks(worldId: WorldId, tasks: readonly NewRecurringTask[]): Write;
+
+  /**
+   * Resolves once this profile's tasks have been read from the server at least
+   * once since the app started. It never resolves while offline.
+   * Firestore: onSnapshot with includeMetadataChanges, until metadata.fromCache is false.
+   */
+  whenTasksSynced(worldId: WorldId, profileId: ProfileId): Promise<void>;
 }
 
 export interface TaskDefStore {

@@ -236,6 +236,84 @@ describe('managing recurring tasks', () => {
   });
 });
 
+type Device = Awaited<ReturnType<typeof openDevice>>;
+
+/** On the map of an admin device: creates a daily recurring task for everyone, and comes back to the map. */
+async function addRecurring(device: Device, title: string) {
+  await device.click('button', 'Gerir');
+  await device.click('button', 'Nova tarefa recorrente');
+  await device.type('O que é para fazer?', title);
+  device.root.querySelectorAll('form')[1]!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+  await device.see(`${title} · Todos os dias`);
+  await device.click('button', 'Voltar');
+}
+
+describe('recurring tasks on the board', () => {
+  const tasksOf = (worldId: string) => [...backend.state.get(worldId)!.tasks.values()];
+
+  it('creates today’s task once when the app opens, and opening it again creates nothing', async () => {
+    const { admin, worldId } = await familyWithChild();
+    await addRecurring(admin, 'Arrumar o quarto');
+    expect(tasksOf(worldId)).toHaveLength(0); // generated on open and on profile switch, not while editing
+
+    const first = await openDevice('child-device', { savedWorld: worldId });
+    await first.click('button.place', 'Quadro');
+    await first.see('Arrumar o quarto');
+    expect(tasksOf(worldId)).toHaveLength(1);
+    expect(tasksOf(worldId)[0]).toMatchObject({ source: 'recurring', periodKey: '2026-10-20', status: 'open' });
+
+    const again = await openDevice('child-device', { savedWorld: worldId });
+    await again.click('button.place', 'Quadro');
+    await again.see('Arrumar o quarto');
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(tasksOf(worldId)).toHaveLength(1);
+  });
+
+  it('generates the tasks of the profile the device switches to', async () => {
+    const { admin, worldId } = await familyWithChild();
+    await addRecurring(admin, 'Regar as plantas');
+    const profileIds = [...backend.state.get(worldId)!.profiles.values()];
+    const sam = profileIds.find((p) => p.displayName === 'Sam')!;
+    const alex = profileIds.find((p) => p.displayName === 'Alex')!;
+
+    await admin.click('button', 'Trocar de perfil');
+    await admin.click('button.profile', 'Sam');
+    await vi.waitFor(() => expect(tasksOf(worldId).map((t) => t.profileId)).toEqual([sam.id]));
+
+    await admin.click('button', 'Trocar de perfil');
+    await admin.click('button.profile', 'Alex');
+    await vi.waitFor(() => expect(tasksOf(worldId).map((t) => t.profileId).sort()).toEqual([alex.id, sam.id].sort()));
+  });
+
+  it('shows only the oldest open task of a definition, on the board and in the check-in', async () => {
+    const { admin, worldId } = await familyWithChild();
+    await addRecurring(admin, 'Fazer a cama');
+    const ws = backend.state.get(worldId)!;
+    const defId = [...ws.taskDefs.keys()][0]!;
+    const sam = [...ws.profiles.values()].find((p) => p.displayName === 'Sam')!;
+
+    // A device whose cache missed the first task generated a second one for a later period.
+    const extra = createMemoryStore(backend, { uid: 'child-device', clock, randomInt });
+    await extra.session.signIn();
+    const task = (periodKey: string) => ({ id: `${defId}_${periodKey}_${sam.id}`, defId, periodKey, profileId: sam.id, title: 'Fazer a cama', level: 'mid' as const, question: null });
+    now -= 86_400_000;
+    await extra.tasks.createRecurringTasks(worldId, [task('2026-10-19')]).settled;
+    now += 86_400_000;
+    await extra.tasks.createRecurringTasks(worldId, [task('2026-10-20')]).settled;
+    expect(tasksOf(worldId)).toHaveLength(2);
+
+    const child = await openDevice('child-device', { savedWorld: worldId });
+    await child.click('button.place', 'Quadro');
+    await child.see('Fazer a cama');
+    expect(child.root.querySelectorAll('ul.tasks li')).toHaveLength(1);
+
+    await child.click('button', 'Voltar');
+    await child.click('button.place', 'Registo');
+    await child.see('Fazer a cama');
+    expect(child.root.querySelectorAll('li.checkin-task')).toHaveLength(1);
+  });
+});
+
 describe('coming back', () => {
   it('goes straight to the home of the remembered profile', async () => {
     const { admin, worldId } = await createFamily();

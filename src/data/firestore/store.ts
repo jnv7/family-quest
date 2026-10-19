@@ -25,6 +25,7 @@ import {
 import { signInAnonymously, type Auth } from 'firebase/auth';
 import { weekKey } from '../../core/calendar';
 import { taskDefProblem } from '../../core/taskDefs';
+import { newRecurringTaskProblem, settleRecurringWrites } from '../recurring';
 import {
   DEFAULT_AVATAR,
   DEFAULT_RULESET,
@@ -339,6 +340,67 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
 
       setTalkFlag: (worldId, taskId, talkFlag) =>
         write(undefined, () => updateDoc(taskDoc(db, worldId, taskId), { talkFlag })),
+
+      createRecurringTasks(worldId, tasks) {
+        const meta = newDoc();
+        return write(undefined, async () => {
+          for (const input of tasks) {
+            const problem = newRecurringTaskProblem(input);
+            if (problem) throw invalid(problem);
+          }
+          const member = decodeMember(await readDoc(memberDoc(db, worldId, requireUid())));
+          if (!member?.profileId) throw denied('Choose a profile first');
+          const createdBy = member.profileId;
+          // One write per task: the server judges each on its own, so one refusal blocks no other.
+          await settleRecurringWrites(
+            tasks.map((input) => {
+              const task: Task = {
+                ...meta,
+                id: input.id,
+                profileId: input.profileId,
+                title: input.title,
+                level: input.level,
+                question: input.question,
+                source: 'recurring',
+                defId: input.defId,
+                periodKey: input.periodKey,
+                createdBy,
+                origin: 'app',
+                plan: null,
+                status: 'open',
+                doneAt: null,
+                answer: null,
+                talkFlag: false,
+                weekKey: null,
+              };
+              return setDoc(taskDoc(db, worldId, task.id), encodeTask(task)).catch((error: unknown) =>
+                Promise.reject(toDataStoreError(error)),
+              );
+            }),
+          );
+        });
+      },
+
+      whenTasksSynced: (worldId, profileId) =>
+        new Promise<void>((resolve, reject) => {
+          let stop: Unsubscribe = () => {};
+          let finished = false;
+          stop = onSnapshot(
+            query(tasksCollection(db, worldId), where('profileId', '==', profileId)),
+            { includeMetadataChanges: true },
+            (snapshot) => {
+              if (finished || snapshot.metadata.fromCache) return;
+              finished = true;
+              stop();
+              resolve();
+            },
+            (error) => {
+              finished = true;
+              reject(toDataStoreError(error));
+            },
+          );
+          if (finished) stop();
+        }),
     },
 
     taskDefs: {

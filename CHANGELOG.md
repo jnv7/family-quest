@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.3] — 2026-10-19
+
+### Added
+
+- Recurring tasks now appear. When the app opens, and after every profile switch, the device waits up to 5 seconds for the profile's tasks to come from the server (so it never generates from an empty cache), then creates the day's, week's or month's tasks the profile is due, once. Opening the app again creates nothing.
+- `createRecurringTasks` and `whenTasksSynced` in the `DataStore` contract, with both adapters and the contract suite: one write per task, so one refusal never blocks the others; a refusal by the rules (another device got there first, or the definition changed) is silent.
+
+### Changed
+
+- The board and the check-in show at most one open task per recurring definition, the oldest; the others stay stored and appear as the first is completed (`visibleOpenTasks`).
+
 ## [0.3.2] — 2026-10-19
 
 ### Added
