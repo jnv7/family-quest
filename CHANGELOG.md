@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.6] — 2026-10-19
+
+Closes release 0.2.
+
+### Changed
+
+- Creating ad hoc tasks uses the single definition of admin (`isAdmin`): an archived adult profile is not an admin.
+
 ## [0.2.5] — 2026-10-19
 
 Completes 0.2.4 with two items from the radar (moved there by the developer, and accepted afterwards by the product owner), and delivers the theme of the world.
