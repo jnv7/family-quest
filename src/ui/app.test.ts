@@ -182,6 +182,60 @@ describe('managing profiles', () => {
   });
 });
 
+describe('managing recurring tasks', () => {
+  /** Opens the management screen of a world with a child profile "Sam", and returns the recurring-task form helpers. */
+  async function openRecurring() {
+    const { admin, worldId } = await createFamily();
+    await admin.click('button', 'Continuar');
+    await admin.click('button', 'Gerir');
+    await admin.type('Nome', 'Sam');
+    admin.submit();
+    await admin.see('Sam');
+    const form = () => admin.root.querySelectorAll('form')[1]!;
+    const save = () => form().dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    return { admin, worldId, form, save };
+  }
+
+  it('creates a definition, dims it when deactivated, and brings it back', async () => {
+    const { admin, form, save } = await openRecurring();
+    await admin.see('Ainda não há tarefas recorrentes.');
+
+    await admin.click('button', 'Nova tarefa recorrente');
+    expect(form().hidden).toBe(false);
+    await admin.type('O que é para fazer?', 'Arrumar o quarto');
+    save();
+    await admin.see('Arrumar o quarto · Todos os dias');
+    expect(form().hidden).toBe(true);
+
+    await admin.click('li button', 'Desativar');
+    await admin.see('(desativada)');
+    expect(admin.find('li.inactive', 'Arrumar o quarto')).toBeDefined();
+
+    await admin.click('li button', 'Ativar');
+    await admin.notSee('(desativada)');
+  });
+
+  it('assigns a definition to chosen profiles, and edits it', async () => {
+    const { admin, form, save } = await openRecurring();
+    await admin.click('button', 'Nova tarefa recorrente');
+    await admin.type('O que é para fazer?', 'Regar as plantas');
+    await admin.choose('Repete', 'Todas as semanas');
+    await admin.choose('Dificuldade', 'Difícil');
+    const sam = [...form().querySelectorAll('label.check')].find((l) => l.textContent?.includes('Sam'))!;
+    (sam.querySelector('input') as HTMLInputElement).checked = true;
+    save();
+    await admin.see('Regar as plantas · Todas as semanas');
+
+    await admin.click('li button', 'Editar');
+    expect((form().querySelector('input[type=text]') as HTMLInputElement).value).toBe('Regar as plantas');
+    expect(((form().querySelector('label.check input[value]:checked') as HTMLInputElement | null)?.parentElement?.textContent) ?? '').toContain('Sam');
+    await admin.type('O que é para fazer?', 'Regar o jardim');
+    save();
+    await admin.see('Regar o jardim');
+    await admin.notSee('Regar as plantas');
+  });
+});
+
 describe('coming back', () => {
   it('goes straight to the home of the remembered profile', async () => {
     const { admin, worldId } = await createFamily();

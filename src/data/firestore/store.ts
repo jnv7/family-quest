@@ -24,6 +24,7 @@ import {
 } from 'firebase/firestore';
 import { signInAnonymously, type Auth } from 'firebase/auth';
 import { weekKey } from '../../core/calendar';
+import { taskDefProblem } from '../../core/taskDefs';
 import {
   DEFAULT_AVATAR,
   DEFAULT_RULESET,
@@ -35,6 +36,7 @@ import {
   type Profile,
   type RandomInt,
   type Task,
+  type TaskDef,
   type Uid,
   type World,
 } from '../../core/model';
@@ -52,11 +54,13 @@ import {
   decodeMember,
   decodeProfile,
   decodeTask,
+  decodeTaskDef,
   decodeWorld,
   encodeMember,
   encodeProfile,
   encodeTask,
   encodeTaskCompletion,
+  encodeTaskDef,
   encodeWorld,
 } from './converters';
 import { toDataStoreError } from './errors';
@@ -65,6 +69,8 @@ import {
   memberDoc,
   profileDoc,
   profilesCollection,
+  taskDefDoc,
+  taskDefsCollection,
   taskDoc,
   tasksCollection,
   worldDoc,
@@ -333,6 +339,45 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
 
       setTalkFlag: (worldId, taskId, talkFlag) =>
         write(undefined, () => updateDoc(taskDoc(db, worldId, taskId), { talkFlag })),
+    },
+
+    taskDefs: {
+      observeTaskDefs: (worldId, onValue, onError) =>
+        onSnapshot(
+          query(taskDefsCollection(db, worldId), orderBy('title', 'asc')),
+          (snapshot) => onValue(decodeAll(snapshot.docs, decodeTaskDef)),
+          (error) => onError?.(toDataStoreError(error)),
+        ),
+
+      createTaskDef(worldId, input) {
+        const defId = doc(taskDefsCollection(db, worldId)).id;
+        const meta = newDoc();
+        return write({ defId }, async () => {
+          const problem = taskDefProblem(input);
+          if (problem) throw invalid(problem);
+          const def: TaskDef = {
+            ...meta,
+            id: defId,
+            title: input.title,
+            cadence: input.cadence,
+            level: input.level,
+            assignedTo: [...input.assignedTo],
+            question: input.question,
+            big: input.big,
+            active: true,
+          };
+          await setDoc(taskDefDoc(db, worldId, defId), encodeTaskDef(def));
+        });
+      },
+
+      updateTaskDef: (worldId, defId, patch) =>
+        write(undefined, async () => {
+          const problem = taskDefProblem(patch);
+          if (problem) throw invalid(problem);
+          // `updateDoc` rejects `undefined` values, so only the fields that were given are sent.
+          const fields = Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined));
+          await updateDoc(taskDefDoc(db, worldId, defId), fields);
+        }),
     },
   };
 }

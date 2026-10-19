@@ -7,8 +7,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { weekKey } from '../core/calendar';
-import { DEFAULT_RULESET, type Clock, type Millis, type Profile, type ProfileId, type Task } from '../core/model';
-import { DataStoreError, type DataStore, type DataStoreErrorCode, type Unsubscribe, type Write } from './DataStore';
+import { DEFAULT_RULESET, LIMITS, type Clock, type Millis, type Profile, type ProfileId, type Task, type TaskDef } from '../core/model';
+import { DataStoreError, type DataStore, type DataStoreErrorCode, type TaskDefInput, type Unsubscribe, type Write } from './DataStore';
 
 /** Signed-in devices that share one backend. */
 export interface ContractDevices {
@@ -379,6 +379,151 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
         await child.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: false }).settled;
         await rejectsWith(child.tasks.setTalkFlag(worldId, taskId, true), 'permission-denied');
         await eventually(() => expect(watch.value?.[0]).toMatchObject({ status: 'done', talkFlag: false }));
+        watch.close();
+      });
+    });
+
+    describe('task definitions', () => {
+      const def = (overrides: Partial<TaskDefInput> = {}): TaskDefInput => ({
+        title: 'Make the bed',
+        cadence: 'daily',
+        level: 'low',
+        assignedTo: [],
+        question: null,
+        big: false,
+        ...overrides,
+      });
+
+      it('lets an admin create one, active, and every device sees it', async () => {
+        const { admin, child, worldId } = await setup();
+        const created = admin.taskDefs.createTaskDef(worldId, def({ question: 'Did you make it?' }));
+        await created.settled;
+
+        for (const device of [admin, child]) {
+          const watch = new Watch<TaskDef[]>((v, e) => device.taskDefs.observeTaskDefs(worldId, v, e));
+          await eventually(() => expect(watch.value).toHaveLength(1));
+          expect(watch.value?.[0]).toMatchObject({
+            id: created.result.defId,
+            title: 'Make the bed',
+            cadence: 'daily',
+            level: 'low',
+            assignedTo: [],
+            question: 'Did you make it?',
+            big: false,
+            active: true,
+          });
+          watch.close();
+        }
+      });
+
+      it('lists them ordered by title, inactive ones included', async () => {
+        const { admin, worldId } = await setup();
+        await admin.taskDefs.createTaskDef(worldId, def({ title: 'b' })).settled;
+        const second = admin.taskDefs.createTaskDef(worldId, def({ title: 'a' }));
+        await second.settled;
+        await admin.taskDefs.updateTaskDef(worldId, second.result.defId, { active: false }).settled;
+
+        const watch = new Watch<TaskDef[]>((v, e) => admin.taskDefs.observeTaskDefs(worldId, v, e));
+        await eventually(() => expect(watch.value?.map((d) => [d.title, d.active])).toEqual([['a', false], ['b', true]]));
+        watch.close();
+      });
+
+      it('refuses a device on a child profile, for creating and for updating', async () => {
+        const { admin, child, worldId } = await setup();
+        await rejectsWith(child.taskDefs.createTaskDef(worldId, def()), 'permission-denied');
+
+        const created = admin.taskDefs.createTaskDef(worldId, def());
+        await created.settled;
+        await rejectsWith(child.taskDefs.updateTaskDef(worldId, created.result.defId, { title: 'Changed' }), 'permission-denied');
+        await rejectsWith(child.taskDefs.updateTaskDef(worldId, created.result.defId, { active: false }), 'permission-denied');
+
+        const watch = new Watch<TaskDef[]>((v, e) => admin.taskDefs.observeTaskDefs(worldId, v, e));
+        await eventually(() => expect(watch.value?.map((d) => [d.title, d.active])).toEqual([['Make the bed', true]]));
+        watch.close();
+      });
+
+      it('refuses a device that has not chosen a profile', async () => {
+        const { newcomer, worldId } = await setup();
+        await rejectsWith(newcomer.taskDefs.createTaskDef(worldId, def()), 'permission-denied');
+      });
+
+      it('deactivates and reactivates, and both changes are emitted', async () => {
+        const { admin, child, worldId } = await setup();
+        const created = admin.taskDefs.createTaskDef(worldId, def());
+        await created.settled;
+        const { defId } = created.result;
+
+        const watch = new Watch<TaskDef[]>((v, e) => child.taskDefs.observeTaskDefs(worldId, v, e));
+        await admin.taskDefs.updateTaskDef(worldId, defId, { active: false }).settled;
+        await eventually(() => expect(watch.value?.[0]?.active).toBe(false));
+        await admin.taskDefs.updateTaskDef(worldId, defId, { active: true }).settled;
+        await eventually(() => expect(watch.value?.[0]?.active).toBe(true));
+        watch.close();
+      });
+
+      it('edits any field, and clears the question and the list of profiles', async () => {
+        const { admin, worldId, childProfileId } = await setup();
+        const created = admin.taskDefs.createTaskDef(worldId, def({ question: 'Done?' }));
+        await created.settled;
+        const { defId } = created.result;
+
+        await admin.taskDefs
+          .updateTaskDef(worldId, defId, {
+            title: 'Tidy the room',
+            cadence: 'weekly',
+            level: 'high',
+            assignedTo: [childProfileId],
+            question: null,
+            big: true,
+          })
+          .settled;
+        const watch = new Watch<TaskDef[]>((v, e) => admin.taskDefs.observeTaskDefs(worldId, v, e));
+        await eventually(() =>
+          expect(watch.value?.[0]).toMatchObject({
+            title: 'Tidy the room',
+            cadence: 'weekly',
+            level: 'high',
+            assignedTo: [childProfileId],
+            question: null,
+            big: true,
+            active: true,
+          }),
+        );
+        await admin.taskDefs.updateTaskDef(worldId, defId, { assignedTo: [] }).settled;
+        await eventually(() => expect(watch.value?.[0]?.assignedTo).toEqual([]));
+        watch.close();
+      });
+
+      it('rejects a title or a question over the limit with invalid-argument, before any write', async () => {
+        const { admin, worldId } = await setup();
+        await rejectsWith(admin.taskDefs.createTaskDef(worldId, def({ title: 'x'.repeat(LIMITS.title + 1) })), 'invalid-argument');
+        await rejectsWith(admin.taskDefs.createTaskDef(worldId, def({ title: '' })), 'invalid-argument');
+        await rejectsWith(admin.taskDefs.createTaskDef(worldId, def({ question: 'x'.repeat(LIMITS.question + 1) })), 'invalid-argument');
+
+        const created = admin.taskDefs.createTaskDef(worldId, def());
+        await created.settled;
+        await rejectsWith(admin.taskDefs.updateTaskDef(worldId, created.result.defId, { title: 'x'.repeat(LIMITS.title + 1) }), 'invalid-argument');
+        await rejectsWith(admin.taskDefs.updateTaskDef(worldId, created.result.defId, { question: 'x'.repeat(LIMITS.question + 1) }), 'invalid-argument');
+
+        const watch = new Watch<TaskDef[]>((v, e) => admin.taskDefs.observeTaskDefs(worldId, v, e));
+        await eventually(() => expect(watch.value?.map((d) => d.title)).toEqual(['Make the bed']));
+        watch.close();
+      });
+
+      it('leaves existing tasks alone when the definition changes', async () => {
+        // Tasks are separate documents that copy the definition when they are
+        // created. The full case, with a recurring task, is in the generation tests (0.3.3).
+        const { admin, child, worldId, childProfileId } = await setup();
+        const created = admin.taskDefs.createTaskDef(worldId, def());
+        await created.settled;
+        const task = admin.tasks.createAdhocTask(worldId, adhoc(childProfileId, 'Old title'));
+        await task.settled;
+
+        await admin.taskDefs.updateTaskDef(worldId, created.result.defId, { title: 'New title', level: 'high' }).settled;
+
+        const watch = new Watch<Task[]>((v, e) => child.tasks.observeTasks(worldId, childProfileId, v, e));
+        await eventually(() => expect(watch.value).toHaveLength(1));
+        expect(watch.value?.[0]).toMatchObject({ title: 'Old title', level: 'mid' });
         watch.close();
       });
     });

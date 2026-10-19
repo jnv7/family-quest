@@ -7,6 +7,7 @@
  * observers show the server state again.
  */
 import { weekKey } from '../../core/calendar';
+import { taskDefProblem } from '../../core/taskDefs';
 import {
   DEFAULT_AVATAR,
   DEFAULT_RULESET,
@@ -19,6 +20,8 @@ import {
   type ProfileId,
   type RandomInt,
   type Task,
+  type TaskDef,
+  type TaskDefId,
   type TaskId,
   type Uid,
   type World,
@@ -31,6 +34,7 @@ import {
   type CreateAdhocTaskInput,
   type CreateProfileInput,
   type CreateWorldInput,
+  type TaskDefInput,
   type DataStore,
   type Observer,
   type ObserverError,
@@ -458,7 +462,68 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
           };
         }),
     },
+
+    taskDefs: {
+      observeTaskDefs: (worldId, onValue, onError) =>
+        observeAsMember(
+          worldId,
+          ({ ws }) => ({ value: [...ws.taskDefs.values()].sort(byTitleThenId) }),
+          onValue,
+          onError,
+        ),
+
+      createTaskDef(worldId, input: TaskDefInput) {
+        const defId = autoId();
+        return submit({ defId }, (view, uid) => {
+          const problem = taskDefProblem(input);
+          if (problem) throw invalid(problem);
+          requireWorld(view, worldId);
+          const def: TaskDef = {
+            ...newDoc(),
+            id: defId,
+            title: input.title,
+            cadence: input.cadence,
+            level: input.level,
+            assignedTo: [...input.assignedTo],
+            question: input.question,
+            big: input.big,
+            active: true,
+          };
+          return {
+            ops: [{ worldId, collection: 'taskDefs', id: defId, create: def }],
+            check: (state) => (accessOf(state, worldId, uid)?.isAdmin ? null : denied('Only an admin creates task definitions')),
+          };
+        });
+      },
+
+      updateTaskDef: (worldId, defId, patch) =>
+        submit(undefined, (view, uid) => {
+          const problem = taskDefProblem(patch);
+          if (problem) throw invalid(problem);
+          if (!requireWorld(view, worldId).taskDefs.has(defId)) throw notFound(`Task definition ${defId} does not exist`);
+          return {
+            ops: [{ worldId, collection: 'taskDefs', id: defId, patch: definedFields(patch) }],
+            check: (state) => {
+              const access = accessOf(state, worldId, uid);
+              if (!access?.isAdmin) return denied('Only an admin changes task definitions');
+              if (!access.ws.taskDefs.has(defId)) return notFound(`Task definition ${defId} does not exist`);
+              return null;
+            },
+          };
+        }),
+    },
   };
+}
+
+/** Firestore orders by title, then by document id; the memory adapter does the same. */
+function byTitleThenId(a: TaskDef, b: TaskDef): number {
+  if (a.title !== b.title) return a.title < b.title ? -1 : 1;
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
+/** A patch without the keys set to `undefined`, which must not overwrite anything. */
+function definedFields<T extends object>(patch: T): T {
+  return Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined)) as T;
 }
 
 /** Only the owner changes a task, and only while it is open. */

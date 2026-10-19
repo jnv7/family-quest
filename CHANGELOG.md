@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-10-19
+
+First delivery of release 0.3.
+
+### Added
+
+- Management has a "recurring tasks" section (admins only): list the definitions with the inactive ones dimmed, create and edit them (title, cadence, level, for whom, optional question, "big"), and deactivate or reactivate them. There is no delete.
+- Data access for definitions: `TaskDefStore` in the `DataStore` contract (`observeTaskDefs`, `createTaskDef`, `updateTaskDef`), with the Firestore and memory adapters and the shared contract suite. A title or question over its limit is refused with `invalid-argument` before any write; a device on a child profile gets `permission-denied`.
+- `taskDefProblem` in the domain, the one field check both adapters use.
+
 ## [0.2.6] — 2026-10-19
 
 Closes release 0.2.
