@@ -4,7 +4,7 @@ Each release is one minor version, developed on its own `release/0.x` branch (`G
 
 The behaviour each release implements is specified in `SPEC.md`.
 
-**Last closed release: 0.1 — Foundations** (2026-10-18, tag `v0.1`; [release notes](docs/release-notes/0.1.md)). **Next: 0.2 — Core**, not started.
+**Last closed release: 0.2 — Core** (2026-10-19, tag `v0.2`; [release notes](docs/release-notes/0.2.md)). **Current release:** none; the next one is 0.3, whose deliveries are in [docs/plans/0.3.md](docs/plans/0.3.md).
 
 ## Release plan
 
@@ -25,14 +25,14 @@ Exit criteria:
 - domain and rules tests pass in CI;
 - the start page opens on a phone over HTTPS.
 
-### 0.2 — Core
+### 0.2 — Core (closed)
 
 Deliveries:
 
-- **0.2.1 — World and profiles:** join link and QR code, Netflix-style profile picker.
-- **0.2.2 — Map and `board`:** creating ad hoc tasks.
-- **0.2.3 — `checkin`:** the verification question and the "I think I did better" button.
-- **0.2.4 — Installable and offline:** web app manifest and a service worker that caches the app shell.
+- **0.2.1 — World and profiles (done):** join link and QR code, Netflix-style profile picker.
+- **0.2.2 — Map and `board` (done):** creating ad hoc tasks.
+- **0.2.3 — `checkin` (done):** the verification question and the "I think I did better" button.
+- **0.2.4 — Installable and offline (done):** web app manifest and a service worker that caches the app shell; the installed app's name and icon follow the world's theme, and the app offers to install itself (moved here from the radar by the developer, and accepted afterwards by the product owner on the tech lead's review, 2026-10-19; delivered as patches 0.2.4 and 0.2.5).
 
 The app is installable from this release on. Installing it later would move it to separate storage on iOS and force everyone to join again.
 
@@ -115,6 +115,9 @@ Ideas that are outside the current release. They are neither implemented on own 
 
 | Idea | Origin |
 | --- | --- |
+| Theme text layer 3: a theme may reword any neutral message by key and define terms used only in its own texts (`{#term}`), validated by `validate-theme` (ADR 0006) | Product owner, 2026-10-19 |
+| Per-locale theme texts: move layers 2 and 3 of each theme into `src/themes/{themeId}/locales/{locale}.json` when a second locale arrives (ADR 0006) | Product owner, 2026-10-19 |
+| Move the default theme id out of `src/main.ts` into a single configuration value (ADR 0006) | Spec review, 2026-10-19 |
 | Due dates on tasks, and rescheduling without penalty; with them, decide what happens to open recurring tasks from past periods (today they stay on the `board` and block new copies) | Deferred by the product owner, 2026-10-18 |
 | An admin can revoke a device (remove a member), for a leaked join code | Spec review, 2026-10-18 |
 | Device-bound admin rights with an admin recovery code, so a child picking an adult profile does not get admin rights (alternative B in ADR 0003) | Deferred by the product owner, 2026-10-18 |

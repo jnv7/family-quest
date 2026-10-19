@@ -9,7 +9,11 @@ A web app (PWA) for one family: daily, weekly, monthly and ad hoc tasks, complet
 
 ## Non-negotiable rules
 
-1. **Theme independence.** Nothing outside `src/themes/` may contain theme vocabulary: entity names, texts, ids, collection names or Firestore rules. Code uses the neutral glossary in `SPEC.md` §3. `npm run lint:theme-leak` must pass.
+1. **A theme is a skin.** A theme changes only looks and words, never behaviour (ADR 0006, `docs/architecture.md` §6).
+   - **Vocabulary:** nothing outside `src/themes/` may contain theme vocabulary (entity names, texts, ids, collection names or Firestore rules). Code uses the neutral glossary in `SPEC.md` §3, and `npm run lint:theme-leak` must pass.
+   - **No branching:** no code branches on a specific theme id.
+   - **Data only:** themes are data only.
+   - **Text:** all visible text comes from the locale files and the theme.
 2. **Public repository.** Never write secrets, service account keys, passwords, people's names, ages or any personal family data here. The `firebaseConfig` is public by design; security lives in the Firestore rules.
 3. **No cost.** Spark plan: no Cloud Functions, no Cloud Storage. If anything asks for billing, stop and ask.
 4. **Local-first.** Everything works offline and syncs later. Firestore transactions do not work offline: use `writeBatch` with deterministic ids (`SPEC.md` §10).
