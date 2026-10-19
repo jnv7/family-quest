@@ -589,14 +589,19 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
         await child.tasks.setTalkFlag(worldId, task.id, true).settled;
         now += 1000;
         await child.tasks.createRecurringTasks(worldId, [task]).settled;
-        await eventually(() => expect(watch.value).toHaveLength(1));
-        expect(watch.value?.[0]).toMatchObject({ status: 'open', talkFlag: true, createdAt: START });
+        // Firestore shows the rewrite locally until the server refuses it, then reverts.
+        await eventually(() => {
+          expect(watch.value).toHaveLength(1);
+          expect(watch.value?.[0]).toMatchObject({ status: 'open', talkFlag: true, createdAt: START });
+        });
 
         await child.tasks.completeTask(worldId, task.id, { answer: null, talkFlag: true }).settled;
         now += 1000;
         await child.tasks.createRecurringTasks(worldId, [task]).settled;
-        await eventually(() => expect(watch.value?.[0]).toMatchObject({ status: 'done', talkFlag: true, createdAt: START }));
-        expect(watch.value).toHaveLength(1);
+        await eventually(() => {
+          expect(watch.value).toHaveLength(1);
+          expect(watch.value?.[0]).toMatchObject({ status: 'done', talkFlag: true, createdAt: START });
+        });
         watch.close();
       });
 
