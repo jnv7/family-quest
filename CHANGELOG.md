@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- When the tasks could not be loaded, the board threw the person back to the map without a word, so no task could be created. It now stays on screen with a message and a "try again" button, and the same applies to the new task form.
+- A failed load of the world's profiles no longer makes the device forget its world. Only losing access does.
+
 ## [0.2.2] — 2026-10-19
 
 ### Added

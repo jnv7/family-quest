@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRandomInt } from '../core/random';
+import { DataStoreError, type DataStore } from '../data/DataStore';
 import { createMemoryBackend, createMemoryStore } from '../data/memory';
 import { loadTheme } from '../theme';
 import { startApp } from './app';
@@ -19,7 +20,10 @@ let backend = createMemoryBackend();
 let stops: Array<() => void> = [];
 
 /** One device: its own store, remembered world and screen, sharing the backend. */
-async function openDevice(uid: string, options: { hash?: string; savedWorld?: string } = {}) {
+async function openDevice(
+  uid: string,
+  options: { hash?: string; savedWorld?: string; wrap?: (store: DataStore) => DataStore } = {},
+) {
   const storage = new Map<string, string>();
   const world = createWorldMemory({
     getItem: (k) => storage.get(k) ?? null,
@@ -29,7 +33,7 @@ async function openDevice(uid: string, options: { hash?: string; savedWorld?: st
   if (options.savedWorld) world.set(options.savedWorld);
   const root = document.createElement('main');
   document.body.append(root);
-  const store = createMemoryStore(backend, { uid, clock, randomInt });
+  const store = (options.wrap ?? ((s) => s))(createMemoryStore(backend, { uid, clock, randomInt }));
   stops.push(await startApp({ root, store, theme, baseUrl: BASE_URL, world, clock, navigation: memoryNavigation(options.hash ?? '') }));
 
   const find = (selector: string, text?: string) =>
@@ -303,5 +307,53 @@ describe('the board and ad hoc tasks', () => {
     await child.enabled('Criar tarefa');
     child.submit();
     await child.see('Quarta');
+  });
+});
+
+describe('when data cannot be loaded', () => {
+  /** A store whose first read of the open tasks fails, as when the server lacks an index. */
+  const failingOnce =
+    (code: 'unavailable' | 'permission-denied') =>
+    (store: DataStore): DataStore => {
+      let failed = false;
+      return {
+        ...store,
+        tasks: {
+          ...store.tasks,
+          observeOpenTasks: (worldId, profileId, onValue, onError) => {
+            if (failed) return store.tasks.observeOpenTasks(worldId, profileId, onValue, onError);
+            failed = true;
+            queueMicrotask(() => onError?.(new DataStoreError(code, 'The query requires an index')));
+            return () => {};
+          },
+        },
+      };
+    };
+
+  it('keeps the board on screen with a message and a retry, instead of leaving it', async () => {
+    const { admin } = await createFamily();
+    stops.pop()!();
+    const worldId = admin.world.get()!;
+    const device = await openDevice('admin-device', { savedWorld: worldId, wrap: failingOnce('unavailable') });
+    await device.see('Olá, Alex!');
+
+    await device.click('button.place', 'Quadro');
+    await device.see('Não foi possível carregar');
+    expect(device.root.textContent).toContain('As tuas tarefas'); // still the board
+    expect(device.find('button', 'Nova tarefa')).toBeDefined(); // and a task can still be created
+
+    await device.click('button', 'Tentar de novo');
+    await device.see('Nada por fazer');
+    await device.notSee('Não foi possível carregar');
+  });
+
+  it('does not forget the world on an error that is not about access', async () => {
+    const { admin } = await createFamily();
+    stops.pop()!();
+    const worldId = admin.world.get()!;
+    const device = await openDevice('admin-device', { savedWorld: worldId, wrap: failingOnce('unavailable') });
+    await device.click('button.place', 'Quadro');
+    await device.see('Não foi possível carregar');
+    expect(device.world.get()).toBe(worldId);
   });
 });

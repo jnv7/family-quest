@@ -1,15 +1,18 @@
 import type { ProfileId, Task } from '../../core/model';
 import type { WorldScreen } from '../context';
 import { h } from '../dom';
+import { observeWithRetry } from '../observe';
 import { observeSelf } from '../self';
 
 /** All open tasks of the active profile, oldest first, including those from past periods (SPEC.md §7.3). */
 export const renderBoard: WorldScreen = (ctx, root, { worldId }) => {
   const list = h('ul', { class: 'rows tasks' });
   const empty = h('div');
+  const problem = h('div');
 
   root.append(
     h('h1', {}, ctx.text('board.title')),
+    problem,
     list,
     empty,
     h('div', { class: 'stack' },
@@ -33,7 +36,9 @@ export const renderBoard: WorldScreen = (ctx, root, { worldId }) => {
     if (profile.id === watchedProfile) return;
     stopTasks();
     watchedProfile = profile.id;
-    stopTasks = ctx.store.tasks.observeOpenTasks(worldId, profile.id, show, () => ctx.go({ name: 'map' }, { replace: true }));
+    stopTasks = observeWithRetry(ctx, problem, (onError) =>
+      ctx.store.tasks.observeOpenTasks(worldId, profile.id, show, onError),
+    );
   });
   return () => {
     stopTasks();

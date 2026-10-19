@@ -2,6 +2,7 @@ import { adhocPermission } from '../../core/tasks';
 import { LIMITS, type Profile, type Task, type TaskLevel, type World } from '../../core/model';
 import type { WorldScreen } from '../context';
 import { h } from '../dom';
+import { observeWithRetry } from '../observe';
 import { observeSelf } from '../self';
 
 const LEVELS: readonly TaskLevel[] = ['low', 'mid', 'high'];
@@ -18,6 +19,8 @@ export const renderNewTask: WorldScreen = (ctx, root, { worldId }) => {
   const targetField = h('label', {}, ctx.text('newTask.forWho'), target);
   const submit = h('button', { class: 'primary', type: 'submit', disabled: true }, ctx.text('newTask.submit'));
   const limitMessage = h('div');
+  const worldProblem = h('div');
+  const tasksProblem = h('div');
   const form = h('form', { class: 'stack' },
     h('label', {}, ctx.text('newTask.title'), title),
     h('label', {}, ctx.text('newTask.level'), level),
@@ -27,6 +30,8 @@ export const renderNewTask: WorldScreen = (ctx, root, { worldId }) => {
   );
   root.append(
     h('h1', {}, ctx.text('newTask.heading')),
+    worldProblem,
+    tasksProblem,
     form,
     limitMessage,
     h('div', { class: 'stack' }, h('button', { onClick: () => ctx.go({ name: 'board' }) }, ctx.text('app.back'))),
@@ -77,7 +82,9 @@ export const renderNewTask: WorldScreen = (ctx, root, { worldId }) => {
   });
   target.addEventListener('change', refresh);
 
-  const stopWorld = ctx.store.worlds.observeWorld(worldId, (value) => ((world = value), refresh()));
+  const stopWorld = observeWithRetry(ctx, worldProblem, (onError) =>
+    ctx.store.worlds.observeWorld(worldId, (value) => ((world = value), refresh()), onError),
+  );
   const stopSelf = observeSelf(ctx, worldId, ({ profile, profiles }) => {
     if (!profile) {
       ctx.go({ name: 'profiles' }, { replace: true });
@@ -95,7 +102,9 @@ export const renderNewTask: WorldScreen = (ctx, root, { worldId }) => {
       stopTasks();
       watchedProfile = profile.id;
       myTasks = null;
-      stopTasks = ctx.store.tasks.observeTasks(worldId, profile.id, (tasks) => ((myTasks = tasks), refresh()));
+      stopTasks = observeWithRetry(ctx, tasksProblem, (onError) =>
+        ctx.store.tasks.observeTasks(worldId, profile.id, (tasks) => ((myTasks = tasks), refresh()), onError),
+      );
     }
     refresh();
   });

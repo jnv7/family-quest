@@ -1,5 +1,6 @@
 import { activeProfileOf, isAdmin } from '../core/access';
 import type { Member, Profile, WorldId } from '../core/model';
+import { DataStoreError } from '../data/DataStore';
 import type { AppContext, Dispose } from './context';
 
 export interface Self {
@@ -22,10 +23,16 @@ export function observeSelf(ctx: AppContext, worldId: WorldId, onChange: (self: 
     const profile = activeProfileOf(ctx.uid, members, profiles);
     onChange({ profiles, profile, isAdmin: isAdmin(profile) });
   };
-  const onError = () => {
-    // Lost read access (for example a world that no longer exists for this device).
-    ctx.world.clear();
-    ctx.go({ name: 'start' }, { replace: true });
+  const onError = (error: DataStoreError) => {
+    if (error.code === 'permission-denied') {
+      // This device can no longer read the world (it is not a member).
+      ctx.world.clear();
+      ctx.go({ name: 'start' }, { replace: true });
+      return;
+    }
+    // Anything else is about the connection or the server: keep the world and say so.
+    console.error('Could not load the world', error);
+    ctx.notify('notice.connection');
   };
 
   const stopMembers = ctx.store.worlds.observeMembers(worldId, (value) => ((members = value), report()), onError);
