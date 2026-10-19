@@ -7,7 +7,7 @@
  * not know. It never coerces such a document.
  */
 import { Timestamp, type DocumentData, type DocumentSnapshot, type QueryDocumentSnapshot } from 'firebase/firestore';
-import { SCHEMA_VERSION, type Member, type Millis, type Profile, type Reward, type Task, type TaskDef, type World } from '../../core/model';
+import { SCHEMA_VERSION, type Collectible, type Member, type Millis, type Profile, type Reward, type Task, type TaskDef, type World } from '../../core/model';
 
 type Snapshot = DocumentSnapshot | QueryDocumentSnapshot;
 
@@ -107,6 +107,32 @@ export function decodeReward(snapshot: Snapshot): Reward | null {
     } as Reward)
   );
 }
+
+export function encodeCollectible(collectible: Collectible): DocumentData {
+  return {
+    ...withoutKey(collectible, 'id'),
+    createdAt: toTimestamp(collectible.createdAt),
+    obtainedAt: toTimestamp(collectible.obtainedAt),
+    reserveAt: collectible.reserveAt === null ? null : toTimestamp(collectible.reserveAt),
+  };
+}
+
+export function decodeCollectible(snapshot: Snapshot): Collectible | null {
+  const data = readKnown(snapshot);
+  return (
+    data &&
+    ({
+      ...data,
+      id: snapshot.id,
+      createdAt: toMillis(data.createdAt),
+      obtainedAt: toMillis(data.obtainedAt),
+      reserveAt: data.reserveAt === null ? null : toMillis(data.reserveAt),
+    } as Collectible)
+  );
+}
+
+/** The one field written when a reward is opened. */
+export const encodeRewardOpening = (openedAt: Millis): DocumentData => ({ openedAt: toTimestamp(openedAt) });
 
 /** Fields written when a task is completed. */
 export function encodeTaskCompletion(fields: {

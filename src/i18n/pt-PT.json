@@ -123,6 +123,17 @@
     "odds.row": "Tarefa {level}",
     "odds.sum": "Soma: {sum}",
     "odds.save": "Guardar probabilidades",
-    "odds.invalid": "Cada linha tem de ter números inteiros que somam 100."
+    "odds.invalid": "Cada linha tem de ter números inteiros que somam 100.",
+    "vault.open": "Abrir",
+    "vault.notYet": "Abre a partir de {weekday}.",
+    "vault.revealed": "Saiu {@collectible.a}!",
+    "vault.close": "Ok",
+    "weekday.monday": "segunda-feira",
+    "weekday.tuesday": "terça-feira",
+    "weekday.wednesday": "quarta-feira",
+    "weekday.thursday": "quinta-feira",
+    "weekday.friday": "sexta-feira",
+    "weekday.saturday": "sábado",
+    "weekday.sunday": "domingo"
   }
 }

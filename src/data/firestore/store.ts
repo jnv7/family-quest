@@ -35,6 +35,7 @@ import {
   SCHEMA_VERSION,
   TIERS,
   type Clock,
+  type Collectible,
   type DocMeta,
   type Member,
   type Profile,
@@ -56,15 +57,18 @@ import {
 } from '../DataStore';
 import {
   decodeAll,
+  decodeCollectible,
   decodeMember,
   decodeProfile,
   decodeReward,
   decodeTask,
   decodeTaskDef,
   decodeWorld,
+  encodeCollectible,
   encodeMember,
   encodeProfile,
   encodeReward,
+  encodeRewardOpening,
   encodeTask,
   encodeTaskCompletion,
   encodeTaskDef,
@@ -72,6 +76,8 @@ import {
 } from './converters';
 import { toDataStoreError } from './errors';
 import {
+  collectibleDoc,
+  collectiblesCollection,
   membersCollection,
   memberDoc,
   profileDoc,
@@ -451,12 +457,59 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
     },
 
     rewards: {
+      openReward(worldId, rewardId, input) {
+        const openedAt = clock();
+        return write(undefined, async () => {
+          checkText('Slot', input.slot, LIMITS.slot);
+          const [worldSnapshot, rewardSnapshot, memberSnapshot] = await Promise.all([
+            readDoc(worldDoc(db, worldId)),
+            readDoc(rewardDoc(db, worldId, rewardId)),
+            readDoc(memberDoc(db, worldId, requireUid())),
+          ]);
+          const world = worldSnapshot.exists() ? decodeWorld(worldSnapshot) : null;
+          const reward = rewardSnapshot.exists() ? decodeReward(rewardSnapshot) : null;
+          if (!world || !reward) throw new DataStoreError('not-found', `Reward ${rewardId} does not exist`);
+          const member = memberSnapshot.exists() ? decodeMember(memberSnapshot) : null;
+          // Refused here as the rules would refuse it, so the screen never shows a false collectible.
+          if (member?.profileId !== reward.profileId) throw denied('Only the owner opens a reward');
+          if (reward.openedAt !== null) throw denied('A reward is opened once');
+          const collectible: Collectible = {
+            schemaVersion: SCHEMA_VERSION,
+            createdAt: openedAt,
+            id: rewardId,
+            profileId: reward.profileId,
+            slot: input.slot,
+            tier: reward.tier,
+            nickname: null,
+            obtainedWeekKey: weekKey(openedAt, world.ruleset.timezone),
+            obtainedAt: openedAt,
+            reserveAt: null,
+          };
+          // One batch: the rules accept the collectible only together with the reward being opened.
+          const batch = writeBatch(db);
+          batch.update(rewardDoc(db, worldId, rewardId), encodeRewardOpening(openedAt));
+          batch.set(collectibleDoc(db, worldId, rewardId), encodeCollectible(collectible));
+          await batch.commit();
+        });
+      },
+
       // Equality filters only, so no composite index is needed; the order is applied here.
       observeUnopenedRewards: (worldId, profileId, onValue, onError) =>
         onSnapshot(
           query(rewardsCollection(db, worldId), where('profileId', '==', profileId), where('openedAt', '==', null)),
           (snapshot) =>
             onValue(decodeAll(snapshot.docs, decodeReward).sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1))),
+          (error) => onError?.(toDataStoreError(error)),
+        ),
+    },
+
+    collectibles: {
+      // One equality filter, so no composite index is needed; the order is applied here.
+      observeCollectibles: (worldId, profileId, onValue, onError) =>
+        onSnapshot(
+          query(collectiblesCollection(db, worldId), where('profileId', '==', profileId)),
+          (snapshot) =>
+            onValue(decodeAll(snapshot.docs, decodeCollectible).sort((a, b) => b.obtainedAt - a.obtainedAt || (a.id < b.id ? -1 : 1))),
           (error) => onError?.(toDataStoreError(error)),
         ),
     },

@@ -12,6 +12,7 @@ import {
   DEFAULT_RULESET,
   LIMITS,
   type Clock,
+  type Collectible,
   type Millis,
   type Profile,
   type ProfileId,
@@ -476,6 +477,101 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
           child.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: false, rewardTier: 'epic' as never }),
           'invalid-argument',
         );
+      });
+    });
+
+    describe('opening a reward', () => {
+      /** A child with one completed task, hence one unopened reward. */
+      async function withReward(tier: 'low' | 'mid' | 'high' = 'high') {
+        const env = await setup();
+        const task = env.admin.tasks.createAdhocTask(env.worldId, adhoc(env.childProfileId));
+        await task.settled;
+        const rewardId = task.result.taskId;
+        await env.child.tasks.completeTask(env.worldId, rewardId, { answer: null, talkFlag: false, rewardTier: tier }).settled;
+        return { ...env, rewardId };
+      }
+
+      it('creates the collectible with the reward’s tier and profile and the drawn slot, and the reward leaves the unopened', async () => {
+        const { child, worldId, childProfileId, rewardId } = await withReward('high');
+        const unopened = new Watch<Reward[]>((v, e) => child.rewards.observeUnopenedRewards(worldId, childProfileId, v, e));
+        const owned = new Watch<Collectible[]>((v, e) => child.collectibles.observeCollectibles(worldId, childProfileId, v, e));
+        await eventually(() => expect(unopened.value).toHaveLength(1));
+        expect(await owned.current()).toEqual([]);
+
+        now = Date.parse('2026-10-25T10:00:00Z');
+        await child.rewards.openReward(worldId, rewardId, { slot: 'dragon' }).settled;
+
+        await eventually(() => {
+          expect(unopened.value).toEqual([]);
+          expect(owned.value).toHaveLength(1);
+        });
+        expect(owned.value?.[0]).toMatchObject({
+          id: rewardId,
+          profileId: childProfileId,
+          slot: 'dragon',
+          tier: 'high',
+          nickname: null,
+          obtainedWeekKey: weekKey(now, DEFAULT_RULESET.timezone),
+          obtainedAt: now,
+          reserveAt: null,
+        });
+        unopened.close();
+        owned.close();
+      });
+
+      it('gives one collectible when two devices of the same profile open the same reward', async () => {
+        const { child, child2, worldId, childProfileId, rewardId } = await withReward('mid');
+        const owned1 = new Watch<Collectible[]>((v, e) => child.collectibles.observeCollectibles(worldId, childProfileId, v, e));
+        const owned2 = new Watch<Collectible[]>((v, e) => child2.collectibles.observeCollectibles(worldId, childProfileId, v, e));
+        const open2 = new Watch<Reward[]>((v, e) => child2.rewards.observeUnopenedRewards(worldId, childProfileId, v, e));
+        await eventually(() => expect(open2.value).toHaveLength(1));
+
+        await child.rewards.openReward(worldId, rewardId, { slot: 'fox' }).settled;
+        await rejectsWith(child2.rewards.openReward(worldId, rewardId, { slot: 'lion' }), 'permission-denied');
+
+        await eventually(() => {
+          expect(owned1.value?.map((c) => c.slot)).toEqual(['fox']);
+          expect(owned2.value?.map((c) => c.slot)).toEqual(['fox']);
+          expect(open2.value).toEqual([]);
+        });
+        for (const watch of [owned1, owned2, open2]) watch.close();
+      });
+
+      it('refuses someone else’s reward, even an admin’s, and changes nothing', async () => {
+        const { admin, child, worldId, childProfileId, rewardId } = await withReward();
+        await rejectsWith(admin.rewards.openReward(worldId, rewardId, { slot: 'dragon' }), 'permission-denied');
+
+        const unopened = new Watch<Reward[]>((v, e) => child.rewards.observeUnopenedRewards(worldId, childProfileId, v, e));
+        const owned = new Watch<Collectible[]>((v, e) => child.collectibles.observeCollectibles(worldId, childProfileId, v, e));
+        await eventually(() => expect(unopened.value?.map((r) => r.id)).toEqual([rewardId]));
+        expect(await owned.current()).toEqual([]);
+        unopened.close();
+        owned.close();
+      });
+
+      it('refuses a reward that is already opened, and nothing changes', async () => {
+        const { child, worldId, childProfileId, rewardId } = await withReward();
+        await child.rewards.openReward(worldId, rewardId, { slot: 'dragon' }).settled;
+        await rejectsWith(child.rewards.openReward(worldId, rewardId, { slot: 'unicorn' }), 'permission-denied');
+
+        const owned = new Watch<Collectible[]>((v, e) => child.collectibles.observeCollectibles(worldId, childProfileId, v, e));
+        await eventually(() => expect(owned.value?.map((c) => c.slot)).toEqual(['dragon']));
+        owned.close();
+      });
+
+      it('refuses a reward that does not exist, and an empty slot, before any write', async () => {
+        const { child, worldId, rewardId } = await withReward();
+        await rejectsWith(child.rewards.openReward(worldId, 'nothing-here', { slot: 'dragon' }), 'not-found');
+        await rejectsWith(child.rewards.openReward(worldId, rewardId, { slot: '' }), 'invalid-argument');
+      });
+
+      it('lets an admin read the collectibles of a child', async () => {
+        const { admin, child, worldId, childProfileId, rewardId } = await withReward();
+        await child.rewards.openReward(worldId, rewardId, { slot: 'dragon' }).settled;
+
+        const asAdmin = new Watch<Collectible[]>((v, e) => admin.collectibles.observeCollectibles(worldId, childProfileId, v, e));
+        await eventually(() => expect(asAdmin.value?.map((c) => c.id)).toEqual([rewardId]));
+        asAdmin.close();
       });
     });
 

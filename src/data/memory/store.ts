@@ -19,6 +19,7 @@ import {
   SCHEMA_VERSION,
   TIERS,
   type Clock,
+  type Collectible,
   type DocMeta,
   type Member,
   type Profile,
@@ -556,7 +557,52 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
       },
     },
 
+    collectibles: {
+      observeCollectibles: (worldId, profileId, onValue, onError) =>
+        observeAsMember(
+          worldId,
+          (access) => {
+            // Every member reads collectibles (the showcase lists other people's); the interface hides the owner.
+            const mine = [...access.ws.collectibles.values()].filter((c) => c.profileId === profileId);
+            return { value: mine.sort((a, b) => b.obtainedAt - a.obtainedAt || (a.id < b.id ? -1 : 1)) };
+          },
+          onValue,
+          onError,
+        ),
+    },
+
     rewards: {
+      openReward: (worldId, rewardId, input) =>
+        submit(undefined, (view, uid) => {
+          checkText('Slot', input.slot, LIMITS.slot);
+          const ws = requireWorld(view, worldId);
+          const reward = ws.rewards.get(rewardId);
+          if (!reward) throw notFound(`Reward ${rewardId} does not exist`);
+          const { member } = requireAccess(view, worldId, uid);
+          if (member.profileId !== reward.profileId) throw denied('Only the owner opens a reward');
+          if (reward.openedAt !== null) throw denied('A reward is opened once');
+          const openedAt = clock();
+          const collectible: Collectible = {
+            schemaVersion: SCHEMA_VERSION,
+            createdAt: openedAt,
+            id: rewardId,
+            profileId: reward.profileId,
+            slot: input.slot,
+            tier: reward.tier,
+            nickname: null,
+            obtainedWeekKey: weekKey(openedAt, ws.world.ruleset.timezone),
+            obtainedAt: openedAt,
+            reserveAt: null,
+          };
+          return {
+            ops: [
+              { worldId, collection: 'rewards', id: rewardId, patch: { openedAt } },
+              { worldId, collection: 'collectibles', id: rewardId, create: collectible },
+            ],
+            check: (state) => checkOwnerOpensOnce(state, worldId, uid, rewardId),
+          };
+        }),
+
       observeUnopenedRewards: (worldId, profileId, onValue, onError) =>
         observeAsMember(
           worldId,
@@ -649,6 +695,18 @@ function byTitleThenId(a: TaskDef, b: TaskDef): number {
 /** A patch without the keys set to `undefined`, which must not overwrite anything. */
 function definedFields<T extends object>(patch: T): T {
   return Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined)) as T;
+}
+
+/** Only the owner opens a reward, only once; the collectible is never replaced. */
+function checkOwnerOpensOnce(state: MemoryState, worldId: WorldId, uid: Uid, rewardId: TaskId): DataStoreError | null {
+  const access = accessOf(state, worldId, uid);
+  if (!access) return denied('Not a member of this world');
+  const reward = access.ws.rewards.get(rewardId);
+  if (!reward) return notFound(`Reward ${rewardId} does not exist`);
+  if (access.member.profileId !== reward.profileId) return denied('Only the owner opens a reward');
+  if (reward.openedAt !== null) return denied('A reward is opened once');
+  if (access.ws.collectibles.has(rewardId)) return denied('A collectible is never replaced');
+  return null;
 }
 
 /** Only the owner changes a task, and only while it is open. */

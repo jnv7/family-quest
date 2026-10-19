@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.2] — 2026-10-20
+
+### Added
+
+- Opening rewards. In the `vault`, a reward whose week is closed, or whose week is the current one from the opening day on (Sunday by default, Lisbon time), has an "open" button; before that it says, calmly, from which weekday it opens. Opening draws a catalogue slot of the reward's tier, plays a short neutral reveal (the same in every theme) and shows the collectible with its name and the theme's tier name. Each person opens only their own.
+- One batch opens a reward and creates its collectible, so two devices of the same profile opening the same reward end with a single collectible: the second batch is refused, and its screen follows the true state.
+- Domain: `canOpen`, tested across the opening day, a skipped Sunday, the daylight saving change and the turn of the year.
+- `DataStore`: `rewards.openReward` and `collectibles.observeCollectibles`, with both adapters and the contract suite. `observeCollectibles` comes one delivery earlier than the plan listed, because the acceptance of opening reads the collectible. Any member can read collectibles, as the rules say (the showcase lists other people's); the interface never shows the owner.
+
 ## [0.6.1] — 2026-10-19
 
 ### Added

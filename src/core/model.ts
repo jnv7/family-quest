@@ -77,6 +77,8 @@ export const LIMITS = {
   question: 140,
   trigger: 80,
   nickname: 30,
+  /** A catalogue slot id (`firestore.rules`). */
+  slot: 60,
   /** World ids are random and act as the access code (SPEC.md §5). */
   worldIdMinLength: 24,
 } as const;

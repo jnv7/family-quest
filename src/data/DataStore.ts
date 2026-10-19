@@ -13,6 +13,7 @@ import type { NewRecurringTask } from '../core/generation';
 import type {
   Answer,
   Cadence,
+  Collectible,
   Member,
   Plan,
   Profile,
@@ -20,6 +21,7 @@ import type {
   ProfileKind,
   Reward,
   Ruleset,
+  Slot,
   Task,
   TaskDef,
   TaskDefId,
@@ -238,6 +240,20 @@ export interface TaskDefStore {
 export interface RewardStore {
   /** The profile's unopened rewards, oldest first. Owner or admin. */
   observeUnopenedRewards(worldId: WorldId, profileId: ProfileId, onValue: Observer<Reward[]>, onError?: ObserverError): Unsubscribe;
+
+  /**
+   * One batch: sets `openedAt` to now on the reward and creates `collectibles/{rewardId}` with the
+   * reward's profile and tier, the given `slot`, no nickname, `obtainedWeekKey` of now,
+   * `obtainedAt` now and `reserveAt: null`. Owner only, once: a reward already opened (here or
+   * on another device) is `permission-denied`, and nothing changes. The caller checks `canOpen`
+   * first and draws the slot with `drawSlot(theme catalogue, reward.tier, randomInt)`.
+   */
+  openReward(worldId: WorldId, rewardId: TaskId, input: { slot: Slot }): Write;
+}
+
+export interface CollectibleStore {
+  /** The profile's collectibles, newest first. Every member can read them (the showcase needs other people's); the interface never shows the owner. */
+  observeCollectibles(worldId: WorldId, profileId: ProfileId, onValue: Observer<Collectible[]>, onError?: ObserverError): Unsubscribe;
 }
 
 export interface DataStore {
@@ -246,4 +262,5 @@ export interface DataStore {
   readonly tasks: TaskStore;
   readonly taskDefs: TaskDefStore;
   readonly rewards: RewardStore;
+  readonly collectibles: CollectibleStore;
 }

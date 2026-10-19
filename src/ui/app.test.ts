@@ -701,11 +701,82 @@ describe('the vault', () => {
     expect([...child.root.querySelectorAll('.vault-week h2')].map((el) => el.textContent)).toEqual(['Semana 43', 'Semana 44']);
     for (const item of child.root.querySelectorAll<HTMLElement>('li.reward')) {
       const art = theme.rewardArt[item.dataset.tier as Tier];
-      expect(item.textContent).toBe('emoji' in art ? art.emoji : '');
+      expect(item.querySelector('.reward-art')?.textContent).toBe('emoji' in art ? art.emoji : '');
     }
     // The adult's own vault holds none of the child's rewards.
     await admin.click('button.place', 'Cofre');
     await admin.see('Ainda não tens prémios para abrir.');
+  });
+});
+
+describe('opening rewards', () => {
+  const SUNDAY = Date.parse('2026-10-25T10:00:00Z');
+
+  /** A child with one reward earned on Tuesday, standing in the vault. */
+  async function childWithReward() {
+    const { admin, child, worldId } = await familyWithChild();
+    await createTask(admin, 'Arrumar o quarto', 'Sam');
+    await child.click('button.place', 'Registo');
+    await child.click('button', 'Feito');
+    await vi.waitFor(() => expect(backend.state.get(worldId)!.rewards.size).toBe(1));
+    await child.click('button', 'Voltar');
+    return { admin, child, worldId };
+  }
+
+  it('waits for the opening day with a calm line, and opens from Sunday with a reveal of the drawn tier', async () => {
+    const { child, worldId } = await childWithReward();
+
+    await child.click('button.place', 'Cofre');
+    await child.see('Abre a partir de domingo.');
+    expect(child.find('button', 'Abrir')).toBeUndefined();
+
+    now = SUNDAY;
+    await child.click('button', 'Voltar');
+    await child.click('button.place', 'Cofre');
+    await child.click('button', 'Abrir');
+
+    const reward = [...backend.state.get(worldId)!.rewards.values()][0]!;
+    await vi.waitFor(() => expect(backend.state.get(worldId)!.collectibles.size).toBe(1));
+    const collectible = [...backend.state.get(worldId)!.collectibles.values()][0]!;
+    expect(collectible).toMatchObject({ tier: reward.tier, profileId: reward.profileId, obtainedAt: SUNDAY, reserveAt: null });
+    const entry = theme.catalog.slots.find((slot) => slot.slot === collectible.slot)!;
+    expect(entry.tier).toBe(reward.tier);
+
+    await child.see(`Saiu um cromo!`);
+    await child.see(entry.name);
+    await child.see(theme.tiers[reward.tier]);
+    expect(child.root.querySelectorAll('li.reward')).toHaveLength(0);
+
+    await child.click('button', 'Ok');
+    await child.see('Ainda não tens prémios para abrir.');
+  });
+
+  it('opens a reward from a closed week at any time', async () => {
+    const { child, worldId } = await childWithReward();
+    now = Date.parse('2026-10-26T08:00:00Z'); // Monday of the next week
+    await child.click('button.place', 'Cofre');
+    await child.click('button', 'Abrir');
+    await vi.waitFor(() => expect(backend.state.get(worldId)!.collectibles.size).toBe(1));
+  });
+
+  it('ends with one collectible when another device of the same profile opened the reward first', async () => {
+    const { child, worldId } = await childWithReward();
+    now = SUNDAY;
+    await child.click('button.place', 'Cofre');
+    await child.see('Abrir');
+
+    const second = await openDevice('child-device-2', { hash: `#/join/${worldId}` });
+    const profileId = [...backend.state.get(worldId)!.profiles.values()].find((p) => p.displayName === 'Sam')!.id;
+    await second.click('button.profile', 'Sam');
+    await second.click('button.place', 'Cofre');
+    await second.click('button', 'Abrir');
+    await vi.waitFor(() => expect(backend.state.get(worldId)!.collectibles.size).toBe(1));
+    const stored = [...backend.state.get(worldId)!.collectibles.values()][0]!;
+    expect(stored.profileId).toBe(profileId);
+
+    // The first device was still showing the reward: it leaves the list, and nothing is duplicated.
+    await vi.waitFor(() => expect(child.find('button', 'Abrir')).toBeUndefined());
+    expect(backend.state.get(worldId)!.collectibles.size).toBe(1);
   });
 });
 
