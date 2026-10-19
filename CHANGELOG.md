@@ -6,8 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- A child creating a task only names it. The difficulty, the verification question and "for whom" are for adults only (`SPEC.md` §6).
+
 ### Fixed
 
+- Fields meant to be hidden (such as "for whom" for a child) were still visible, because a style rule overrode the `hidden` attribute.
 - When the tasks could not be loaded, the board threw the person back to the map without a word, so no task could be created. It now stays on screen with a message and a "try again" button, and the same applies to the new task form.
 - A failed load of the world's profiles no longer makes the device forget its world. Only losing access does.
 

@@ -1,6 +1,6 @@
 # Specification — Family Quest
 
-Last revised: 2026-10-18.
+Last revised: 2026-10-19.
 
 Tags: **[decided]** came from the product owner; **[proposal]** is a design suggestion that may change; **[open]** is still to be decided.
 
@@ -180,7 +180,7 @@ There is therefore at most one open task per `taskDef` and profile. Completing a
 
 Known edge case: the "no open task" check runs on the local cache, so a device whose cache misses an open task (for example, a fresh install that has not synced yet) can still create a second open task for a new period. The `board` shows only the oldest open task per `taskDef` and profile; any extra task stays stored and appears once the first is completed. **[proposal]**
 
-**Ad hoc tasks.** An `admin` creates them for any profile. A child creates them only for themselves, within the daily limit. The limit counts the ad hoc tasks the child's profile created for itself whose `createdAt` falls on today's date in Lisbon; tasks created by an admin do not count. **[decided]** An ad hoc task stays open until it is completed. It may have a `question`.
+**Ad hoc tasks.** An `admin` creates them for any profile. A child creates them only for themselves, within the daily limit. The limit counts the ad hoc tasks the child's profile created for itself whose `createdAt` falls on today's date in Lisbon; tasks created by an admin do not count. **[decided]** A child only gives the task a title: it is always for themselves, with `level` `mid` and no `question`. **[decided]** An adult may also set the `level`, a `question` and who it is for. An ad hoc task stays open until it is completed.
 
 **Completing.** Each person completes only their own tasks. **[decided]** In one atomic batch, the client:
 

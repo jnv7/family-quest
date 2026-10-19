@@ -271,15 +271,22 @@ describe('the board and ad hoc tasks', () => {
     expect([...admin.root.querySelectorAll('.tasks li')].map((li) => li.textContent)).toEqual(['Primeira', 'Segunda']);
   });
 
-  it('lets a child create tasks only for themselves', async () => {
-    const { child } = await familyWithChild();
+  it('lets a child create tasks only for themselves, and only name them', async () => {
+    const { child, worldId } = await familyWithChild();
     await child.click('button.place', 'Quadro');
     await child.click('button', 'Nova tarefa');
     await child.type('O que é para fazer?', 'Ler um livro');
-    expect([...child.root.querySelectorAll('label')].some((l) => l.textContent?.includes('Para quem') && !l.hidden)).toBe(false);
     await child.enabled('Criar tarefa');
+    // A child only names the task: no difficulty, question or "for whom".
+    expect(child.root.querySelectorAll('label')).toHaveLength(1);
+    for (const field of ['Dificuldade', 'Pergunta', 'Para quem']) expect(child.root.textContent).not.toContain(field);
     child.submit();
     await child.see('Ler um livro');
+
+    // The task is for the child, of normal difficulty and without a question.
+    const [stored] = [...backend.state.get(worldId)!.tasks.values()];
+    expect(stored).toMatchObject({ title: 'Ler um livro', level: 'mid', question: null, source: 'adhoc' });
+    expect(stored?.profileId).toBe(stored?.createdBy);
   });
 
   it('stops a child after three tasks in a day, and allows more the next day', async () => {
