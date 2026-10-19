@@ -36,6 +36,15 @@ npm run build    # production build, as published to GitHub Pages
 
 The Firestore rules tests (`npm run test:rules`) and the Firestore adapter tests (`npm run test:emulator`) need Java for the emulators, so they run in CI. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Installing on a phone
+
+Open the app's address in the browser, then:
+
+- **iPhone (Safari):** Share → Add to Home Screen.
+- **Android (Chrome):** menu → Install app.
+
+Install before joining a family: on iOS the installed app keeps its own storage, separate from the browser. The first launch needs the network; after that the app opens offline.
+
 ## Licence
 
 [MIT](LICENSE)

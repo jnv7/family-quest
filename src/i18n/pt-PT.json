@@ -74,6 +74,8 @@
     "checkin.yes": "Sim",
     "checkin.no": "Não",
     "checkin.better": "Acho que fiz melhor. Quero falar com os meus pais.",
-    "checkin.empty": "Nada para concluir por agora."
+    "checkin.empty": "Nada para concluir por agora.",
+    "app.installName": "Family Quest",
+    "app.installDescription": "Tarefas em família, com recompensas para colecionar."
   }
 }

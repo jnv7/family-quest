@@ -4,7 +4,7 @@ Each release is one minor version, developed on its own `release/0.x` branch (`G
 
 The behaviour each release implements is specified in `SPEC.md`.
 
-**Last closed release: 0.1 — Foundations** (2026-10-18, tag `v0.1`; [release notes](docs/release-notes/0.1.md)). **Current release: 0.2 — Core**, in progress: 0.2.1, 0.2.2 and 0.2.3 delivered.
+**Last closed release: 0.1 — Foundations** (2026-10-18, tag `v0.1`; [release notes](docs/release-notes/0.1.md)). **Current release: 0.2 — Core**, in progress: all four deliveries done; the exit criteria remain.
 
 ## Release plan
 
@@ -32,7 +32,7 @@ Deliveries:
 - **0.2.1 — World and profiles (done):** join link and QR code, Netflix-style profile picker.
 - **0.2.2 — Map and `board` (done):** creating ad hoc tasks.
 - **0.2.3 — `checkin` (done):** the verification question and the "I think I did better" button.
-- **0.2.4 — Installable and offline:** web app manifest and a service worker that caches the app shell.
+- **0.2.4 — Installable and offline (done):** web app manifest and a service worker that caches the app shell.
 
 The app is installable from this release on. Installing it later would move it to separate storage on iOS and force everyone to join again.
 

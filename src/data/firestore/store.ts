@@ -134,7 +134,8 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
   async function getMembership(worldId: string): Promise<Member | null> {
     const uid = requireUid();
     try {
-      const snapshot = await getDoc(memberDoc(db, worldId, uid));
+      // Cache first, so launching the app offline does not wait for the network to give up.
+      const snapshot = await readDoc(memberDoc(db, worldId, uid));
       return snapshot.exists() ? decodeMember(snapshot) : null;
     } catch (error) {
       const mapped = toDataStoreError(error);

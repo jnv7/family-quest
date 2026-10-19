@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#2f6fed"/>
+  <!-- A four-pointed star centred in the icon, inside the central 60% so that it survives any mask. -->
+  <path fill="#fff" d="M256 146c10 74 36 100 110 110-74 10-100 36-110 110-10-74-36-100-110-110 74-10 100-36 110-110z"/>
+  <circle cx="352" cy="170" r="14" fill="#fff" fill-opacity=".85"/>
+</svg>

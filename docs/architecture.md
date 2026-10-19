@@ -179,7 +179,7 @@ Until 0.6, only themes listed in `scripts/validated-themes.json` are checked (th
 - **`firebaseConfig`** lives in `src/data/firestore/config.ts`. It is committed: it is public by design (ADR 0001); the product owner provides the values.
 - **Emulator ports:** Firestore 8080, Auth 9099. The project id is `demo-family-quest`, so no real project can be touched by mistake.
 - **GitHub Pages.** Vite `base: '/family-quest/'`. Routing uses the URL hash only (`#/join/<worldId>`, `#/board`, ...); there is no History API, because GitHub Pages cannot rewrite paths.
-- **Service worker** (0.2): `vite-plugin-pwa` (**[proposal]**), precaching the app shell and the bundled themes. Firestore keeps its own data cache; the service worker never caches Firestore traffic.
+- **Service worker** (0.2.4, ADR 0004): `vite-plugin-pwa` precaches the app shell and the bundled themes' art. Firestore keeps its own data cache; the service worker never caches Firestore traffic. The manifest is built by `scripts/pwa-manifest.ts`, with its text from the locale file, and the icons are in `public/icons/`. The worker is generated only by `npm run build`, so `npm run dev` never registers one.
 
 ## 8. Schema versions
 

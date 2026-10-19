@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.4] — 2026-10-19
+
+### Added
+
+- The app is installable (web app manifest, icons, iOS home screen name) and opens with no network: a service worker caches the app shell (ADR 0004, proposed).
+- Neutral app icons in `public/icons/`.
+
+### Changed
+
+- Checking the device's membership at launch reads the local cache first, so starting the app offline does not wait for the network to give up.
+
 ## [0.2.3] — 2026-10-19
 
 ### Added

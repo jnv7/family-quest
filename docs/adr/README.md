@@ -7,3 +7,4 @@ Each major decision (`GOVERNANCE.md` §1) is recorded here as `NNNN-short-title.
 | [0001](0001-founding-decisions.md) | Founding decisions | Accepted (decision 6, roles: superseded by 0003) |
 | [0002](0002-data-access-contract.md) | Data access contract and write semantics | Accepted |
 | [0003](0003-admin-rights-from-profile.md) | Admin rights come from the active profile | Accepted |
+| [0004](0004-installable-offline-app-shell.md) | Installable app and offline app shell | Proposed |
