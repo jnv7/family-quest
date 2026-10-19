@@ -23,6 +23,14 @@ export interface Place {
 
 export type PlaceRole = 'board' | 'checkin' | 'home' | 'vault' | 'showcase';
 
+/** How the installed app looks (ADR 0005). Icon paths are relative to the theme's folder. */
+export interface Install {
+  name: string;
+  themeColor: string;
+  backgroundColor: string;
+  icons: Record<'small' | 'large' | 'maskable' | 'apple', { image: string }>;
+}
+
 export interface ThemeFile {
   $schema: string;
   id: string;
@@ -33,6 +41,7 @@ export interface ThemeFile {
   map: { background: Art; aspectRatio: number };
   places: Record<PlaceRole, Place>;
   homeVariants: { adult: Art; child: Art };
+  install: Install;
   character: {
     art: Art;
     lines: { greeting: string[]; congrats: string[]; doubt: string[]; farewell: string[] };

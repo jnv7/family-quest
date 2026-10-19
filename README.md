@@ -43,7 +43,7 @@ Open the app's address in the browser, then:
 - **iPhone (Safari):** Share → Add to Home Screen.
 - **Android (Chrome):** menu → Install app.
 
-Install before joining a family: on iOS the installed app keeps its own storage, separate from the browser. The first launch needs the network; after that the app opens offline.
+The installed app takes the name and icon of the family's theme. Install before joining a family: on iOS the installed app keeps its own storage, separate from the browser. The first launch needs the network; after that the app opens offline.
 
 ## Licence
 

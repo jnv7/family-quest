@@ -22,6 +22,16 @@ describe('createWorldMemory', () => {
     expect(createWorldMemory(storage).get()).toBeNull();
   });
 
+  it('remembers the theme with the world, and forgets both together', () => {
+    const storage = fakeStorage();
+    const memory = createWorldMemory(storage);
+    memory.set('abc');
+    memory.setTheme('minimal-farm');
+    expect(createWorldMemory(storage).getTheme()).toBe('minimal-farm');
+    memory.clear();
+    expect(createWorldMemory(storage).getTheme()).toBeNull();
+  });
+
   it('keeps working in memory when storage is missing or throws', () => {
     const broken = {
       getItem: () => {

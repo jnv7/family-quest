@@ -168,5 +168,24 @@
         "Até à próxima."
       ]
     }
+  },
+  "install": {
+    "name": "Família",
+    "themeColor": "#1f2a44",
+    "backgroundColor": "#ffffff",
+    "icons": {
+      "small": {
+        "image": "assets/icons/icon-192.png"
+      },
+      "large": {
+        "image": "assets/icons/icon-512.png"
+      },
+      "maskable": {
+        "image": "assets/icons/icon-maskable-512.png"
+      },
+      "apple": {
+        "image": "assets/icons/apple-touch-icon.png"
+      }
+    }
   }
 }

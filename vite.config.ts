@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { createManifest } from './scripts/pwa-manifest.ts';
+import { themeManifests } from './scripts/theme-manifests.ts';
 
 const { version } = JSON.parse(readFileSync('package.json', 'utf8')) as { version: string };
 const { messages } = JSON.parse(readFileSync('src/i18n/pt-PT.json', 'utf8')) as { messages: Record<string, string> };
@@ -23,6 +24,7 @@ export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(version) },
   plugins: [
     iosTitle,
+    themeManifests({ base: BASE, themesDir: 'src/themes', description: installDescription }),
     VitePWA({
       // The new version takes over as soon as it is installed. The page in use is not reloaded.
       registerType: 'autoUpdate',

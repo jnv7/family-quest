@@ -76,6 +76,16 @@
     "checkin.better": "Acho que fiz melhor. Quero falar com os meus pais.",
     "checkin.empty": "Nada para concluir por agora.",
     "app.installName": "Family Quest",
-    "app.installDescription": "Tarefas em família, com recompensas para colecionar."
+    "app.installDescription": "Tarefas em família, com recompensas para colecionar.",
+    "create.theme": "Tema",
+    "join.copyCode": "Copiar o link",
+    "join.paste": "Colar",
+    "join.pasteFailed": "Não foi possível colar. Escreve ou cola o código no campo.",
+    "join.iosInstallFirst": "No iPhone, instala primeiro a app e só depois entra: a app instalada guarda os dados à parte. Copia o link, instala a app, abre-a e cola o link.",
+    "install.title": "Instalar a app",
+    "install.button": "Instalar a app",
+    "install.ios": "Para instalar «{appName}»: toca em Partilhar e depois em «Adicionar ao ecrã principal».",
+    "install.nothing": "A app já está instalada, ou este navegador não permite instalá-la.",
+    "map.install": "Instalar"
   }
 }

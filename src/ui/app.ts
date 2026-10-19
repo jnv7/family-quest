@@ -2,14 +2,17 @@
 import type { Clock, RandomInt } from '../core/model';
 import type { DataStore } from '../data/DataStore';
 import type { Theme } from '../theme';
-import { formatMessage } from '../theme';
+import { formatMessage, hasTheme, loadTheme } from '../theme';
 import { reportSettleError, type AppContext, type Dispose, type Screen, type WorldScreen } from './context';
 import { h } from './dom';
+import type { Installer } from './install';
 import type { Navigation } from './navigation';
+import { applyThemeToPage } from './pageTheme';
 import { hashFor, parseHash, type Route } from './routes';
 import { renderCreate } from './screens/create';
 import { renderBoard } from './screens/board';
 import { renderCheckin } from './screens/checkin';
+import { renderInstall } from './screens/install';
 import { renderJoin } from './screens/join';
 import { renderManage } from './screens/manage';
 import { renderMap } from './screens/map';
@@ -29,16 +32,23 @@ export interface AppOptions {
   clock: Clock;
   randomInt: RandomInt;
   navigation: Navigation;
+  installer: Installer;
+  /** The theme the app was launched with (`?theme=` in the address of an installed app), if any. */
+  launchTheme: string | null;
+  /** The app's base path, such as `/family-quest/`, where the per-theme manifests and icons are. */
+  assetBase: string;
 }
 
 const NOTICE_MS = 5000;
 
 /** Starts the interface and returns a function that stops it. */
 export async function startApp(options: AppOptions): Promise<() => void> {
-  const { root, store, theme, baseUrl, world, clock, randomInt, navigation } = options;
+  const { root, store, baseUrl, world, clock, randomInt, navigation, installer, assetBase, launchTheme } = options;
+  let theme = options.theme;
+  let themeKnown = false;
   const text = (key: string, params?: Record<string, string | number>) => formatMessage(theme, key, params);
 
-  const uid = await signInWithRetry(root, store, text);
+  const uid = await signInWithRetry(root, store, (key) => text(key));
 
   const notify = (messageKey: string) => {
     const notice = h('div', { class: 'notice', role: 'status' }, text(messageKey));
@@ -48,9 +58,31 @@ export async function startApp(options: AppOptions): Promise<() => void> {
 
   let dispose: Dispose = () => {};
 
+  /** Switches to a bundled theme and makes the page look like it. Returns whether anything changed. */
+  function useTheme(themeId: string): boolean {
+    if (!hasTheme(themeId)) {
+      console.warn(`Unknown theme "${themeId}"; keeping "${theme.id}"`);
+      return false;
+    }
+    const changed = themeId !== theme.id || !themeKnown;
+    theme = loadTheme(themeId);
+    themeKnown = true;
+    applyThemeToPage(document, theme, assetBase);
+    return changed;
+  }
+
   const ctx: AppContext = {
     store,
-    theme,
+    get theme() {
+      return theme;
+    },
+    get themeKnown() {
+      return themeKnown;
+    },
+    setTheme(themeId) {
+      if (useTheme(themeId)) render();
+    },
+    installer,
     clock,
     randomInt,
     uid,
@@ -89,6 +121,8 @@ export async function startApp(options: AppOptions): Promise<() => void> {
         return renderCreate;
       case 'join':
         return renderJoin(route.worldId);
+      case 'install':
+        return needsWorld(renderInstall);
       case 'profiles':
         return needsWorld(renderProfiles);
       case 'map':
@@ -106,17 +140,43 @@ export async function startApp(options: AppOptions): Promise<() => void> {
     }
   }
 
+  // The world's own theme is the truth: follow it, and remember it for the next launch.
+  let watchedWorld: string | null = null;
+  let stopWatchingWorld: Dispose = () => {};
+  function followWorldTheme(): void {
+    const worldId = world.get();
+    if (worldId === watchedWorld) return;
+    stopWatchingWorld();
+    watchedWorld = worldId;
+    if (worldId === null) return;
+    stopWatchingWorld = store.worlds.observeWorld(
+      worldId,
+      (value) => {
+        world.setTheme(value.themeId);
+        ctx.setTheme(value.themeId);
+      },
+      () => {}, // not a member (yet): the screens deal with it
+    );
+  }
+
   function render(): void {
     dispose();
     root.replaceChildren();
-    dispose = screenFor(parseHash(navigation.hash()))(ctx, root);
+    const route = parseHash(navigation.hash());
+    if (route.name === 'join' && route.themeId) useTheme(route.themeId); // a join link is themed before joining
+    followWorldTheme();
+    dispose = screenFor(route)(ctx, root);
   }
 
   const stopListening = navigation.onChange(render);
+  const rememberedTheme = world.getTheme();
+  if (launchTheme) useTheme(launchTheme); // an installed app starts with its own theme
+  if (world.get() !== null && rememberedTheme) useTheme(rememberedTheme); // the world's theme wins, from the first frame
   await resumeSession(ctx, navigation);
   render();
   return () => {
     stopListening();
+    stopWatchingWorld();
     dispose();
     root.replaceChildren();
   };

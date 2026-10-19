@@ -1,12 +1,14 @@
 import type { WorldScreen } from '../context';
 import { h } from '../dom';
 import { qrSvg } from '../qr';
+import { mountInstallOffer } from '../installOffer';
 import { joinLink } from '../routes';
 
 /** Shows the join link, its QR code and the code for typing by hand (SPEC.md §5). */
 export const renderShare: WorldScreen = (ctx, root, { worldId }) => {
-  const link = joinLink(ctx.baseUrl, worldId);
+  const link = joinLink(ctx.baseUrl, worldId, ctx.theme.id);
   const status = h('p', { class: 'message', role: 'status' });
+  const offer = h('div', { class: 'stack' });
 
   const copy = async () => {
     try {
@@ -27,6 +29,7 @@ export const renderShare: WorldScreen = (ctx, root, { worldId }) => {
       h('button', { class: 'primary', onClick: () => ctx.go({ name: 'map' }) }, ctx.text('share.continue')),
     ),
     status,
+    offer,
   );
-  return () => {};
+  return mountInstallOffer(ctx, offer);
 };

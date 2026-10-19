@@ -1,0 +1,77 @@
+{
+  "$schema": "../../../schemas/catalog.schema.json",
+  "slots": [
+    {
+      "slot": "hen",
+      "tier": "low",
+      "name": "Galinha",
+      "art": {
+        "emoji": "🐔"
+      }
+    },
+    {
+      "slot": "duck",
+      "tier": "low",
+      "name": "Pato",
+      "art": {
+        "emoji": "🦆"
+      }
+    },
+    {
+      "slot": "chick",
+      "tier": "low",
+      "name": "Pinto",
+      "art": {
+        "emoji": "🐥"
+      }
+    },
+    {
+      "slot": "pig",
+      "tier": "mid",
+      "name": "Porco",
+      "art": {
+        "emoji": "🐖"
+      }
+    },
+    {
+      "slot": "sheep",
+      "tier": "mid",
+      "name": "Ovelha",
+      "art": {
+        "emoji": "🐑"
+      }
+    },
+    {
+      "slot": "goat",
+      "tier": "mid",
+      "name": "Cabra",
+      "art": {
+        "emoji": "🐐"
+      }
+    },
+    {
+      "slot": "cow",
+      "tier": "high",
+      "name": "Vaca",
+      "art": {
+        "emoji": "🐄"
+      }
+    },
+    {
+      "slot": "horse",
+      "tier": "high",
+      "name": "Cavalo",
+      "art": {
+        "emoji": "🐎"
+      }
+    },
+    {
+      "slot": "rooster",
+      "tier": "high",
+      "name": "Galo",
+      "art": {
+        "emoji": "🐓"
+      }
+    }
+  ]
+}

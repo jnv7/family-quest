@@ -25,6 +25,15 @@ for (const [path, file] of Object.entries(themeFiles)) {
   themes.set(folderOf(path), { ...file, catalog });
 }
 
+/** Every bundled theme, in a stable order. */
+export function listThemes(): Theme[] {
+  return [...themes.values()].sort((a, b) => a.id.localeCompare(b.id));
+}
+
+export function hasTheme(themeId: string): boolean {
+  return themes.has(themeId);
+}
+
 export function loadTheme(themeId: string): Theme {
   const theme = themes.get(themeId);
   if (!theme) throw new Error(`Unknown theme "${themeId}"`);

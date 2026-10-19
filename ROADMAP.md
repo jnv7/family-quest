@@ -32,7 +32,7 @@ Deliveries:
 - **0.2.1 — World and profiles (done):** join link and QR code, Netflix-style profile picker.
 - **0.2.2 — Map and `board` (done):** creating ad hoc tasks.
 - **0.2.3 — `checkin` (done):** the verification question and the "I think I did better" button.
-- **0.2.4 — Installable and offline (done):** web app manifest and a service worker that caches the app shell.
+- **0.2.4 — Installable and offline (done):** web app manifest and a service worker that caches the app shell; the installed app's name and icon follow the world's theme, and the app offers to install itself (moved here from the radar; delivered as patches 0.2.4 and 0.2.5).
 
 The app is installable from this release on. Installing it later would move it to separate storage on iOS and force everyone to join again.
 
@@ -119,8 +119,6 @@ Ideas that are outside the current release. They are neither implemented on own 
 | An admin can revoke a device (remove a member), for a leaked join code | Spec review, 2026-10-18 |
 | Device-bound admin rights with an admin recovery code, so a child picking an adult profile does not get admin rights (alternative B in ADR 0003) | Deferred by the product owner, 2026-10-18 |
 | Weekly guaranteed minimum (`ruleset.guarantee`) | `SPEC.md` §13 |
-| Installed app name and icon follow the world's theme. One static manifest per theme (`manifest-{themeId}.webmanifest`, with its own `id`, name and icons, generated from `theme.json` at build time), swapped into the page before install. The join link carries the theme id (not secret), so the page is themed before joining. iOS never updates an installed icon, so the theme must be set before installing: the app offers installation only once it knows the theme (from the join link, or chosen when creating a world), never from the bare URL. On iOS the installed app does not share storage with Safari, so the order is install first, then join: the join page in Safari does not join; it only offers to install, already themed. To join without typing, try leaving `start_url` out of the iOS manifest so the installed app starts on the join link itself, and check on a real iPhone that the URL fragment survives. Fallback: the join page copies the code to the clipboard and the installed app offers a "Paste code" button (one tap). Candidate for 0.2.4 | Product owner, 2026-10-19 |
-| In-app "install" button: on Android, the `beforeinstallprompt` event; on iOS there is no API, so a short themed instruction (Share → Add to Home Screen). Hidden when already installed (`display-mode: standalone`). Candidate for 0.2.4 | Product owner, 2026-10-19 |
 | Switching the theme of an existing world | `SPEC.md` §14 |
 | Family meter and paired tasks | `SPEC.md` §14 |
 | API integration (`origin: api`) | `SPEC.md` §14 |

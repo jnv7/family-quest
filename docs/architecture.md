@@ -112,6 +112,35 @@ Auto-ids never contain `_`, so recurring ids stay unambiguous.
 
 ## 6. Themes and interface text
 
+### A theme is a skin (ADR 0006)
+
+These rules hold for every change; review and CI enforce them:
+
+1. **No branching on themes.** No code outside `src/themes/` compares, switches on, or maps over a specific theme id. Code reads the active theme through `src/theme/` and uses only what the schema defines.
+2. **One default, in configuration.** The only theme id named outside `src/themes/` and tests is the default theme, and it lives in one configuration value, not in logic.
+3. **Schema-only data.** A theme provides data that the schemas in `schemas/` describe. A field the schema does not define does not exist for the engine. Theme files never contain code, expressions or behaviour flags.
+4. **New capability = new schema field.** When a theme needs a new visual capability (for example, a new kind of transition), it is added to the schema and the engine for every theme at once, never for one theme.
+5. **Stable stored references.** Stored data references a theme only by `themeId`, `slot` and `tier`.
+
+### Text layers
+
+To get a visible string, `formatMessage(theme, key, params)` resolves it as follows:
+
+1. **Today:** the message for `key` comes from `src/i18n/{locale}.json` (layer 1). Its `{@role...}` placeholders are filled from the theme's role nouns (layer 2).
+2. **Future (layer 3):** first look for `key` in the theme's own messages, then fall back to `src/i18n/{locale}.json`. A theme term placeholder (proposed syntax: `{#term}`) resolves only from the same theme's terms. `validate-theme` checks that:
+   - every overridden key exists in layer 1;
+   - an override uses only the runtime parameters that the layer 1 message uses;
+   - every `{#term}` is defined.
+3. **Errors:** a missing key, role, form or term throws (explicit failure). A raw placeholder is never shown.
+
+Future layout once there is more than one locale:
+
+```text
+src/i18n/{locale}.json                      layer 1
+src/themes/{themeId}/theme.json             structure only: map, places, art, install, gender of nouns
+src/themes/{themeId}/locales/{locale}.json  layers 2 and 3 for that locale
+```
+
 ### Files
 
 ```text
@@ -201,8 +230,10 @@ No framework (`CONTRIBUTING.md`). `src/main.ts` picks the adapter and calls `sta
 - **`AppContext`** (`src/ui/context.ts`) is everything a screen may use: the `DataStore`, the theme, `text()`, `go()`, `notify()` and `settle()`. `settle()` applies the table in §2 to a write's late verdict.
 - **Observer failures.** A screen never leaves, or forgets the world, because an observer failed. `observeWithRetry` (`src/ui/observe.ts`) shows a message with a retry button, and the details go to `console.error`. Only `permission-denied` on the world's own data (the device is no longer a member) clears the remembered world.
 - **Rendering.** Screens render from observers only. Who the device is (`observeSelf`, `src/ui/self.ts`) comes from the memberships and profiles, so a refused profile choice sends the device back to the picker by itself.
-- **Routes** are hash routes (`src/ui/routes.ts`): `#/`, `#/create`, `#/join[/<worldId>]`, `#/profiles`, `#/map`, `#/board`, `#/new-task`, `#/manage`, `#/share`. Unknown hashes are the start page. Screens that need a world send the device to the start page if it has none. The route `map` is the main screen; `home` is a place on the map, not a route yet.
+- **Routes** are hash routes (`src/ui/routes.ts`): `#/`, `#/create`, `#/join[/<worldId>[/<themeId>]]`, `#/install`, `#/profiles`, `#/map`, `#/board`, `#/new-task`, `#/manage`, `#/share`. Unknown hashes are the start page. Screens that need a world send the device to the start page if it has none. The route `map` is the main screen; `home` is a place on the map, not a route yet.
 - **Navigation** (`src/ui/navigation.ts`) is injected, so the app never touches `location` directly. The browser version uses the address bar; the in-memory version gives each device of a test its own, so several devices can run in one test.
+- **The theme is dynamic.** `ctx.theme` is whatever the theme currently is, and `ctx.setTheme()` changes it and redraws. It is set from a join link, from the choice when creating a world, from the launch address (`?theme=`) of an installed app, and from the world itself, which wins and is remembered by `WorldMemory` so the next launch has the right names from the first frame. `applyThemeToPage` swaps the page's manifest, iOS icon and name, and colours.
+- **Installing** (ADR 0005). `src/ui/install.ts` detects the platform and keeps the browser's install event from the moment the app starts; `src/ui/installOffer.ts` draws the offer (a button, or the iOS steps) only once the theme is known. One manifest per theme is built by `scripts/theme-manifests.ts`, with the paths in `src/theme/installPaths.ts` shared with the app.
 - **The map** (`src/ui/screens/map.ts`) places the five places where `theme.json` says, in percent of the map. A place without a destination yet is drawn dimmed and disabled. Tapping one plays the theme's transition (`src/ui/transition.ts`: `move`, `fade` or `none`, skipped when the person prefers reduced motion) and then navigates. Art is an emoji or an image from the theme's folder (`src/ui/art.ts`).
 - **The check-in** (`src/ui/screens/checkin.ts`) puts the completing action on the task itself, which is how a completion stays at two taps from the map. The character's lines come from the theme and are picked with the injected `randomInt` (`src/ui/lines.ts`).
 - **Ad hoc task limit.** The child's daily limit is a pure function in `src/core/tasks.ts`. The form (`src/ui/screens/newTask.ts`) combines three observers (the world's ruleset, who the device is, and the profile's own tasks) and only enables the button when the rule allows it. It shows no counts, only a friendly message when the limit is reached.

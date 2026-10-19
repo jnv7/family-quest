@@ -2,6 +2,7 @@ import type { WorldScreen } from '../context';
 import { artElement } from '../art';
 import { h } from '../dom';
 import type { Route } from '../routes';
+import { canOfferInstall } from '../installOffer';
 import { observeSelf } from '../self';
 import type { PlaceRole } from '../../theme/types';
 import { playTransition } from '../transition';
@@ -52,6 +53,7 @@ export const renderMap: WorldScreen = (ctx, root, { worldId }) => {
     }
     title.textContent = ctx.text('map.hello', { name: profile.displayName });
     const buttons = [h('button', { onClick: () => ctx.go({ name: 'profiles' }) }, ctx.text('map.switch'))];
+    if (canOfferInstall(ctx)) buttons.push(h('button', { onClick: () => ctx.go({ name: 'install' }) }, ctx.text('map.install')));
     if (isAdmin) buttons.push(h('button', { onClick: () => ctx.go({ name: 'manage' }) }, ctx.text('map.manage')));
     actions.replaceChildren(...buttons);
   });

@@ -140,7 +140,7 @@ A completed task produces a `reward` with the task's id. Opening the reward prod
 
 **Profiles.** An admin creates the profiles of everyone else in the world, through the app, with generated ids. **[decided]**
 
-**Joining a world.** The admin shares a join link, `<app URL>#/join/<worldId>`, also shown as a QR code. The code is in the URL fragment, so it never reaches a server log. Typing the code by hand remains possible. The joining device creates its `members/{uid}` with `profileId: null`, which makes it a member. It can then read the profiles, and it picks one. **[decided]**
+**Joining a world.** The admin shares a join link, `<app URL>#/join/<worldId>/<themeId>`, also shown as a QR code. The code is in the URL fragment, so it never reaches a server log. The theme id is not secret: it makes the page look like the world before it joins and lets the app offer to install itself with the right name and icon (ADR 0005). On iOS, in a browser tab, the link does not join: the installed app has its own storage, so the person installs first and joins from the installed app, pasting the link in one tap. **[decided]** Typing the code by hand remains possible. The joining device creates its `members/{uid}` with `profileId: null`, which makes it a member. It can then read the profiles, and it picks one. **[decided]**
 
 **Choosing and switching profiles.** It works like Netflix: the device picks a profile and stays on it; it can switch to another profile at any time. The choice is not verified, so security between profiles relies on trust. An optional PIN per profile (0.8) locks the interface only. **[decided]** A second adult gets admin rights by picking their own adult profile. **[decided]**
 
@@ -213,7 +213,7 @@ A newly obtained collectible is pending. It stays in its owner's list, where the
 
 The main screen is a **map** with five tappable places. Each tap starts a short animation to that place. The position, drawing and animation of each place belong to the theme. The avatar cannot be moved freely. **[decided]**
 
-1. **First launch.** Create a world, which shows the join link and QR code, or join with a link or code. Then pick a profile.
+1. **First launch.** Create a world (choosing its theme, when there is more than one), which shows the join link and QR code, or join with a link or code. Then pick a profile. Once the theme is known, the app offers to install itself (never from the bare address).
 2. **Profile picker.** Netflix-style list of the world's non-archived profiles. Reachable later to switch profile.
 3. **`board`.** All open tasks of the active profile, including those from past periods, and, highlighted, planned `big` tasks for tomorrow and today (the visual alert, 0.3). Entry point for creating a task: adults for any profile, children for themselves.
 4. **`checkin`.** Pick an open task, tap done. Shows the question when there is one. "I think I did better" button.
@@ -226,6 +226,29 @@ Adults play like everyone else. The theme can give an adult's `home` a different
 
 ## 8. Theme package and interface text
 
+**A theme is a skin.** **[decided]** (ADR 0006) It changes only how the game looks and what things are called, never how the game works:
+
+- **Same game:** every theme has the same mechanics, screens, rules, data and `ruleset`.
+- **Data only:** a theme is data (JSON and art). It contains no code, and no code branches on which theme is active.
+- **New theme = new folder:** adding a theme means adding a folder under `src/themes/`, with no code change and no data migration.
+- **Nothing stored refers to theme text:** stored documents keep only `themeId`, `slot` and `tier`, never a themed name or text.
+
+**Interface text has three layers.** **[decided]**
+
+| Layer | Where | Contains | Status |
+| --- | --- | --- | --- |
+| 1. Neutral messages | `src/i18n/{locale}.json` | Every message the engine shows, with placeholders for themed nouns; no theme vocabulary | In place |
+| 2. Theme vocabulary | the theme package | The visible names of the glossary roles (with gender), tier names, catalogue names and the `checkin` character's lines | In place |
+| 3. Theme-specific wording | the theme package | Optional rewording of any neutral message in the theme's own voice, using terms that exist only in that theme | Future |
+
+**Rules for layer 3 (future):**
+
+- A theme may override a layer 1 message only by its key.
+- A theme may define extra terms, but only for use in its own texts.
+- The engine never shows a key or a term that layer 1 does not define, so a theme can change words but never add behaviour.
+
+**Locales (future).** Layer 1 already has one file per locale. When a second locale arrives, each theme's texts (layers 2 and 3) move to one file per locale inside the theme. The structural part of `theme.json` (map, places, art, install data) stays language-neutral.
+
 Folder `src/themes/{themeId}/` with:
 
 - `theme.json` containing:
@@ -233,11 +256,12 @@ Folder `src/themes/{themeId}/` with:
   - for each glossary role, the singular and plural visible name;
   - for each map place, its position, size and animation;
   - `homeVariants` per `kind`;
+  - `install`: the name and colours of the installed app and its icons, from which one manifest per theme is built (ADR 0005);
   - the `checkin` character's lines (greeting, congratulations, doubt, farewell), short and fixed in number.
 - `catalog`: a list of slots, each with `slot`, `tier`, `name` and art file.
 - `assets/`: art.
 
-Interface text that does not belong to a theme lives in locale files under `src/i18n/` (for now only `pt-PT.json`). These strings are neutral; when they need a themed noun, they use a placeholder (for example `{reward}`) that the theme fills in. No visible interface text is hard-coded in TypeScript. **[decided]**
+Interface text that does not belong to a theme lives in locale files under `src/i18n/` (for now only `pt-PT.json`). These strings are neutral; when they need a themed noun, they use a placeholder (for example `{@reward}`) that the theme fills in. No visible interface text is hard-coded in TypeScript. **[decided]**
 
 The engine reads the theme only through a typed `theme` module. A validator (`npm run validate-theme`) checks that the theme has enough slots in each `tier`, that no text is missing, and that every placeholder used in `src/i18n/` has a name in the theme. A collectible stores `slot` and `tier`, never the theme's name, so a new theme changes the look of everything already obtained without migrating data.
 

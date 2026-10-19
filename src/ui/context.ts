@@ -1,6 +1,7 @@
 import type { Clock, RandomInt, Uid, WorldId } from '../core/model';
 import { DataStoreError, type DataStore } from '../data/DataStore';
 import type { MessageParams, Theme } from '../theme';
+import type { Installer } from './install';
 import type { Route } from './routes';
 import type { WorldMemory } from './worldMemory';
 
@@ -9,7 +10,17 @@ export type Dispose = () => void;
 
 export interface AppContext {
   store: DataStore;
-  theme: Theme;
+  /** The current theme. It changes when the theme becomes known (see `setTheme`). */
+  readonly theme: Theme;
+  /**
+   * True once the theme comes from somewhere reliable: a join link, the choice made
+   * when creating a world, or the world itself. The app offers to install itself
+   * only then, never from the bare address (ADR 0005).
+   */
+  readonly themeKnown: boolean;
+  /** Uses another theme, makes the page look like it, and redraws the current screen. */
+  setTheme(themeId: string): void;
+  installer: Installer;
   clock: Clock;
   randomInt: RandomInt;
   /** The signed-in device. */

@@ -5,6 +5,7 @@ import { DataStoreError, type DataStore } from '../data/DataStore';
 import { createMemoryBackend, createMemoryStore } from '../data/memory';
 import { loadTheme } from '../theme';
 import { startApp } from './app';
+import type { Installer, InstallMode, Platform } from './install';
 import { memoryNavigation } from './navigation';
 import { createWorldMemory } from './worldMemory';
 
@@ -16,13 +17,24 @@ const theme = loadTheme('minimal');
 let now = Date.parse('2026-10-20T10:00:00Z');
 const clock = () => now;
 
+/** An installer that lets a test choose the platform and what can be offered. */
+function fakeInstaller(mode: InstallMode = 'none', platform: Partial<Platform> = {}) {
+  const installer: Installer & { prompt: ReturnType<typeof vi.fn> } = {
+    platform: { isIos: false, isStandalone: false, ...platform },
+    mode: () => mode,
+    prompt: vi.fn(async () => {}),
+    onChange: () => () => {},
+  };
+  return installer;
+}
+
 let backend = createMemoryBackend();
 let stops: Array<() => void> = [];
 
 /** One device: its own store, remembered world and screen, sharing the backend. */
 async function openDevice(
   uid: string,
-  options: { hash?: string; savedWorld?: string; wrap?: (store: DataStore) => DataStore } = {},
+  options: { hash?: string; savedWorld?: string; savedTheme?: string; launchTheme?: string; wrap?: (store: DataStore) => DataStore; installer?: Installer } = {},
 ) {
   const storage = new Map<string, string>();
   const world = createWorldMemory({
@@ -31,10 +43,11 @@ async function openDevice(
     removeItem: (k) => void storage.delete(k),
   });
   if (options.savedWorld) world.set(options.savedWorld);
+  if (options.savedTheme) world.setTheme(options.savedTheme);
   const root = document.createElement('main');
   document.body.append(root);
   const store = (options.wrap ?? ((s) => s))(createMemoryStore(backend, { uid, clock, randomInt }));
-  stops.push(await startApp({ root, store, theme, baseUrl: BASE_URL, world, clock, randomInt, navigation: memoryNavigation(options.hash ?? '') }));
+  stops.push(await startApp({ root, store, theme, baseUrl: BASE_URL, world, clock, randomInt, navigation: memoryNavigation(options.hash ?? ''), installer: options.installer ?? fakeInstaller(), assetBase: '/family-quest/', launchTheme: options.launchTheme ?? null }));
 
   const find = (selector: string, text?: string) =>
     [...root.querySelectorAll<HTMLElement>(selector)].find((el) => text === undefined || el.textContent?.includes(text));
@@ -118,7 +131,7 @@ describe('joining a world', () => {
 
     const child = await openDevice('child-device', { hash: `#/join/${worldId}` });
     await child.see('Quem és tu?');
-    expect(child.find('button.profile', 'Alex')).toBeDefined();
+    await vi.waitFor(() => expect(child.find('button.profile', 'Alex')).toBeDefined());
     await child.click('button.profile', 'Sam');
     await child.see('Olá, Sam!');
     expect(child.find('button', 'Gerir')).toBeUndefined();
@@ -161,6 +174,7 @@ describe('managing profiles', () => {
 
     const other = await openDevice('other-device', { hash: `#/join/${worldId}` });
     await other.see('Quem és tu?');
+    await vi.waitFor(() => expect(other.find('button.profile', 'Alex')).toBeDefined());
     expect(other.find('button.profile', 'Sam')).toBeUndefined();
 
     await admin.click('li button', 'Reativar');
@@ -431,5 +445,149 @@ describe('the check-in', () => {
     await child.see('Nada para concluir');
     expect(lines.farewell).toContain(bubble(child));
     expect(child.root.textContent).not.toContain('Só para mim');
+  });
+});
+
+describe('the theme of the world', () => {
+  const FARM = 'minimal-farm';
+  const manifest = () => document.head.querySelector('link[rel="manifest"]')?.getAttribute('href');
+
+  /** Creates a world with the farm theme, from the create screen. */
+  async function createFarm(installer?: Installer) {
+    const admin = await openDevice('admin-device', { installer });
+    await admin.click('button', 'Criar uma família');
+    await admin.choose('Tema', 'Tema quinta');
+    await admin.see('Criar uma quinta'); // the names follow the choice at once
+    await admin.type('Nome da quinta', 'Casa');
+    await admin.type('O teu nome', 'Alex');
+    admin.submit();
+    await admin.see('Convidar');
+    return { admin, worldId: admin.world.get()! };
+  }
+
+  it('is chosen when creating the world, fixed for it, and drives the names and the installed app', async () => {
+    const { admin, worldId } = await createFarm();
+    expect(backend.state.get(worldId)?.world.themeId).toBe(FARM);
+    expect(manifest()).toBe('/family-quest/manifest-minimal-farm.webmanifest');
+    expect(document.head.querySelector('link[rel="apple-touch-icon"]')?.getAttribute('href')).toBe(
+      '/family-quest/themes/minimal-farm/apple-touch-icon.png',
+    );
+    expect(document.head.querySelector('meta[name="apple-mobile-web-app-title"]')?.getAttribute('content')).toBe('Quinta');
+
+    await admin.click('button', 'Continuar');
+    await admin.see('Painel'); // the farm's name for the board
+    expect(admin.world.getTheme()).toBe(FARM);
+  });
+
+  it('puts the theme in the join link, so a joining device looks like the world before it joins', async () => {
+    const { worldId } = await createFarm();
+    const device = await openDevice('other-device', { hash: `#/join/${worldId}/${FARM}` });
+    await device.see('Quem és tu?');
+    expect(manifest()).toBe('/family-quest/manifest-minimal-farm.webmanifest');
+    await device.click('button.profile', 'Alex');
+    await device.see('Painel');
+    expect(device.world.getTheme()).toBe(FARM);
+  });
+
+  it('is remembered, so the next launch has the right names from the first frame', async () => {
+    const { admin, worldId } = await createFarm();
+    await admin.click('button', 'Continuar');
+    stops.pop()!();
+    const again = await openDevice('admin-device', { savedWorld: worldId, savedTheme: FARM });
+    expect(again.root.textContent).not.toContain('A carregar');
+    await again.see('Painel');
+  });
+
+  it('is the one an installed app was launched with, even before there is a world', async () => {
+    const device = await openDevice('device', { launchTheme: FARM });
+    await device.see('Criar uma quinta'); // the farm's name, from the very first screen
+    await device.click('button', 'Criar uma quinta');
+    await device.see('Nome da quinta');
+    expect(manifest()).toBe('/family-quest/manifest-minimal-farm.webmanifest');
+  });
+
+  it('ignores a theme id this build does not have', async () => {
+    const { worldId } = await createFarm();
+    const device = await openDevice('other-device', { hash: `#/join/${worldId}/unknown-theme` });
+    await device.see('Quem és tu?'); // the join still works, with the world's own theme afterwards
+  });
+});
+
+describe('installing the app', () => {
+  it('offers nothing from the bare address, even when the browser could install it', async () => {
+    const device = await openDevice('device', { installer: fakeInstaller('prompt') });
+    await device.see('Criar uma família');
+    expect(device.find('button', 'Instalar')).toBeUndefined();
+  });
+
+  it('offers the browser install button once the theme is known, and uses the browser dialog', async () => {
+    const installer = fakeInstaller('prompt');
+    const admin = await openDevice('admin-device', { installer });
+    await admin.click('button', 'Criar uma família');
+    await admin.type('Nome da família', 'Casa');
+    await admin.type('O teu nome', 'Alex');
+    admin.submit();
+    await admin.see('Convidar');
+
+    await admin.click('button', 'Instalar a app');
+    expect(installer.prompt).toHaveBeenCalledTimes(1);
+
+    await admin.click('button', 'Continuar');
+    await admin.see('Olá, Alex!');
+    expect(admin.find('.bar-actions button', 'Instalar')).toBeDefined();
+  });
+
+  it('shows the iOS steps with the name of the themed app, and hides the offer once installed', async () => {
+    const admin = await openDevice('admin-device', { installer: fakeInstaller('ios', { isIos: true }) });
+    await admin.click('button', 'Criar uma família');
+    await admin.type('Nome da família', 'Casa');
+    await admin.type('O teu nome', 'Alex');
+    admin.submit();
+    await admin.see('Para instalar «Família»: toca em Partilhar');
+    stops.pop()!();
+
+    const installed = await openDevice('admin-device', { installer: fakeInstaller('installed', { isIos: true, isStandalone: true }), savedWorld: admin.world.get()!, savedTheme: 'minimal' });
+    await installed.see('Olá, Alex!');
+    expect(installed.find('.bar-actions button', 'Instalar')).toBeUndefined();
+  });
+
+  it('on iOS in a browser tab, does not join: it explains, and offers to copy the link', async () => {
+    const { admin, worldId } = await createFamily();
+    await admin.click('button', 'Continuar');
+    const members = () => backend.state.get(worldId)!.members.size;
+    const before = members();
+
+    const copied: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t: string) => void copied.push(t) }, configurable: true });
+    const safari = await openDevice('iphone', {
+      hash: `#/join/${worldId}/minimal`,
+      installer: fakeInstaller('ios', { isIos: true }),
+    });
+    await safari.see('instala primeiro a app');
+    expect(safari.root.textContent).toContain('Para instalar «Família»'); // themed from the link
+    expect(safari.world.get()).toBeNull();
+    expect(members()).toBe(before);
+
+    await safari.click('button', 'Copiar o link');
+    await safari.see('Link copiado');
+    expect(copied[0]).toContain(`#/join/${worldId}/minimal`);
+  });
+
+  it('on iOS in the installed app, joins as usual; and a pasted link joins too', async () => {
+    const { admin, worldId } = await createFamily();
+    await admin.click('button', 'Continuar');
+    const standalone = fakeInstaller('installed', { isIos: true, isStandalone: true });
+
+    const viaLink = await openDevice('iphone-1', { hash: `#/join/${worldId}/minimal`, installer: standalone });
+    await viaLink.see('Quem és tu?');
+
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { readText: async () => `https://example.org/family-quest/#/join/${worldId}/minimal` },
+      configurable: true,
+    });
+    const viaPaste = await openDevice('iphone-2', { hash: '#/join', installer: standalone });
+    await viaPaste.click('button', 'Colar');
+    await viaPaste.see('Quem és tu?');
+    expect(viaPaste.world.get()).toBe(worldId);
   });
 });

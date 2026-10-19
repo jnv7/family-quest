@@ -4,6 +4,7 @@ import { createRandomInt } from './core/random';
 import type { DataStore } from './data/DataStore';
 import { formatMessage, loadTheme } from './theme';
 import { startApp } from './ui/app';
+import { createInstaller } from './ui/install';
 import { browserNavigation } from './ui/navigation';
 import { createWorldMemory } from './ui/worldMemory';
 
@@ -48,4 +49,7 @@ void startApp({
   clock: Date.now,
   randomInt: createRandomInt((array) => crypto.getRandomValues(array)),
   navigation: browserNavigation(),
+  installer: createInstaller(window),
+  launchTheme: new URLSearchParams(location.search).get('theme'),
+  assetBase: import.meta.env.BASE_URL,
 });

@@ -3,12 +3,17 @@ import type { WorldId } from '../core/model';
 export interface WorldMemory {
   get(): WorldId | null;
   set(worldId: WorldId): void;
+  /** The world's theme id, remembered so the next launch looks right before anything loads. */
+  getTheme(): string | null;
+  setTheme(themeId: string): void;
+  /** Forgets the world and its theme. */
   clear(): void;
 }
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 const KEY = 'familyQuest.worldId';
+const THEME_KEY = 'familyQuest.themeId';
 
 /**
  * Remembers which world this device is in (several worlds per device are out of
@@ -17,8 +22,10 @@ const KEY = 'familyQuest.worldId';
  */
 export function createWorldMemory(storage: StorageLike | null): WorldMemory {
   let current: WorldId | null = null;
+  let theme: string | null = null;
   try {
     current = storage?.getItem(KEY) ?? null;
+    theme = storage?.getItem(THEME_KEY) ?? null;
   } catch {
     // Unreadable storage: start empty.
   }
@@ -35,9 +42,18 @@ export function createWorldMemory(storage: StorageLike | null): WorldMemory {
       current = worldId;
       persist((s) => s.setItem(KEY, worldId));
     },
+    getTheme: () => theme,
+    setTheme(themeId) {
+      theme = themeId;
+      persist((s) => s.setItem(THEME_KEY, themeId));
+    },
     clear() {
       current = null;
-      persist((s) => s.removeItem(KEY));
+      theme = null;
+      persist((s) => {
+        s.removeItem(KEY);
+        s.removeItem(THEME_KEY);
+      });
     },
   };
 }

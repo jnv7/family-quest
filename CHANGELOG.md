@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.5] — 2026-10-19
+
+Completes 0.2.4 with the two items the product owner moved there from the radar, and delivers the theme of the world.
+
+### Added
+
+- The theme belongs to the world: it is chosen when the world is created (when there is more than one theme), fixed for it, and followed by every device. The names, texts and page colours change with it, and the next launch has the right names from the first frame.
+- A second minimal theme, "Tema quinta" (`minimal-farm`), with other names, genders, emoji art and icons, to prove a theme works without touching code or data.
+- The installed app follows the world's theme (ADR 0005): one manifest per theme, with its own id, name, colours and icons, built from a new `install` block in `theme.json` (`validate-theme` checks it). The installed app starts on `?theme=<id>`, so it looks right from its first frame.
+- The join link carries the theme id (`#/join/<worldId>/<themeId>`), so a joining device looks like the world before it joins.
+- An install offer inside the app, only once the theme is known and never from the bare address: a button on Android and desktop Chrome, and the steps with the theme's app name on iOS. Hidden when already installed. It appears when inviting, in the map bar and on its own screen.
+- On iOS, in a browser tab, a join link does not join (the installed app has its own storage): it explains, offers the steps and copies the link. A "paste" button joins from the clipboard in the installed app.
+
+### Changed
+
+- `theme.schema.json` has a required `install` block.
+- A manifest without `start_url` was tried and dropped: Chrome refuses to install it (`start-url-not-valid`).
+
 ## [0.2.4] — 2026-10-19
 
 ### Added
