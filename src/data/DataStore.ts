@@ -10,6 +10,7 @@
  * Scope: operations needed up to release 0.6 (rewards, collectibles and the party).
  */
 import type { NewRecurringTask } from '../core/generation';
+import type { PartyChange } from '../core/party';
 import type {
   Answer,
   Cadence,
@@ -254,6 +255,15 @@ export interface RewardStore {
 export interface CollectibleStore {
   /** The profile's collectibles, newest first. Every member can read them (the showcase needs other people's); the interface never shows the owner. */
   observeCollectibles(worldId: WorldId, profileId: ProfileId, onValue: Observer<Collectible[]>, onError?: ObserverError): Unsubscribe;
+
+  /**
+   * One batch: `profile.partyIds := change.partyIds`, plus the `reserveAt` changes (`toReserve`
+   * get the time of the call, `fromReserve` get null). Owner only. The adapter runs
+   * `checkPartyChange` first and rejects with `invalid-argument` before any write if it fails.
+   * The profile is not written when its `partyIds` do not change, so the silent move of old
+   * pending collectibles to the reserve never overwrites a party another device just edited.
+   */
+  arrangeParty(worldId: WorldId, profileId: ProfileId, change: PartyChange): Write;
 }
 
 export interface DataStore {

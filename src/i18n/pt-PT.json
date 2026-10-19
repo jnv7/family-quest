@@ -134,6 +134,11 @@
     "weekday.thursday": "quinta-feira",
     "weekday.friday": "sexta-feira",
     "weekday.saturday": "sábado",
-    "weekday.sunday": "domingo"
+    "weekday.sunday": "domingo",
+    "party.join": "Pôr {@party.in}",
+    "party.later": "Mais tarde",
+    "party.full": "Não há mais lugares {@party.in}. Quem sai?",
+    "party.swap": "Trocar por {name}",
+    "vault.recent": "Recentes"
   }
 }

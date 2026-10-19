@@ -575,6 +575,114 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
       });
     });
 
+    describe('party and reserve', () => {
+      /** The child opens `count` rewards, one second apart; returns the collectible ids, oldest first. */
+      async function withCollectibles(count: number) {
+        const env = await setup();
+        const ids: string[] = [];
+        for (let i = 0; i < count; i++) {
+          now = START + 1000 * (i + 1);
+          const task = env.admin.tasks.createAdhocTask(env.worldId, adhoc(env.childProfileId, `Task ${i}`));
+          await task.settled;
+          const id = task.result.taskId;
+          await env.child.tasks.completeTask(env.worldId, id, { answer: null, talkFlag: false, rewardTier: 'low' }).settled;
+          await env.child.rewards.openReward(env.worldId, id, { slot: `slot${i}` }).settled;
+          ids.push(id);
+        }
+        const profiles = new Watch<Profile[]>((v, e) => env.child.worlds.observeProfiles(env.worldId, v, e));
+        const owned = new Watch<Collectible[]>((v, e) => env.child.collectibles.observeCollectibles(env.worldId, env.childProfileId, v, e));
+        await eventually(() => expect(owned.value).toHaveLength(count));
+        const partyOf = () => profiles.value?.find((p) => p.id === env.childProfileId)?.partyIds;
+        const reserveOf = (id: string) => owned.value?.find((c) => c.id === id)?.reserveAt;
+        return { ...env, ids, profiles, owned, partyOf, reserveOf };
+      }
+      const arrange = (partyIds: string[], toReserve: string[] = [], fromReserve: string[] = []) => ({ partyIds, toReserve, fromReserve });
+
+      it('adds to a party with room: partyIds grows and the collectible stays out of the reserve', async () => {
+        const { child, worldId, childProfileId, ids, partyOf, reserveOf, profiles, owned } = await withCollectibles(2);
+        await child.collectibles.arrangeParty(worldId, childProfileId, arrange([ids[0]!])).settled;
+        await child.collectibles.arrangeParty(worldId, childProfileId, arrange([ids[0]!, ids[1]!])).settled;
+        await eventually(() => expect(partyOf()).toEqual([ids[0], ids[1]]));
+        expect(reserveOf(ids[1]!)).toBeNull();
+        profiles.close();
+        owned.close();
+      });
+
+      it('adds to a full party when the chosen one leaves for the reserve at the time of the call', async () => {
+        const { child, worldId, childProfileId, ids, partyOf, reserveOf, profiles, owned } = await withCollectibles(6);
+        const first = ids.slice(0, 5);
+        await child.collectibles.arrangeParty(worldId, childProfileId, arrange(first)).settled;
+
+        now = START + 60_000;
+        await child.collectibles.arrangeParty(worldId, childProfileId, arrange([...first.slice(0, 4), ids[5]!], [first[4]!])).settled;
+        await eventually(() => {
+          expect(partyOf()).toEqual([...first.slice(0, 4), ids[5]]);
+          expect(reserveOf(first[4]!)).toBe(now);
+          expect(reserveOf(ids[5]!)).toBeNull();
+        });
+        profiles.close();
+        owned.close();
+      });
+
+      it('refuses a sixth collectible without anyone leaving, before any write', async () => {
+        const { child, worldId, childProfileId, ids, partyOf, profiles, owned } = await withCollectibles(6);
+        const first = ids.slice(0, 5);
+        await child.collectibles.arrangeParty(worldId, childProfileId, arrange(first)).settled;
+        await rejectsWith(child.collectibles.arrangeParty(worldId, childProfileId, arrange(ids)), 'invalid-argument');
+        await eventually(() => expect(partyOf()).toEqual(first));
+        profiles.close();
+        owned.close();
+      });
+
+      it('brings a collectible back from the reserve into the party', async () => {
+        const { child, worldId, childProfileId, ids, partyOf, reserveOf, profiles, owned } = await withCollectibles(2);
+        now = START + 60_000;
+        await child.collectibles.arrangeParty(worldId, childProfileId, arrange([], [ids[0]!])).settled;
+        await eventually(() => expect(reserveOf(ids[0]!)).toBe(now));
+
+        await child.collectibles.arrangeParty(worldId, childProfileId, arrange([ids[0]!], [], [ids[0]!])).settled;
+        await eventually(() => {
+          expect(partyOf()).toEqual([ids[0]]);
+          expect(reserveOf(ids[0]!)).toBeNull();
+        });
+        profiles.close();
+        owned.close();
+      });
+
+      it('does not rewrite the party when only collectibles move to the reserve', async () => {
+        const { child, child2, worldId, childProfileId, ids, partyOf, reserveOf, profiles, owned } = await withCollectibles(2);
+        // Another device of the same profile put the first one in the party; this device has not seen it yet,
+        // but a move that leaves the party as it was must not write it.
+        await child.collectibles.arrangeParty(worldId, childProfileId, arrange([ids[0]!])).settled;
+        await eventually(() => expect(partyOf()).toEqual([ids[0]]));
+        now = START + 60_000;
+        await child2.collectibles.arrangeParty(worldId, childProfileId, arrange([ids[0]!], [ids[1]!])).settled;
+        await eventually(() => {
+          expect(partyOf()).toEqual([ids[0]]);
+          expect(reserveOf(ids[1]!)).toBe(now);
+        });
+        profiles.close();
+        owned.close();
+      });
+
+      it('refuses what the checks refuse, before any write', async () => {
+        const { child, worldId, childProfileId, ids, profiles, owned } = await withCollectibles(2);
+        await rejectsWith(child.collectibles.arrangeParty(worldId, childProfileId, arrange(['nothing'])), 'invalid-argument');
+        await rejectsWith(child.collectibles.arrangeParty(worldId, childProfileId, arrange([ids[0]!, ids[0]!])), 'invalid-argument');
+        await rejectsWith(child.collectibles.arrangeParty(worldId, childProfileId, arrange([], [ids[0]!], [ids[0]!])), 'invalid-argument');
+        profiles.close();
+        owned.close();
+      });
+
+      it('is refused to another profile, even an admin, and changes nothing', async () => {
+        const { admin, worldId, childProfileId, ids, partyOf, profiles, owned } = await withCollectibles(1);
+        await rejectsWith(admin.collectibles.arrangeParty(worldId, childProfileId, arrange([ids[0]!])), 'permission-denied');
+        await eventually(() => expect(partyOf()).toEqual([]));
+        profiles.close();
+        owned.close();
+      });
+    });
+
     describe('reward odds', () => {
       const odds = { ...DEFAULT_RULESET.tierOdds, low: { low: 70, mid: 25, high: 5 } };
 

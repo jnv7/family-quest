@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.3] — 2026-10-20
+
+Completes the scope of release 0.6.
+
+### Added
+
+- Party, pending and reserve. After a reveal, a new collectible can join the party at once, or wait ("later"). With a full party the screen asks who leaves, and that one goes to the reserve. A "recent" section in the `vault` lists the pending collectibles with the same choices. Nothing offers to delete or release a collectible.
+- The automatic move: when the app opens, after a profile switch, and when the `vault` opens, pending collectibles older than `pendingDays` (counted in Lisbon days) go to the reserve, silently. The party is not rewritten by it.
+- Domain: `addDays` (calendar arithmetic in UTC, tested across month and year ends and both daylight saving changes), `collectibleState`, `pendingToReserve` and `checkPartyChange` (party size, duplicates, ownership, and `toReserve`/`fromReserve` consistent with the new party).
+- `DataStore`: `collectibles.arrangeParty` in one batch, with both adapters and the contract suite. The adapter runs the checks first and refuses with `invalid-argument` before any write.
+
 ## [0.6.2] — 2026-10-20
 
 ### Added

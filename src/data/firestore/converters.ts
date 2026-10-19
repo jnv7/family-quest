@@ -131,6 +131,11 @@ export function decodeCollectible(snapshot: Snapshot): Collectible | null {
   );
 }
 
+/** The one field written when a collectible moves to or leaves the reserve. */
+export const encodeReserveAt = (reserveAt: Millis | null): DocumentData => ({
+  reserveAt: reserveAt === null ? null : toTimestamp(reserveAt),
+});
+
 /** The one field written when a reward is opened. */
 export const encodeRewardOpening = (openedAt: Millis): DocumentData => ({ openedAt: toTimestamp(openedAt) });
 

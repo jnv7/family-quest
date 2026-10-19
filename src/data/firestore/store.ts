@@ -25,6 +25,7 @@ import {
 import { signInAnonymously, type Auth } from 'firebase/auth';
 import { weekKey } from '../../core/calendar';
 import { oddsProblem } from '../../core/draw';
+import { checkPartyChange } from '../../core/party';
 import { taskDefProblem } from '../../core/taskDefs';
 import { assertPlanAllowed } from '../plan';
 import { newRecurringTaskProblem, settleRecurringWrites } from '../recurring';
@@ -68,6 +69,7 @@ import {
   encodeMember,
   encodeProfile,
   encodeReward,
+  encodeReserveAt,
   encodeRewardOpening,
   encodeTask,
   encodeTaskCompletion,
@@ -504,6 +506,41 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
     },
 
     collectibles: {
+      arrangeParty(worldId, profileId, change) {
+        const now = clock();
+        return write(undefined, async () => {
+          const ids = [...new Set([...change.partyIds, ...change.toReserve, ...change.fromReserve])];
+          const [worldSnapshot, profileSnapshot, memberSnapshot, ...collectibleSnapshots] = await Promise.all([
+            readDoc(worldDoc(db, worldId)),
+            readDoc(profileDoc(db, worldId, profileId)),
+            readDoc(memberDoc(db, worldId, requireUid())),
+            ...ids.map((id) => readDoc(collectibleDoc(db, worldId, id))),
+          ]);
+          const world = worldSnapshot.exists() ? decodeWorld(worldSnapshot) : null;
+          const profile = profileSnapshot.exists() ? decodeProfile(profileSnapshot) : null;
+          if (!world || !profile) throw new DataStoreError('not-found', `Profile ${profileId} does not exist`);
+          const member = memberSnapshot.exists() ? decodeMember(memberSnapshot) : null;
+          if (member?.profileId !== profileId) throw denied('Only the owner arranges the party');
+          // The party's current members are read too, so a stale id in it is reported, not ignored.
+          const current = await Promise.all(
+            profile.partyIds.filter((id) => !ids.includes(id)).map((id) => readDoc(collectibleDoc(db, worldId, id))),
+          );
+          const owned = [...collectibleSnapshots, ...current].flatMap((snapshot) => {
+            const collectible = snapshot.exists() ? decodeCollectible(snapshot) : null;
+            return collectible && collectible.profileId === profileId ? [collectible] : [];
+          });
+          const problem = checkPartyChange(profile, owned, change, world.ruleset.partySize);
+          if (problem) throw invalid(`The party change is not valid (${problem})`);
+
+          const batch = writeBatch(db);
+          for (const id of change.toReserve) batch.update(collectibleDoc(db, worldId, id), encodeReserveAt(now));
+          for (const id of change.fromReserve) batch.update(collectibleDoc(db, worldId, id), encodeReserveAt(null));
+          const same = profile.partyIds.length === change.partyIds.length && profile.partyIds.every((id, i) => id === change.partyIds[i]);
+          if (!same) batch.update(profileDoc(db, worldId, profileId), { partyIds: change.partyIds });
+          await batch.commit();
+        });
+      },
+
       // One equality filter, so no composite index is needed; the order is applied here.
       observeCollectibles: (worldId, profileId, onValue, onError) =>
         onSnapshot(

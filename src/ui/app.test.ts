@@ -747,8 +747,10 @@ describe('opening rewards', () => {
     await child.see(theme.tiers[reward.tier]);
     expect(child.root.querySelectorAll('li.reward')).toHaveLength(0);
 
-    await child.click('button', 'Ok');
-    await child.see('Ainda não tens prémios para abrir.');
+    // The new collectible is pending: "later" closes the reveal, and it waits among the recent ones.
+    await child.click('button', 'Mais tarde');
+    await child.see('Recentes');
+    await child.see(entry.name);
   });
 
   it('opens a reward from a closed week at any time', async () => {
@@ -777,6 +779,95 @@ describe('opening rewards', () => {
     // The first device was still showing the reward: it leaves the list, and nothing is duplicated.
     await vi.waitFor(() => expect(child.find('button', 'Abrir')).toBeUndefined());
     expect(backend.state.get(worldId)!.collectibles.size).toBe(1);
+  });
+});
+
+describe('the party and the reserve', () => {
+  const SUNDAY = Date.parse('2026-10-25T10:00:00Z');
+  const state = (worldId: string) => backend.state.get(worldId)!;
+  const profileSam = (worldId: string) => [...state(worldId).profiles.values()].find((p) => p.displayName === 'Sam')!;
+
+  /** A child who earned `count` rewards in a closed week, standing in the vault. */
+  async function childWithRewards(count: number) {
+    const { admin, child, worldId } = await familyWithChild();
+    for (let i = 0; i < count; i++) {
+      await createTask(admin, `Tarefa ${i}`, 'Sam');
+      await admin.click('button', 'Voltar');
+    }
+    await child.click('button.place', 'Registo');
+    for (let i = 0; i < count; i++) {
+      await child.click('button', 'Feito');
+      await vi.waitFor(() => expect(state(worldId).rewards.size).toBe(i + 1));
+    }
+    await child.click('button', 'Voltar');
+    now = SUNDAY;
+    await child.click('button.place', 'Cofre');
+    return { admin, child, worldId };
+  }
+
+  const openAll = async (child: Awaited<ReturnType<typeof openDevice>>, worldId: string, count: number) => {
+    for (let i = 0; i < count; i++) {
+      await child.click('button', 'Abrir');
+      await vi.waitFor(() => expect(state(worldId).collectibles.size).toBe(i + 1));
+      await child.click('button', 'Mais tarde');
+    }
+  };
+
+  it('puts a new collectible in the party when there is room, from the reveal', async () => {
+    const { child, worldId } = await childWithRewards(1);
+    await child.click('button', 'Abrir');
+    await child.click('button', 'Pôr na equipa');
+    const id = [...state(worldId).collectibles.keys()][0]!;
+    await vi.waitFor(() => expect(profileSam(worldId).partyIds).toEqual([id]));
+    expect([...state(worldId).collectibles.values()][0]!.reserveAt).toBeNull();
+    await child.notSee('Pôr na equipa');
+  });
+
+  it('asks who leaves when the party is full, sends that one to the reserve, and never offers to delete', async () => {
+    const { child, worldId } = await childWithRewards(6);
+    await openAll(child, worldId, 5);
+    const recent = () => [...child.root.querySelectorAll<HTMLButtonElement>('.recent-card button.primary')];
+    for (let i = 0; i < 5; i++) {
+      await vi.waitFor(() => expect(recent().length).toBeGreaterThan(0));
+      recent()[0]!.click();
+      await vi.waitFor(() => expect(profileSam(worldId).partyIds).toHaveLength(i + 1));
+    }
+
+    await child.click('button', 'Abrir');
+    await child.see('Quem sai?');
+    const partyBefore = [...profileSam(worldId).partyIds];
+    const newcomer = [...state(worldId).collectibles.values()].find((c) => !partyBefore.includes(c.id))!;
+    await child.click('button.swap', 'Trocar por');
+    await vi.waitFor(() => expect(profileSam(worldId).partyIds).toContain(newcomer.id));
+    const party = profileSam(worldId).partyIds;
+    expect(party).toHaveLength(5);
+    const left = partyBefore.find((id) => !party.includes(id))!;
+    expect(state(worldId).collectibles.get(left)!.reserveAt).toBe(now);
+    expect(state(worldId).collectibles.size).toBe(6);
+    expect([...child.root.querySelectorAll('button')].map((b) => b.textContent).join(' ')).not.toMatch(/apagar|eliminar|largar|libertar/i);
+  });
+
+  it('moves a collectible left pending to the reserve on the first app open of the next day, and not before', async () => {
+    const { child, worldId } = await childWithRewards(1);
+    await child.click('button', 'Abrir');
+    await child.click('button', 'Mais tarde');
+    const id = [...state(worldId).collectibles.keys()][0]!;
+    expect(state(worldId).collectibles.get(id)!.reserveAt).toBeNull();
+
+    // The same day, the app is opened again: it is still pending.
+    now = SUNDAY + 3 * 3_600_000;
+    const sameDay = await openDevice('child-device', { savedWorld: worldId });
+    await sameDay.see('Olá, Sam!');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(state(worldId).collectibles.get(id)!.reserveAt).toBeNull();
+
+    // The next day, the first open puts it in the reserve, without any screen asking.
+    now = SUNDAY + 24 * 3_600_000;
+    const nextDay = await openDevice('child-device', { savedWorld: worldId });
+    await nextDay.see('Olá, Sam!');
+    await vi.waitFor(() => expect(state(worldId).collectibles.get(id)!.reserveAt).toBe(now));
+    expect(profileSam(worldId).partyIds).toEqual([]);
+    expect(state(worldId).collectibles.size).toBe(1);
   });
 });
 

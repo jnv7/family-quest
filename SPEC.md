@@ -218,7 +218,7 @@ The main screen is a **map** with five tappable places. Each tap starts a short 
 3. **`board`.** All open tasks of the active profile, including those from past periods, and, highlighted, planned `big` tasks for tomorrow and today (the visual alert, 0.3). Entry point for creating a task: adults for any profile, children for themselves.
 4. **`checkin`.** Pick an open task, tap done. Shows the question when there is one. "I think I did better" button.
 5. **`home`.** Avatar and `party` of the active profile, plus its pending collectibles. Edit the `party` (remove, add). Name a collectible. Edit the avatar (0.8).
-6. **`vault`.** The active profile's unopened `rewards`, grouped by week, each shown with the theme's art for its `tier` (the tier is visible before opening **[decided]**). Only that profile's own rewards.
+6. **`vault`.** The active profile's unopened `rewards`, grouped by week, each shown with the theme's art for its `tier` (the tier is visible before opening **[decided]**). Only that profile's own rewards. A reward is opened here from the opening day on; the collectible that comes out is shown and can join the `party` at once, or stay pending. Until the full `home` place arrives (0.7), the vault also lists the pending collectibles in a "recent" section, with the same choices.
 7. **`showcase`.** The latest 30 from the reserve.
 8. **Management (`admin` only).** Create and archive profiles, create and edit `taskDefs`, edit the reward odds (`tierOdds`), view tasks per profile (including `talkFlag`), show the join link and QR code again. Profiles and worlds are always created through the app, with generated ids, never by editing data by hand. **[decided]**
 

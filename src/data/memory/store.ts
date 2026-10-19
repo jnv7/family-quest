@@ -8,6 +8,7 @@
  */
 import { weekKey } from '../../core/calendar';
 import { oddsProblem } from '../../core/draw';
+import { checkPartyChange } from '../../core/party';
 import { taskDefProblem } from '../../core/taskDefs';
 import { assertPlanAllowed } from '../plan';
 import { newRecurringTaskProblem, settleRecurringWrites } from '../recurring';
@@ -558,6 +559,36 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
     },
 
     collectibles: {
+      arrangeParty: (worldId, profileId, change) =>
+        submit(undefined, (view, uid) => {
+          const ws = requireWorld(view, worldId);
+          const profile = ws.profiles.get(profileId);
+          if (!profile) throw notFound(`Profile ${profileId} does not exist`);
+          const owned = [...ws.collectibles.values()].filter((c) => c.profileId === profileId);
+          const problem = checkPartyChange(profile, owned, change, ws.world.ruleset.partySize);
+          if (problem) throw invalid(`The party change is not valid (${problem})`);
+          const now = clock();
+          const ops: Op[] = [
+            ...change.toReserve.map((id): Op => ({ worldId, collection: 'collectibles', id, patch: { reserveAt: now } })),
+            ...change.fromReserve.map((id): Op => ({ worldId, collection: 'collectibles', id, patch: { reserveAt: null } })),
+          ];
+          if (!sameIds(profile.partyIds, change.partyIds)) {
+            ops.push({ worldId, collection: 'profiles', id: profileId, patch: { partyIds: [...change.partyIds] } });
+          }
+          return {
+            ops,
+            check: (state) => {
+              const access = accessOf(state, worldId, uid);
+              if (!access) return denied('Not a member of this world');
+              if (access.member.profileId !== profileId) return denied('Only the owner arranges the party');
+              if ([...change.toReserve, ...change.fromReserve].some((id) => access.ws.collectibles.get(id)?.profileId !== profileId)) {
+                return denied('A collectible is the owner’s to move');
+              }
+              return null;
+            },
+          };
+        }),
+
       observeCollectibles: (worldId, profileId, onValue, onError) =>
         observeAsMember(
           worldId,
@@ -696,6 +727,8 @@ function byTitleThenId(a: TaskDef, b: TaskDef): number {
 function definedFields<T extends object>(patch: T): T {
   return Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined)) as T;
 }
+
+const sameIds = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((id, index) => id === b[index]);
 
 /** Only the owner opens a reward, only once; the collectible is never replaced. */
 function checkOwnerOpensOnce(state: MemoryState, worldId: WorldId, uid: Uid, rewardId: TaskId): DataStoreError | null {

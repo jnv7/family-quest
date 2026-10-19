@@ -474,3 +474,38 @@ button.place[data-alert='tomorrow'] {
     animation: none;
   }
 }
+
+.choices {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: center;
+}
+
+.choices p {
+  margin: 0;
+}
+
+.swap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.swap-art,
+.recent-art {
+  font-size: 1.75rem;
+  max-width: 3rem;
+}
+
+.recent-card {
+  display: grid;
+  justify-items: center;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+}
+
+.recent-card p {
+  margin: 0;
+}

@@ -79,6 +79,14 @@ const toDateKey = (utcMillis: number): DateKey => {
   return `${pad(date.getUTCFullYear(), 4)}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
 };
 
+/** Calendar arithmetic on a `DateKey`, done in UTC so daylight saving never moves a day (docs/architecture.md §4). */
+export function addDays(date: DateKey, days: number): DateKey {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match) throw new Error(`Not a date key: ${date}`);
+  if (!Number.isInteger(days)) throw new RangeError(`days must be an integer, got ${days}`);
+  return toDateKey(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])) + days * MS_PER_DAY);
+}
+
 /**
  * The last calendar day of a period, inclusive: the day itself, the Sunday of an ISO
  * week, or the last day of a month. Throws on a key that does not belong to the cadence.
