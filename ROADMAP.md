@@ -122,6 +122,7 @@ Ideas that are outside the current release. They are neither implemented on own 
 | An admin can revoke a device (remove a member), for a leaked join code | Spec review, 2026-10-18 |
 | Device-bound admin rights with an admin recovery code, so a child picking an adult profile does not get admin rights (alternative B in ADR 0003) | Deferred by the product owner, 2026-10-18 |
 | Weekly guaranteed minimum (`ruleset.guarantee`) | `SPEC.md` §13 |
+| Different children with different themes. Options: (A) separate worlds, one per child (works today, but a device holds one world); (B) several worlds per device, with a world picker; (C) a theme per profile inside one world, which changes `SPEC.md` §1 (a world has one theme), needs `themeId` on `profiles` (with a rules change), the `showcase` drawing each collectible in its owner's theme, and, on iOS, the theme in each child's invitation because installing comes before choosing a profile. Developer's recommendation: C | Product owner, 2026-10-19 |
 | Switching the theme of an existing world | `SPEC.md` §14 |
 | Family meter and paired tasks | `SPEC.md` §14 |
 | API integration (`origin: api`) | `SPEC.md` §14 |
