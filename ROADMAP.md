@@ -115,6 +115,9 @@ Ideas that are outside the current release. They are neither implemented on own 
 
 | Idea | Origin |
 | --- | --- |
+| Theme text layer 3: a theme may reword any neutral message by key and define terms used only in its own texts (`{#term}`), validated by `validate-theme` (ADR 0006) | Product owner, 2026-10-19 |
+| Per-locale theme texts: move layers 2 and 3 of each theme into `src/themes/{themeId}/locales/{locale}.json` when a second locale arrives (ADR 0006) | Product owner, 2026-10-19 |
+| Move the default theme id out of `src/main.ts` into a single configuration value (ADR 0006) | Spec review, 2026-10-19 |
 | Due dates on tasks, and rescheduling without penalty; with them, decide what happens to open recurring tasks from past periods (today they stay on the `board` and block new copies) | Deferred by the product owner, 2026-10-18 |
 | An admin can revoke a device (remove a member), for a leaked join code | Spec review, 2026-10-18 |
 | Device-bound admin rights with an admin recovery code, so a child picking an adult profile does not get admin rights (alternative B in ADR 0003) | Deferred by the product owner, 2026-10-18 |
