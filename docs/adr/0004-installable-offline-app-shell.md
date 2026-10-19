@@ -1,9 +1,9 @@
 # 0004 — Installable app and offline app shell
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-19
 - **Proposed by:** developer, following the proposal in `docs/architecture.md` §7 and the 0.2.4 delivery in `ROADMAP.md`
-- **Accepted by:** pending the product owner
+- **Accepted by:** product owner, 2026-10-19, on the tech lead's review
 
 ## Context
 
@@ -27,5 +27,5 @@ The app is installed on the home screen and has to open with no network (`SPEC.m
 
 - A development dependency with a large tree (Workbox). It is not shipped to the browser; the worker it generates is small.
 - The first launch of a device needs the network; offline start works from the second load on.
-- After a deployment, a device that is open keeps the old version until its next launch. A page that loads code lazily could ask for a file the new version no longer has; the app loads everything it needs at start-up, so this does not happen today. It has to be kept in mind when adding lazy loading.
+- After a deployment, a device that is open keeps the old version until its next launch. A page that loads code lazily could ask for a file the new version no longer has; the app loads everything it needs at start-up, so this does not happen today. The only dynamic imports (`src/main.ts`, the data adapters) run during start-up, before the service worker checks for updates. Rule: no dynamic `import()` may run after start-up without revisiting this ADR.
 - On iOS the installed app has its own storage, separate from the browser. Install first, then join.
