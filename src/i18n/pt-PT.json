@@ -113,6 +113,16 @@
     "install.button": "Instalar a app",
     "install.ios": "Para instalar «{appName}»: toca em Partilhar e depois em «Adicionar ao ecrã principal».",
     "install.nothing": "A app já está instalada, ou este navegador não permite instalá-la.",
-    "map.install": "Instalar"
+    "map.install": "Instalar",
+    "checkin.reward": "Ganhaste {@reward.a}! Foi para {@vault.the}.",
+    "vault.title": "{^@vault}",
+    "vault.empty": "Ainda não tens {@reward.plural} para abrir.",
+    "vault.week": "Semana {week}",
+    "odds.title": "Probabilidades {@reward.ofPlural}",
+    "odds.explain": "Para cada dificuldade de tarefa, a hipótese em % de sair cada nível. Cada linha soma 100.",
+    "odds.row": "Tarefa {level}",
+    "odds.sum": "Soma: {sum}",
+    "odds.save": "Guardar probabilidades",
+    "odds.invalid": "Cada linha tem de ter números inteiros que somam 100."
   }
 }

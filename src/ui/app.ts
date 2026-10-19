@@ -21,6 +21,7 @@ import { renderNewTask } from './screens/newTask';
 import { renderProfiles } from './screens/profiles';
 import { renderShare } from './screens/share';
 import { renderStart } from './screens/start';
+import { renderVault } from './screens/vault';
 import type { WorldMemory } from './worldMemory';
 
 export interface AppOptions {
@@ -132,6 +133,8 @@ export async function startApp(options: AppOptions): Promise<() => void> {
         return needsWorld(renderBoard);
       case 'checkin':
         return needsWorld(renderCheckin);
+      case 'vault':
+        return needsWorld(renderVault);
       case 'newTask':
         return needsWorld(renderNewTask);
       case 'manage':

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Tier } from '../core/model';
 import { createRandomInt } from '../core/random';
 import { DataStoreError, type DataStore } from '../data/DataStore';
 import { createMemoryBackend, createMemoryStore } from '../data/memory';
@@ -455,7 +456,7 @@ async function createTask(device: Awaited<ReturnType<typeof openDevice>>, title:
 }
 
 describe('the map', () => {
-  it('lays out the five places of the theme, and only the board and the check-in lead somewhere yet', async () => {
+  it('lays out the five places of the theme, and only the board, the check-in and the vault lead somewhere yet', async () => {
     const { admin } = await createFamily();
     await admin.click('button', 'Continuar');
     await admin.see('Olá, Alex!');
@@ -468,7 +469,7 @@ describe('the map', () => {
       'Cofre',
       'Vitrina',
     ]);
-    expect(places.filter((p) => !p.disabled).map((p) => p.querySelector('.place-name')?.textContent)).toEqual(['Quadro', 'Registo']);
+    expect(places.filter((p) => !p.disabled).map((p) => p.querySelector('.place-name')?.textContent)).toEqual(['Quadro', 'Registo', 'Cofre']);
     expect(places[0]!.style.left).toBe('8%'); // position comes from theme.json
 
     await admin.click('button.place', 'Quadro');
@@ -624,6 +625,10 @@ describe('the check-in', () => {
     await child.notSee('Arrumar o quarto');
     expect(lines.congrats).toContain(bubble(child));
     expect(storedTask(worldId)).toMatchObject({ status: 'done', doneAt: now, weekKey: '2026-W43', answer: null, talkFlag: false });
+    // The reward went to the vault, and the same tap said so.
+    await child.see('Ganhaste um prémio! Foi para o cofre.');
+    const reward = [...backend.state.get(worldId)!.rewards.values()][0]!;
+    expect(reward).toMatchObject({ weekKey: '2026-W43', openedAt: null });
   });
 
   it('shows the question, completes on yes, and on no leaves the task open with a friendly line', async () => {
@@ -672,6 +677,61 @@ describe('the check-in', () => {
     await child.see('Nada para concluir');
     expect(lines.farewell).toContain(bubble(child));
     expect(child.root.textContent).not.toContain('Só para mim');
+  });
+});
+
+describe('the vault', () => {
+  it('lists the unopened rewards of the active profile only, with the art of their tier, grouped by week', async () => {
+    const { admin, child, worldId } = await familyWithChild();
+    await createTask(admin, 'Arrumar o quarto', 'Sam');
+    await admin.click('button', 'Voltar');
+    await createTask(admin, 'Regar as plantas', 'Sam');
+    await admin.click('button', 'Voltar');
+
+    await child.click('button.place', 'Registo');
+    await child.click('button', 'Feito');
+    await vi.waitFor(() => expect(backend.state.get(worldId)!.rewards.size).toBe(1));
+    now += 7 * 86_400_000; // the next week
+    await child.click('button', 'Feito');
+    await vi.waitFor(() => expect(backend.state.get(worldId)!.rewards.size).toBe(2));
+
+    await child.click('button', 'Voltar');
+    await child.click('button.place', 'Cofre');
+    await vi.waitFor(() => expect(child.root.querySelectorAll('li.reward')).toHaveLength(2));
+    expect([...child.root.querySelectorAll('.vault-week h2')].map((el) => el.textContent)).toEqual(['Semana 43', 'Semana 44']);
+    for (const item of child.root.querySelectorAll<HTMLElement>('li.reward')) {
+      const art = theme.rewardArt[item.dataset.tier as Tier];
+      expect(item.textContent).toBe('emoji' in art ? art.emoji : '');
+    }
+    // The adult's own vault holds none of the child's rewards.
+    await admin.click('button.place', 'Cofre');
+    await admin.see('Ainda não tens prémios para abrir.');
+  });
+});
+
+describe('the reward odds', () => {
+  const worldOdds = (worldId: string) => backend.state.get(worldId)!.world.ruleset.tierOdds;
+  const oddsInputs = (device: Awaited<ReturnType<typeof openDevice>>) =>
+    [...[...device.root.querySelectorAll('form')].at(-1)!.querySelectorAll<HTMLInputElement>('input')];
+  const submitLast = (device: Awaited<ReturnType<typeof openDevice>>) =>
+    [...device.root.querySelectorAll('form')].at(-1)!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+
+  it('shows the odds of the world, saves new ones, and refuses a row that does not sum to 100', async () => {
+    const { admin, worldId } = await familyWithChild();
+    await admin.click('button', 'Gerir');
+    await admin.see('Probabilidades dos prémios');
+    await vi.waitFor(() => expect(oddsInputs(admin).map((input) => input.value).slice(0, 3)).toEqual(['80', '17', '3']));
+
+    const fields = oddsInputs(admin);
+    [fields[0]!.value, fields[1]!.value, fields[2]!.value] = ['70', '25', '5'];
+    submitLast(admin);
+    await vi.waitFor(() => expect(worldOdds(worldId).low).toEqual({ low: 70, mid: 25, high: 5 }));
+    expect(worldOdds(worldId).high).toEqual({ low: 45, mid: 35, high: 20 });
+
+    fields[0]!.value = '10';
+    submitLast(admin);
+    await admin.see('somam 100');
+    expect(worldOdds(worldId).low).toEqual({ low: 70, mid: 25, high: 5 });
   });
 });
 

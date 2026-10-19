@@ -7,7 +7,7 @@
  * not know. It never coerces such a document.
  */
 import { Timestamp, type DocumentData, type DocumentSnapshot, type QueryDocumentSnapshot } from 'firebase/firestore';
-import { SCHEMA_VERSION, type Member, type Millis, type Profile, type Task, type TaskDef, type World } from '../../core/model';
+import { SCHEMA_VERSION, type Member, type Millis, type Profile, type Reward, type Task, type TaskDef, type World } from '../../core/model';
 
 type Snapshot = DocumentSnapshot | QueryDocumentSnapshot;
 
@@ -85,6 +85,27 @@ export function encodeTaskDef(def: TaskDef): DocumentData {
 export function decodeTaskDef(snapshot: Snapshot): TaskDef | null {
   const data = readKnown(snapshot);
   return data && ({ ...data, id: snapshot.id, createdAt: toMillis(data.createdAt) } as TaskDef);
+}
+
+export function encodeReward(reward: Reward): DocumentData {
+  return {
+    ...withoutKey(reward, 'id'),
+    createdAt: toTimestamp(reward.createdAt),
+    openedAt: reward.openedAt === null ? null : toTimestamp(reward.openedAt),
+  };
+}
+
+export function decodeReward(snapshot: Snapshot): Reward | null {
+  const data = readKnown(snapshot);
+  return (
+    data &&
+    ({
+      ...data,
+      id: snapshot.id,
+      createdAt: toMillis(data.createdAt),
+      openedAt: data.openedAt === null ? null : toMillis(data.openedAt),
+    } as Reward)
+  );
 }
 
 /** Fields written when a task is completed. */

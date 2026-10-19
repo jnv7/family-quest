@@ -7,8 +7,7 @@
  *
  * "Admin only" means: the device's active profile is an adult profile.
  *
- * Scope: operations needed up to release 0.3. Rewards, collectibles and the
- * party (0.6) are added by that release, as separate sub-interfaces.
+ * Scope: operations needed up to release 0.6 (rewards, collectibles and the party).
  */
 import type { NewRecurringTask } from '../core/generation';
 import type {
@@ -19,11 +18,14 @@ import type {
   Profile,
   ProfileId,
   ProfileKind,
+  Reward,
+  Ruleset,
   Task,
   TaskDef,
   TaskDefId,
   TaskId,
   TaskLevel,
+  Tier,
   Uid,
   World,
   WorldId,
@@ -121,6 +123,8 @@ export interface CompleteTaskInput {
   /** `yes` when the task has a question; null otherwise. */
   answer: Answer | null;
   talkFlag: boolean;
+  /** Drawn by the caller with `drawTier(tierOddsFor(task.level, ruleset), randomInt)`. */
+  rewardTier: Tier;
 }
 
 // ---------------------------------------------------------------------------
@@ -156,6 +160,12 @@ export interface WorldStore {
   /** Every profile, archived ones included; the caller filters. */
   observeProfiles(worldId: WorldId, onValue: Observer<Profile[]>, onError?: ObserverError): Unsubscribe;
 
+  /**
+   * Admin only. Replaces the reward odds of the world. Every row must pass `oddsProblem`
+   * (integers summing to 100), or the call is `invalid-argument` before any write.
+   */
+  setTierOdds(worldId: WorldId, tierOdds: Ruleset['tierOdds']): Write;
+
   /** Admin only. */
   createProfile(worldId: WorldId, input: CreateProfileInput): Write<{ profileId: ProfileId }>;
   /** Admin only, and only child profiles. Profiles are never deleted. */
@@ -183,7 +193,8 @@ export interface TaskStore {
 
   /**
    * Moves an open task of the active profile to done, with the week of `now`.
-   * From 0.6 the same batch also creates the reward.
+   * The same batch creates `rewards/{taskId}` with `input.rewardTier`, the task's
+   * profile and completion week, and `openedAt: null`.
    */
   completeTask(worldId: WorldId, taskId: TaskId, input: CompleteTaskInput): Write;
 
@@ -224,9 +235,15 @@ export interface TaskDefStore {
   updateTaskDef(worldId: WorldId, defId: TaskDefId, patch: Partial<TaskDefInput & { active: boolean }>): Write;
 }
 
+export interface RewardStore {
+  /** The profile's unopened rewards, oldest first. Owner or admin. */
+  observeUnopenedRewards(worldId: WorldId, profileId: ProfileId, onValue: Observer<Reward[]>, onError?: ObserverError): Unsubscribe;
+}
+
 export interface DataStore {
   readonly session: SessionStore;
   readonly worlds: WorldStore;
   readonly tasks: TaskStore;
   readonly taskDefs: TaskDefStore;
+  readonly rewards: RewardStore;
 }

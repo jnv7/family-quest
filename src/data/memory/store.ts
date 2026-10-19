@@ -7,6 +7,7 @@
  * observers show the server state again.
  */
 import { weekKey } from '../../core/calendar';
+import { oddsProblem } from '../../core/draw';
 import { taskDefProblem } from '../../core/taskDefs';
 import { assertPlanAllowed } from '../plan';
 import { newRecurringTaskProblem, settleRecurringWrites } from '../recurring';
@@ -16,12 +17,14 @@ import {
   DEFAULT_RULESET,
   LIMITS,
   SCHEMA_VERSION,
+  TIERS,
   type Clock,
   type DocMeta,
   type Member,
   type Profile,
   type ProfileId,
   type RandomInt,
+  type Reward,
   type Task,
   type TaskDef,
   type TaskDefId,
@@ -310,6 +313,20 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
       observeProfiles: (worldId, onValue, onError) =>
         observeAsMember(worldId, ({ ws }) => ({ value: [...ws.profiles.values()] }), onValue, onError),
 
+      setTierOdds: (worldId, tierOdds) =>
+        submit(undefined, (view, uid) => {
+          const ws = requireWorld(view, worldId);
+          for (const level of TIERS) {
+            const problem = oddsProblem(tierOdds[level]);
+            if (problem) throw invalid(`The reward odds of level ${level} are not valid (${problem})`);
+          }
+          const ruleset = { ...ws.world.ruleset, tierOdds: structuredClone(tierOdds) };
+          return {
+            ops: [{ worldId, collection: 'world', id: worldId, patch: { ruleset } }],
+            check: (state) => (accessOf(state, worldId, uid)?.isAdmin ? null : denied('Only an admin changes the reward odds')),
+          };
+        }),
+
       createProfile(worldId, input: CreateProfileInput) {
         const profileId = autoId();
         return submit({ profileId }, (view, uid) => {
@@ -436,7 +453,18 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
           const task = requireTask(view, worldId, taskId);
           if (task.question !== null && input.answer !== 'yes') throw invalid('A task with a question is completed by answering yes');
           if (task.question === null && input.answer !== null) throw invalid('A task without a question has no answer');
+          if (!(TIERS as readonly string[]).includes(input.rewardTier)) throw invalid(`Unknown reward tier: ${String(input.rewardTier)}`);
           const doneAt = clock();
+          const completionWeek = weekKey(doneAt, ws.world.ruleset.timezone);
+          const reward: Reward = {
+            schemaVersion: SCHEMA_VERSION,
+            createdAt: doneAt,
+            id: taskId,
+            profileId: task.profileId,
+            weekKey: completionWeek,
+            tier: input.rewardTier,
+            openedAt: null,
+          };
           return {
             ops: [
               {
@@ -448,11 +476,14 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
                   doneAt,
                   answer: input.answer,
                   talkFlag: input.talkFlag,
-                  weekKey: weekKey(doneAt, ws.world.ruleset.timezone),
+                  weekKey: completionWeek,
                 },
               },
+              { worldId, collection: 'rewards', id: taskId, create: reward },
             ],
-            check: (state) => checkOwnerOfOpenTask(state, worldId, taskId, uid),
+            check: (state) =>
+              checkOwnerOfOpenTask(state, worldId, taskId, uid) ??
+              (state.get(worldId)?.rewards.has(taskId) ? denied('A reward is never replaced') : null),
           };
         }),
 
@@ -523,6 +554,20 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
         const access = accessOf(backend.state, worldId, uid);
         if (!access || !canReadTasksOf(access, profileId)) throw denied('Tasks of another profile');
       },
+    },
+
+    rewards: {
+      observeUnopenedRewards: (worldId, profileId, onValue, onError) =>
+        observeAsMember(
+          worldId,
+          (access) => {
+            if (!canReadTasksOf(access, profileId)) return { error: denied('Rewards of another profile') };
+            const unopened = [...access.ws.rewards.values()].filter((r) => r.profileId === profileId && r.openedAt === null);
+            return { value: unopened.sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1)) };
+          },
+          onValue,
+          onError,
+        ),
     },
 
     taskDefs: {

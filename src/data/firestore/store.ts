@@ -24,6 +24,7 @@ import {
 } from 'firebase/firestore';
 import { signInAnonymously, type Auth } from 'firebase/auth';
 import { weekKey } from '../../core/calendar';
+import { oddsProblem } from '../../core/draw';
 import { taskDefProblem } from '../../core/taskDefs';
 import { assertPlanAllowed } from '../plan';
 import { newRecurringTaskProblem, settleRecurringWrites } from '../recurring';
@@ -32,11 +33,13 @@ import {
   DEFAULT_RULESET,
   LIMITS,
   SCHEMA_VERSION,
+  TIERS,
   type Clock,
   type DocMeta,
   type Member,
   type Profile,
   type RandomInt,
+  type Reward,
   type Task,
   type TaskDef,
   type Uid,
@@ -55,11 +58,13 @@ import {
   decodeAll,
   decodeMember,
   decodeProfile,
+  decodeReward,
   decodeTask,
   decodeTaskDef,
   decodeWorld,
   encodeMember,
   encodeProfile,
+  encodeReward,
   encodeTask,
   encodeTaskCompletion,
   encodeTaskDef,
@@ -71,6 +76,8 @@ import {
   memberDoc,
   profileDoc,
   profilesCollection,
+  rewardDoc,
+  rewardsCollection,
   taskDefDoc,
   taskDefsCollection,
   taskDoc,
@@ -237,6 +244,15 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
           (error) => onError?.(toDataStoreError(error)),
         ),
 
+      setTierOdds: (worldId, tierOdds) =>
+        write(undefined, async () => {
+          for (const level of TIERS) {
+            const problem = oddsProblem(tierOdds[level]);
+            if (problem) throw invalid(`The reward odds of level ${level} are not valid (${problem})`);
+          }
+          await updateDoc(worldDoc(db, worldId), { 'ruleset.tierOdds': tierOdds });
+        }),
+
       createProfile(worldId, input) {
         const profileId = doc(profilesCollection(db, worldId)).id;
         return write({ profileId }, async () => {
@@ -327,15 +343,25 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
           if (!world || !task) throw new DataStoreError('not-found', `Task ${taskId} does not exist`);
           if (task.question !== null && input.answer !== 'yes') throw invalid('A task with a question is completed by answering yes');
           if (task.question === null && input.answer !== null) throw invalid('A task without a question has no answer');
-          await updateDoc(
+          if (!(TIERS as readonly string[]).includes(input.rewardTier)) throw invalid(`Unknown reward tier: ${String(input.rewardTier)}`);
+          const completionWeek = weekKey(doneAt, world.ruleset.timezone);
+          const reward: Reward = {
+            schemaVersion: SCHEMA_VERSION,
+            createdAt: doneAt,
+            id: taskId,
+            profileId: task.profileId,
+            weekKey: completionWeek,
+            tier: input.rewardTier,
+            openedAt: null,
+          };
+          // One batch: the rules accept the reward only together with the task moving to done.
+          const batch = writeBatch(db);
+          batch.update(
             taskDoc(db, worldId, taskId),
-            encodeTaskCompletion({
-              doneAt,
-              answer: input.answer,
-              talkFlag: input.talkFlag,
-              weekKey: weekKey(doneAt, world.ruleset.timezone),
-            }),
+            encodeTaskCompletion({ doneAt, answer: input.answer, talkFlag: input.talkFlag, weekKey: completionWeek }),
           );
+          batch.set(rewardDoc(db, worldId, taskId), encodeReward(reward));
+          await batch.commit();
         });
       },
 
@@ -422,6 +448,17 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
           );
           if (finished) stop();
         }),
+    },
+
+    rewards: {
+      // Equality filters only, so no composite index is needed; the order is applied here.
+      observeUnopenedRewards: (worldId, profileId, onValue, onError) =>
+        onSnapshot(
+          query(rewardsCollection(db, worldId), where('profileId', '==', profileId), where('openedAt', '==', null)),
+          (snapshot) =>
+            onValue(decodeAll(snapshot.docs, decodeReward).sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1))),
+          (error) => onError?.(toDataStoreError(error)),
+        ),
     },
 
     taskDefs: {

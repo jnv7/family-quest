@@ -391,3 +391,28 @@ button.place[data-alert='tomorrow'] {
   border-left: 0.3rem solid var(--line);
   padding-left: 0.5rem;
 }
+
+/* The vault: unopened rewards, shown by the art of their tier. */
+.reward-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.reward {
+  display: grid;
+  place-items: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 1rem;
+  border: 1px solid var(--line);
+}
+
+.reward-art {
+  font-size: 2.5rem;
+  max-width: 100%;
+  max-height: 100%;
+}

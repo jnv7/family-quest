@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-10-19
+
+### Added
+
+- Rewards are born with the completion. Completing a task now draws the reward's tier from the world's odds for the task's level, using `crypto`, and creates the reward in the same batch. The check-in says it went to the vault, still at two taps from the map. Tasks completed before this release produce no reward.
+- The `vault` is a place on the map: it lists the person's own unopened rewards, grouped by week, each with the theme's art for its tier. It shows no counts for anyone else and compares nothing. Opening comes in 0.6.2.
+- Reward odds in management: an admin edits, for each task level, the chance of each tier (integers that sum to 100). Existing worlds keep the odds they were created with, so this is how they receive new ones.
+- Themes have a new required block, `rewardArt`, with the art of an unopened reward per tier. Both bundled themes carry emoji placeholders.
+- Domain: `tierOddsFor`, `drawTier`, `drawSlot` and `oddsProblem`, with the draw simulation (10,000 draws per level, chi-square below 13.82).
+- `DataStore`: `rewardTier` in `CompleteTaskInput`, `rewards.observeUnopenedRewards` and `worlds.setTierOdds`, with both adapters and the contract suite.
+
+### Changed
+
+- `SPEC.md`: the odds of the `low` and `high` levels are decided; the tier is visible before opening.
+
 ## [0.3.5] — 2026-10-19
 
 Completes the scope of release 0.3.

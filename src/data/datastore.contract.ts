@@ -8,7 +8,18 @@
 import { describe, expect, it } from 'vitest';
 import { weekKey } from '../core/calendar';
 import type { NewRecurringTask } from '../core/generation';
-import { DEFAULT_RULESET, LIMITS, type Clock, type Millis, type Profile, type ProfileId, type Task, type TaskDef } from '../core/model';
+import {
+  DEFAULT_RULESET,
+  LIMITS,
+  type Clock,
+  type Millis,
+  type Profile,
+  type ProfileId,
+  type Reward,
+  type Task,
+  type TaskDef,
+  type World,
+} from '../core/model';
 import { DataStoreError, type DataStore, type DataStoreErrorCode, type TaskDefInput, type Unsubscribe, type Write } from './DataStore';
 
 /** Signed-in devices that share one backend. */
@@ -268,7 +279,7 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
 
         await eventually(() => expect(open.value?.map((t) => t.title)).toEqual(['First', 'Second']));
 
-        await child.tasks.completeTask(worldId, first.result.taskId, { answer: null, talkFlag: false }).settled;
+        await child.tasks.completeTask(worldId, first.result.taskId, { answer: null, talkFlag: false, rewardTier: 'mid' }).settled;
         await eventually(() => expect(open.value?.map((t) => t.title)).toEqual(['Second']));
         open.close();
       });
@@ -281,7 +292,7 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
         await task.settled;
 
         now = Date.parse('2026-10-25T23:30:00Z');
-        await child.tasks.completeTask(worldId, task.result.taskId, { answer: null, talkFlag: true }).settled;
+        await child.tasks.completeTask(worldId, task.result.taskId, { answer: null, talkFlag: true, rewardTier: 'mid' }).settled;
 
         const watch = new Watch<Task[]>((v, e) => child.tasks.observeTasks(worldId, childProfileId, v, e));
         await eventually(() => expect(watch.value?.[0]?.status).toBe('done'));
@@ -300,7 +311,7 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
         await task.settled;
 
         now = Date.parse('2026-10-25T22:30:00Z'); // Sunday evening, week 43
-        const completion = child.tasks.completeTask(worldId, task.result.taskId, { answer: null, talkFlag: false });
+        const completion = child.tasks.completeTask(worldId, task.result.taskId, { answer: null, talkFlag: false, rewardTier: 'mid' });
         const tapped = now;
         now = Date.parse('2026-10-26T09:00:00Z'); // Monday, week 44, before the write finishes
         await completion.settled;
@@ -317,9 +328,9 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
         await task.settled;
         const { taskId } = task.result;
 
-        await rejectsWith(child.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: false }), 'invalid-argument');
-        await rejectsWith(child.tasks.completeTask(worldId, taskId, { answer: 'no', talkFlag: false }), 'invalid-argument');
-        await child.tasks.completeTask(worldId, taskId, { answer: 'yes', talkFlag: false }).settled;
+        await rejectsWith(child.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: false, rewardTier: 'mid' }), 'invalid-argument');
+        await rejectsWith(child.tasks.completeTask(worldId, taskId, { answer: 'no', talkFlag: false, rewardTier: 'mid' }), 'invalid-argument');
+        await child.tasks.completeTask(worldId, taskId, { answer: 'yes', talkFlag: false, rewardTier: 'mid' }).settled;
       });
 
       it('refuses an admin completing someone else’s task', async () => {
@@ -328,7 +339,7 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
         await task.settled;
         const { taskId } = task.result;
 
-        await rejectsWith(admin.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: false }), 'permission-denied');
+        await rejectsWith(admin.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: false, rewardTier: 'mid' }), 'permission-denied');
 
         const watch = new Watch<Task[]>((v, e) => child.tasks.observeOpenTasks(worldId, childProfileId, v, e));
         await eventually(() => expect(watch.value?.map((t) => t.id)).toEqual([taskId]));
@@ -350,8 +361,8 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
 
         // The second device may or may not have seen the first completion yet;
         // either way the server must refuse it. Sequential so the winner is known.
-        await child.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: false }).settled;
-        await rejectsWith(child2.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: true }), 'permission-denied');
+        await child.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: false, rewardTier: 'mid' }).settled;
+        await rejectsWith(child2.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: true, rewardTier: 'mid' }), 'permission-denied');
 
         await eventually(() => {
           expect(watch1.value?.[0]).toMatchObject({ status: 'done', talkFlag: false });
@@ -359,6 +370,136 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
         });
         watch1.close();
         watch2.close();
+      });
+    });
+
+    describe('rewards', () => {
+      const adhocFor = async (admin: DataStore, worldId: string, profileId: ProfileId, input = {}) => {
+        const task = admin.tasks.createAdhocTask(worldId, { ...adhoc(profileId), ...input });
+        await task.settled;
+        return task.result.taskId;
+      };
+
+      it('is created with the completion, unopened, with the task’s profile, week and the drawn tier', async () => {
+        const { admin, child, worldId, childProfileId } = await setup();
+        const taskId = await adhocFor(admin, worldId, childProfileId);
+
+        const rewards = new Watch<Reward[]>((v, e) => child.rewards.observeUnopenedRewards(worldId, childProfileId, v, e));
+        expect(await rewards.current()).toEqual([]);
+
+        now = Date.parse('2026-10-25T23:30:00Z');
+        await child.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: false, rewardTier: 'high' }).settled;
+
+        await eventually(() => expect(rewards.value).toHaveLength(1));
+        expect(rewards.value?.[0]).toMatchObject({
+          id: taskId,
+          profileId: childProfileId,
+          weekKey: weekKey(now, DEFAULT_RULESET.timezone),
+          tier: 'high',
+          openedAt: null,
+        });
+        rewards.close();
+      });
+
+      it('lists the unopened rewards oldest first', async () => {
+        const { admin, child, worldId, childProfileId } = await setup();
+        const first = await adhocFor(admin, worldId, childProfileId, { title: 'First' });
+        const second = await adhocFor(admin, worldId, childProfileId, { title: 'Second' });
+        const rewards = new Watch<Reward[]>((v, e) => child.rewards.observeUnopenedRewards(worldId, childProfileId, v, e));
+
+        now = START + 5000;
+        await child.tasks.completeTask(worldId, second, { answer: null, talkFlag: false, rewardTier: 'low' }).settled;
+        now = START + 9000;
+        await child.tasks.completeTask(worldId, first, { answer: null, talkFlag: false, rewardTier: 'mid' }).settled;
+
+        await eventually(() => expect(rewards.value?.map((r) => r.id)).toEqual([second, first]));
+        rewards.close();
+      });
+
+      it('creates the reward when the question was answered yes', async () => {
+        const { admin, child, worldId, childProfileId } = await setup();
+        const taskId = await adhocFor(admin, worldId, childProfileId, { question: 'Did you wash your hands?' });
+        await child.tasks.completeTask(worldId, taskId, { answer: 'yes', talkFlag: false, rewardTier: 'low' }).settled;
+
+        const rewards = new Watch<Reward[]>((v, e) => child.rewards.observeUnopenedRewards(worldId, childProfileId, v, e));
+        await eventually(() => expect(rewards.value?.map((r) => r.id)).toEqual([taskId]));
+        rewards.close();
+      });
+
+      it('is one reward when two devices of the same profile complete the same task', async () => {
+        const { admin, child, child2, worldId, childProfileId } = await setup();
+        const taskId = await adhocFor(admin, worldId, childProfileId);
+        const watch1 = new Watch<Reward[]>((v, e) => child.rewards.observeUnopenedRewards(worldId, childProfileId, v, e));
+        const watch2 = new Watch<Reward[]>((v, e) => child2.rewards.observeUnopenedRewards(worldId, childProfileId, v, e));
+        const tasks1 = new Watch<Task[]>((v, e) => child.tasks.observeTasks(worldId, childProfileId, v, e));
+        const tasks2 = new Watch<Task[]>((v, e) => child2.tasks.observeTasks(worldId, childProfileId, v, e));
+        await eventually(() => {
+          expect(tasks1.value).toHaveLength(1);
+          expect(tasks2.value).toHaveLength(1);
+        });
+
+        await child.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: false, rewardTier: 'mid' }).settled;
+        await rejectsWith(
+          child2.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: false, rewardTier: 'high' }),
+          'permission-denied',
+        );
+
+        await eventually(() => {
+          expect(tasks1.value?.[0]?.status).toBe('done');
+          expect(tasks2.value?.[0]?.status).toBe('done');
+          expect(watch1.value).toHaveLength(1);
+          expect(watch2.value).toHaveLength(1);
+          expect(watch1.value?.[0]?.tier).toBe('mid');
+          expect(watch2.value?.[0]?.tier).toBe('mid');
+        });
+        for (const watch of [watch1, watch2, tasks1, tasks2]) watch.close();
+      });
+
+      it('is readable by an admin, and refused to a child on another profile', async () => {
+        const { admin, child, worldId, childProfileId, adminProfileId } = await setup();
+        const taskId = await adhocFor(admin, worldId, childProfileId);
+        await child.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: false, rewardTier: 'low' }).settled;
+
+        const asAdmin = new Watch<Reward[]>((v, e) => admin.rewards.observeUnopenedRewards(worldId, childProfileId, v, e));
+        await eventually(() => expect(asAdmin.value?.map((r) => r.id)).toEqual([taskId]));
+        asAdmin.close();
+
+        const other = new Watch<Reward[]>((v, e) => child.rewards.observeUnopenedRewards(worldId, adminProfileId, v, e));
+        await eventually(() => expect(other.error?.code).toBe('permission-denied'));
+        other.close();
+      });
+
+      it('refuses a tier that does not exist, before any write', async () => {
+        const { admin, child, worldId, childProfileId } = await setup();
+        const taskId = await adhocFor(admin, worldId, childProfileId);
+        await rejectsWith(
+          child.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: false, rewardTier: 'epic' as never }),
+          'invalid-argument',
+        );
+      });
+    });
+
+    describe('reward odds', () => {
+      const odds = { ...DEFAULT_RULESET.tierOdds, low: { low: 70, mid: 25, high: 5 } };
+
+      it('are changed by an admin, and every device sees them', async () => {
+        const { admin, child, worldId } = await setup();
+        await admin.worlds.setTierOdds(worldId, odds).settled;
+        const world = new Watch<World>((v, e) => child.worlds.observeWorld(worldId, v, e));
+        await eventually(() => expect(world.value?.ruleset.tierOdds).toEqual(odds));
+        expect(world.value?.ruleset.partySize).toBe(DEFAULT_RULESET.partySize);
+        world.close();
+      });
+
+      it('are refused to a child', async () => {
+        const { child, worldId } = await setup();
+        await rejectsWith(child.worlds.setTierOdds(worldId, odds), 'permission-denied');
+      });
+
+      it('must be integers that sum to 100, before any write', async () => {
+        const { admin, worldId } = await setup();
+        await rejectsWith(admin.worlds.setTierOdds(worldId, { ...odds, mid: { low: 50, mid: 40, high: 9 } }), 'invalid-argument');
+        await rejectsWith(admin.worlds.setTierOdds(worldId, { ...odds, mid: { low: 50.5, mid: 40, high: 9.5 } }), 'invalid-argument');
       });
     });
 
@@ -377,7 +518,7 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
 
         await rejectsWith(admin.tasks.setTalkFlag(worldId, taskId, true), 'permission-denied');
 
-        await child.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: false }).settled;
+        await child.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: false, rewardTier: 'mid' }).settled;
         await rejectsWith(child.tasks.setTalkFlag(worldId, taskId, true), 'permission-denied');
         await eventually(() => expect(watch.value?.[0]).toMatchObject({ status: 'done', talkFlag: false }));
         watch.close();
@@ -595,7 +736,7 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
           expect(watch.value?.[0]).toMatchObject({ status: 'open', talkFlag: true, createdAt: START });
         });
 
-        await child.tasks.completeTask(worldId, task.id, { answer: null, talkFlag: true }).settled;
+        await child.tasks.completeTask(worldId, task.id, { answer: null, talkFlag: true, rewardTier: 'mid' }).settled;
         now += 1000;
         await child.tasks.createRecurringTasks(worldId, [task]).settled;
         await eventually(() => {
@@ -762,7 +903,7 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
       it('cannot be set on a task that is done', async () => {
         const { admin, child, worldId, childProfileId } = await setup();
         const taskId = await bigTask(admin, child, worldId, childProfileId);
-        await child.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: false }).settled;
+        await child.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: false, rewardTier: 'mid' }).settled;
         await rejectsWith(child.tasks.setPlan(worldId, taskId, { date: '2026-10-25', trigger: 'after dinner' }), 'permission-denied');
       });
     });
