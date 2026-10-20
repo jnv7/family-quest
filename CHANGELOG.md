@@ -45,6 +45,14 @@ Completes the scope of release 0.6.
 
 - `SPEC.md`: the odds of the `low` and `high` levels are decided; the tier is visible before opening.
 
+## [0.5.0] — 2026-10-20
+
+Release 0.5: Children pilot. No code changes. The exit criteria were met, according to the product owner.
+
+## [0.4.0] — 2026-10-20
+
+Release 0.4: Adult pilot. No code changes. The exit criteria were met, according to the product owner.
+
 ## [0.3.5] — 2026-10-19
 
 Completes the scope of release 0.3.

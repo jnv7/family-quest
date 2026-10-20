@@ -4,7 +4,7 @@ Each release is one minor version, developed on its own `release/0.x` branch (`G
 
 The behaviour each release implements is specified in `SPEC.md`.
 
-**Last closed release: 0.2 — Core** (2026-10-19, tag `v0.2`; [release notes](docs/release-notes/0.2.md)). **0.3, 0.4 and 0.5:** exit criteria met, including both pilots, according to the product owner (2026-10-20); their formal closing (merge, tags, release notes, pilot reports) is pending. **Current release: 0.6 — Rewards**: deliveries 0.6.1 to 0.6.3 done, built on top of `release/0.3`. Plans: [0.3](docs/plans/0.3.md), [0.4](docs/plans/0.4.md), [0.5](docs/plans/0.5.md), [0.6](docs/plans/0.6.md), [0.7](docs/plans/0.7.md).
+**Last closed release: 0.5 — Children pilot** (2026-10-20, tag `v0.5`; [release notes](docs/release-notes/0.5.md)). Releases 0.3 to 0.5 were closed on 2026-10-20; the pilots met their exit criteria according to the product owner. **Current release: 0.6 — Rewards**: deliveries 0.6.1 to 0.6.3 done. Plans: [0.6](docs/plans/0.6.md), [0.7](docs/plans/0.7.md).
 
 ## Release plan
 
