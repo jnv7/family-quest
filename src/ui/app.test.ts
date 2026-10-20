@@ -456,7 +456,7 @@ async function createTask(device: Awaited<ReturnType<typeof openDevice>>, title:
 }
 
 describe('the map', () => {
-  it('lays out the five places of the theme, and only the board, the check-in and the vault lead somewhere yet', async () => {
+  it('lays out the five places of the theme, and only the showcase does not lead anywhere yet', async () => {
     const { admin } = await createFamily();
     await admin.click('button', 'Continuar');
     await admin.see('Olá, Alex!');
@@ -469,7 +469,7 @@ describe('the map', () => {
       'Cofre',
       'Vitrina',
     ]);
-    expect(places.filter((p) => !p.disabled).map((p) => p.querySelector('.place-name')?.textContent)).toEqual(['Quadro', 'Registo', 'Cofre']);
+    expect(places.filter((p) => !p.disabled).map((p) => p.querySelector('.place-name')?.textContent)).toEqual(['Quadro', 'Registo', 'Casa', 'Cofre']);
     expect(places[0]!.style.left).toBe('8%'); // position comes from theme.json
 
     await admin.click('button.place', 'Quadro');
@@ -782,37 +782,38 @@ describe('opening rewards', () => {
   });
 });
 
-describe('the party and the reserve', () => {
-  const SUNDAY = Date.parse('2026-10-25T10:00:00Z');
-  const state = (worldId: string) => backend.state.get(worldId)!;
-  const profileSam = (worldId: string) => [...state(worldId).profiles.values()].find((p) => p.displayName === 'Sam')!;
+const SUNDAY = Date.parse('2026-10-25T10:00:00Z');
+const state = (worldId: string) => backend.state.get(worldId)!;
+const profileSam = (worldId: string) => [...state(worldId).profiles.values()].find((p) => p.displayName === 'Sam')!;
 
-  /** A child who earned `count` rewards in a closed week, standing in the vault. */
-  async function childWithRewards(count: number) {
-    const { admin, child, worldId } = await familyWithChild();
-    for (let i = 0; i < count; i++) {
-      await createTask(admin, `Tarefa ${i}`, 'Sam');
-      await admin.click('button', 'Voltar');
-    }
-    await child.click('button.place', 'Registo');
-    for (let i = 0; i < count; i++) {
-      await child.click('button', 'Feito');
-      await vi.waitFor(() => expect(state(worldId).rewards.size).toBe(i + 1));
-    }
-    await child.click('button', 'Voltar');
-    now = SUNDAY;
-    await child.click('button.place', 'Cofre');
-    return { admin, child, worldId };
+/** A child who earned `count` rewards in a closed week, standing in the vault. */
+async function childWithRewards(count: number) {
+  const { admin, child, worldId } = await familyWithChild();
+  for (let i = 0; i < count; i++) {
+    await createTask(admin, `Tarefa ${i}`, 'Sam');
+    await admin.click('button', 'Voltar');
   }
+  await child.click('button.place', 'Registo');
+  for (let i = 0; i < count; i++) {
+    await child.click('button', 'Feito');
+    await vi.waitFor(() => expect(state(worldId).rewards.size).toBe(i + 1));
+  }
+  await child.click('button', 'Voltar');
+  now = SUNDAY;
+  await child.click('button.place', 'Cofre');
+  return { admin, child, worldId };
+}
 
-  const openAll = async (child: Awaited<ReturnType<typeof openDevice>>, worldId: string, count: number) => {
-    for (let i = 0; i < count; i++) {
-      await child.click('button', 'Abrir');
-      await vi.waitFor(() => expect(state(worldId).collectibles.size).toBe(i + 1));
-      await child.click('button', 'Mais tarde');
-    }
-  };
+const openAll = async (child: Awaited<ReturnType<typeof openDevice>>, worldId: string, count: number) => {
+  for (let i = 0; i < count; i++) {
+    await child.click('button', 'Abrir');
+    await vi.waitFor(() => expect(state(worldId).collectibles.size).toBe(i + 1));
+    await child.click('button', 'Mais tarde');
+  }
+};
 
+
+describe('the party and the reserve', () => {
   it('puts a new collectible in the party when there is room, from the reveal', async () => {
     const { child, worldId } = await childWithRewards(1);
     await child.click('button', 'Abrir');
@@ -868,6 +869,77 @@ describe('the party and the reserve', () => {
     await vi.waitFor(() => expect(state(worldId).collectibles.get(id)!.reserveAt).toBe(now));
     expect(profileSam(worldId).partyIds).toEqual([]);
     expect(state(worldId).collectibles.size).toBe(1);
+  });
+});
+
+describe('the home', () => {
+  /** A child with one collectible in the party and one left pending, standing on the home. */
+  async function childAtHome() {
+    const { child, worldId } = await childWithRewards(2);
+    await openAll(child, worldId, 2);
+    const [first, second] = [...state(worldId).collectibles.keys()] as [string, string];
+    const party = [...child.root.querySelectorAll<HTMLButtonElement>('.recent-card button.primary')];
+    party[0]!.click();
+    await vi.waitFor(() => expect(profileSam(worldId).partyIds).toHaveLength(1));
+    await child.click('button', 'Voltar');
+    await child.click('button.place', 'Casa');
+    return { child, worldId, first, second };
+  }
+  const cards = (device: Awaited<ReturnType<typeof openDevice>>, section: number) =>
+    [...device.root.querySelectorAll('section.stack')[section]!.querySelectorAll('li.collectible-card')];
+
+  it('shows the profile with the look of its kind, an empty avatar place, the party and the pending collectibles, with no counts', async () => {
+    const { child } = await childAtHome();
+    await child.see('Sam');
+    await child.see('O avatar chega em breve.');
+    expect(child.root.querySelector('.home-art')?.textContent).toBe('emoji' in theme.homeVariants.child ? theme.homeVariants.child.emoji : '');
+    await vi.waitFor(() => expect(cards(child, 0)).toHaveLength(1));
+    expect(cards(child, 1)).toHaveLength(1);
+    expect(child.root.textContent).not.toMatch(/\d+ (de|na|no|em)\b/);
+  });
+
+  it('renames a collectible, then shows the catalogue name again when the name is cleared', async () => {
+    const { child, worldId, first } = await childAtHome();
+    const catalogueName = () => cards(child, 0)[0]?.querySelector('.reveal-name')?.textContent;
+    await vi.waitFor(() => expect(cards(child, 0)).toHaveLength(1));
+    const original = catalogueName();
+    await child.click('button', 'Mudar o nome');
+    await child.type('Nome', 'Bolinhas');
+    child.submit();
+    await vi.waitFor(() => expect(state(worldId).collectibles.get(first)!.nickname).toBe('Bolinhas'));
+    await vi.waitFor(() => expect(catalogueName()).toBe('Bolinhas'));
+
+    await child.click('button', 'Mudar o nome');
+    await child.type('Nome', '   ');
+    child.submit();
+    await vi.waitFor(() => expect(state(worldId).collectibles.get(first)!.nickname).toBeNull());
+    await vi.waitFor(() => expect(catalogueName()).toBe(original));
+  });
+
+  it('sends a party member to the reserve, then brings it back; the pending one asks who leaves when the party is full', async () => {
+    const { child, worldId, first } = await childAtHome();
+    await child.click('button', 'Para a reserva');
+    await vi.waitFor(() => expect(profileSam(worldId).partyIds).toEqual([]));
+    expect(state(worldId).collectibles.get(first)!.reserveAt).toBe(now);
+    await vi.waitFor(() => expect(cards(child, 2)).toHaveLength(1));
+    expect(cards(child, 0)).toHaveLength(0);
+
+    const inReserve = cards(child, 2)[0]!.querySelector<HTMLButtonElement>('button.primary')!;
+    inReserve.click();
+    await vi.waitFor(() => expect(profileSam(worldId).partyIds).toEqual([first]));
+    expect(state(worldId).collectibles.get(first)!.reserveAt).toBeNull();
+    expect(state(worldId).collectibles.size).toBe(2);
+  });
+
+  it('shows the tier name instead of crashing when the theme lacks the slot of a collectible', async () => {
+    const { child, worldId, first } = await childAtHome();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    state(worldId).collectibles.get(first)!.slot = 'no-such-slot';
+    await child.click('button', 'Voltar');
+    await child.click('button.place', 'Casa');
+    const tier = state(worldId).collectibles.get(first)!.tier;
+    await vi.waitFor(() => expect(cards(child, 0)[0]!.querySelector('.reveal-name')?.textContent).toBe(theme.tiers[tier]));
   });
 });
 

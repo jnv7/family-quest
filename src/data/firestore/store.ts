@@ -24,6 +24,7 @@ import {
 } from 'firebase/firestore';
 import { signInAnonymously, type Auth } from 'firebase/auth';
 import { weekKey } from '../../core/calendar';
+import { nicknameTooLong, normaliseNickname } from '../../core/collection';
 import { oddsProblem } from '../../core/draw';
 import { checkPartyChange } from '../../core/party';
 import { taskDefProblem } from '../../core/taskDefs';
@@ -540,6 +541,13 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
           await batch.commit();
         });
       },
+
+      setNickname: (worldId, collectibleId, nickname) =>
+        write(undefined, async () => {
+          const value = nickname === null ? null : normaliseNickname(nickname);
+          if (nicknameTooLong(value)) throw invalid(`A nickname has at most ${LIMITS.nickname} characters`);
+          await updateDoc(collectibleDoc(db, worldId, collectibleId), { nickname: value });
+        }),
 
       // One equality filter, so no composite index is needed; the order is applied here.
       observeCollectibles: (worldId, profileId, onValue, onError) =>

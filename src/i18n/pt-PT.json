@@ -139,6 +139,19 @@
     "party.later": "Mais tarde",
     "party.full": "Não há mais lugares {@party.in}. Quem sai?",
     "party.swap": "Trocar por {name}",
-    "vault.recent": "Recentes"
+    "vault.recent": "Recentes",
+    "home.title": "{^@home}",
+    "home.avatarSoon": "O avatar chega em breve.",
+    "home.party": "{^@party}",
+    "home.partyEmpty": "Ainda não há nada {@party.in}.",
+    "home.pending": "Recentes",
+    "home.reserve": "{^@reserve}",
+    "home.reserveEmpty": "Ainda não há nada {@reserve.in}.",
+    "home.rename": "Mudar o nome",
+    "home.renameLabel": "Nome",
+    "home.renameSave": "Guardar",
+    "home.renameCancel": "Cancelar",
+    "home.renameTooLong": "O nome é demasiado comprido.",
+    "home.toReserve": "Para {@reserve.the}"
   }
 }

@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-10-20
+
+### Added
+
+- The `home` place: the profile with the theme's look for its kind, an empty labelled place for the avatar (0.8), the party, the pending collectibles and the reserve. A collectible can be renamed, sent to the reserve in one tap, or brought back, asking who leaves when the party is full. No counts, no comparisons.
+- Admins can rename any collectible (moderation), without deleting anything.
+- Domain: `displayName` and `collectionOf` (`src/core/collection.ts`), and the nickname rules. `DataStore`: `collectibles.setNickname`, with both adapters and the contract suite.
+
+### Changed
+
+- The choices to join the party are shared by the `vault` and the `home` (`src/ui/party.ts`).
+
 ## [0.6.4] — 2026-10-20
 
 Closes release 0.6.

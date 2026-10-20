@@ -13,6 +13,7 @@ import { taskDefProblem } from '../../core/taskDefs';
 import { assertPlanAllowed } from '../plan';
 import { newRecurringTaskProblem, settleRecurringWrites } from '../recurring';
 import type { NewRecurringTask } from '../../core/generation';
+import { nicknameTooLong, normaliseNickname } from '../../core/collection';
 import {
   DEFAULT_AVATAR,
   DEFAULT_RULESET,
@@ -585,6 +586,23 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
                 return denied('A collectible is the owner’s to move');
               }
               return null;
+            },
+          };
+        }),
+
+      setNickname: (worldId, collectibleId, nickname) =>
+        submit(undefined, (view, uid) => {
+          const value = nickname === null ? null : normaliseNickname(nickname);
+          if (nicknameTooLong(value)) throw invalid(`A nickname has at most ${LIMITS.nickname} characters`);
+          const ws = requireWorld(view, worldId);
+          if (!ws.collectibles.has(collectibleId)) throw notFound(`Collectible ${collectibleId} does not exist`);
+          return {
+            ops: [{ worldId, collection: 'collectibles', id: collectibleId, patch: { nickname: value } }],
+            check: (state) => {
+              const access = accessOf(state, worldId, uid);
+              if (!access) return denied('Not a member of this world');
+              const owner = access.ws.collectibles.get(collectibleId)?.profileId;
+              return access.member.profileId === owner || access.isAdmin ? null : denied('Only the owner or an admin renames a collectible');
             },
           };
         }),

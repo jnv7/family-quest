@@ -7,7 +7,7 @@
  *
  * "Admin only" means: the device's active profile is an adult profile.
  *
- * Scope: operations needed up to release 0.6 (rewards, collectibles and the party).
+ * Scope: operations needed up to release 0.7 (rewards, collectibles, the party and the showcase).
  */
 import type { NewRecurringTask } from '../core/generation';
 import type { PartyChange } from '../core/party';
@@ -264,6 +264,13 @@ export interface CollectibleStore {
    * pending collectibles to the reserve never overwrites a party another device just edited.
    */
   arrangeParty(worldId: WorldId, profileId: ProfileId, change: PartyChange): Write;
+
+  /**
+   * Sets or clears a collectible's nickname (SPEC.md §4). The text is trimmed; empty means null;
+   * longer than `LIMITS.nickname` is `invalid-argument` before any write. Owner, or an admin
+   * (moderation: the showcase shows nicknames to everyone).
+   */
+  setNickname(worldId: WorldId, collectibleId: TaskId, nickname: string | null): Write;
 }
 
 export interface DataStore {

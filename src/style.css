@@ -509,3 +509,55 @@ button.place[data-alert='tomorrow'] {
 .recent-card p {
   margin: 0;
 }
+
+.home-header {
+  display: grid;
+  justify-items: center;
+  gap: 0.25rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+}
+
+.home-art {
+  font-size: 4rem;
+  max-width: 8rem;
+}
+
+.home-header p,
+.avatar-place {
+  margin: 0;
+}
+
+.avatar-place {
+  padding: 0.5rem 1rem;
+  border: 1px dashed var(--line);
+  border-radius: 0.75rem;
+}
+
+.collectible-list {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.collectible-card {
+  display: grid;
+  justify-items: center;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+}
+
+.collectible-card p {
+  margin: 0;
+}
+
+.rename {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: center;
+}

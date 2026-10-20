@@ -684,6 +684,56 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
       });
     });
 
+    describe('nicknames', () => {
+      async function withCollectible() {
+        const env = await setup();
+        const task = env.admin.tasks.createAdhocTask(env.worldId, adhoc(env.childProfileId));
+        await task.settled;
+        const id = task.result.taskId;
+        await env.child.tasks.completeTask(env.worldId, id, { answer: null, talkFlag: false, rewardTier: 'low' }).settled;
+        await env.child.rewards.openReward(env.worldId, id, { slot: 'slot0' }).settled;
+        const owned = new Watch<Collectible[]>((v, e) => env.admin.collectibles.observeCollectibles(env.worldId, env.childProfileId, v, e));
+        await eventually(() => expect(owned.value).toHaveLength(1));
+        const nickname = () => owned.value?.[0]?.nickname;
+        return { ...env, id, owned, nickname };
+      }
+
+      it('lets the owner set a trimmed nickname, then clear it', async () => {
+        const { child, worldId, id, owned, nickname } = await withCollectible();
+        await child.collectibles.setNickname(worldId, id, '  Rex ').settled;
+        await eventually(() => expect(nickname()).toBe('Rex'));
+        await child.collectibles.setNickname(worldId, id, '   ').settled;
+        await eventually(() => expect(nickname()).toBeNull());
+        owned.close();
+      });
+
+      it('accepts 30 characters and refuses 31 before any write', async () => {
+        const { child, worldId, id, owned, nickname } = await withCollectible();
+        await child.collectibles.setNickname(worldId, id, 'x'.repeat(LIMITS.nickname)).settled;
+        await eventually(() => expect(nickname()).toBe('x'.repeat(LIMITS.nickname)));
+        await rejectsWith(child.collectibles.setNickname(worldId, id, 'y'.repeat(LIMITS.nickname + 1)), 'invalid-argument');
+        expect(nickname()).toBe('x'.repeat(LIMITS.nickname));
+        owned.close();
+      });
+
+      it('lets an admin rename another profile’s collectible (moderation)', async () => {
+        const { admin, worldId, id, owned, nickname } = await withCollectible();
+        await admin.collectibles.setNickname(worldId, id, 'Moderated').settled;
+        await eventually(() => expect(nickname()).toBe('Moderated'));
+        owned.close();
+      });
+
+      it('refuses another child', async () => {
+        const { admin, newcomer, worldId, id, owned, nickname } = await withCollectible();
+        const other = admin.worlds.createProfile(worldId, { displayName: 'Robin', kind: 'child' });
+        await other.settled;
+        await newcomer.worlds.chooseProfile(worldId, other.result.profileId).settled;
+        await rejectsWith(newcomer.collectibles.setNickname(worldId, id, 'Mine now'), 'permission-denied');
+        expect(nickname()).toBeNull();
+        owned.close();
+      });
+    });
+
     describe('reward odds', () => {
       const odds = { ...DEFAULT_RULESET.tierOdds, low: { low: 70, mid: 25, high: 5 } };
 
