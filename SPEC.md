@@ -217,7 +217,7 @@ The main screen is a **map** with five tappable places. Each tap starts a short 
 
 - **Order:** profiles fill the moorings in creation order (`createdAt`, then `id`), so every device draws the same layout.
 - **Symbol on the sail:** each boat shows its profile's `avatar.symbol` at the theme's symbol spot (on the sail, in the pirate theme), so each person's boat can be told apart. A profile with no symbol shows its boat without one.
-- **Decoration only:** the boats are not tappable. They show no name, count, collectible or party, so `SPEC.md` §2 still holds. Each person's own place stays the `home` place.
+- **Decoration only:** the boats are not tappable. They show no name, count, collectible or party, so `SPEC.md` §2 still holds. The boats only show that each person is on the island; they never open another person's `home` or `party` (product owner, 2026-10-20). Each person's own place stays the `home` place.
 - **More profiles than moorings:** the extra profiles are not drawn. This is a limit of the theme, not an error. A theme should declare enough moorings (the pirate theme: at least 6 for children).
 - **Themes without moorings:** a theme that declares none shows the map exactly as before.
 
