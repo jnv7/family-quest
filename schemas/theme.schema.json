@@ -571,6 +571,33 @@
               "maximum": 1500
             }
           }
+        },
+        "symbolAt": {
+          "description": "Optional. Where the active profile's symbol goes over this place's art, as the centre (x, y) and size, in percent of the area the art is drawn in; size is a share of its width. Used only when the art is the `homeVariants` art of the profile's kind (the big ship at the pier, for adults).",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "x",
+            "y",
+            "size"
+          ],
+          "properties": {
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "size": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 100
+            }
+          }
         }
       }
     },

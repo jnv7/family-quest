@@ -5,9 +5,9 @@ import groups from './emoji.json';
 describe('the emoji of the symbol picker', () => {
   const all = groups.flatMap((group) => group.emojis);
 
-  it('has every group with emoji, and no repeats', () => {
-    expect(groups.map((group) => group.id)).toEqual(['smileys', 'people', 'animals', 'food', 'travel', 'activities', 'objects', 'symbols']);
-    expect(groups.every((group) => group.emojis.length > 50)).toBe(true);
+  it('has only the animals and nature group, with no repeats', () => {
+    expect(groups.map((group) => group.id)).toEqual(['animals']); // animals and plants: the picker offers nothing else
+    expect(groups.every((group) => group.emojis.length > 100)).toBe(true);
     expect(new Set(all).size).toBe(all.length);
   });
 

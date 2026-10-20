@@ -197,6 +197,11 @@
       "transition": {
         "kind": "fade",
         "durationMs": 300
+      },
+      "symbolAt": {
+        "x": 50,
+        "y": 37,
+        "size": 27
       }
     },
     "vault": {

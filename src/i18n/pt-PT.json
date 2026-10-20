@@ -143,14 +143,7 @@
     "vault.recent": "Recentes",
     "manage.symbol": "Símbolo",
     "manage.symbolNone": "Nenhum",
-    "emoji.group.smileys": "Carinhas",
-    "emoji.group.people": "Pessoas",
     "emoji.group.animals": "Animais e natureza",
-    "emoji.group.food": "Comida e bebida",
-    "emoji.group.travel": "Viagens e lugares",
-    "emoji.group.activities": "Atividades",
-    "emoji.group.objects": "Objetos",
-    "emoji.group.symbols": "Símbolos",
     "home.chooseSymbol": "Escolher o meu símbolo",
     "home.symbolPanel": "Escolhe um símbolo",
     "home.symbolSuggested": "Sugestões",
@@ -159,11 +152,8 @@
     "home.title": "{^@home}",
     "home.party": "{^@party}",
     "home.partyHint": "{^@collectible.thePlural} que andam contigo.",
-    "home.reserveHint": "Aqui descansam {@collectible.thePlural} que não estão {@party.in}.",
     "home.partyEmpty": "Ainda não há nada {@party.in}.",
     "home.pending": "Recentes",
-    "home.reserve": "{^@reserve}",
-    "home.reserveEmpty": "Ainda não há nada {@reserve.in}.",
     "showcase.title": "{^@showcase}",
     "showcase.empty": "Ainda não há nada {@showcase.in}.",
     "showcase.close": "Fechar",
@@ -172,6 +162,6 @@
     "collectible.renameSave": "Guardar",
     "collectible.renameCancel": "Cancelar",
     "collectible.renameTooLong": "O nome é demasiado comprido.",
-    "home.toReserve": "Para {@reserve.the}"
+    "home.toReserve": "Enviar para {@showcase.the}"
   }
 }

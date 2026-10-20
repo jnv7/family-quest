@@ -18,8 +18,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed (product owner's review, 2026-10-20)
 
 - Any emoji can be a symbol, not only the theme's: the `home` has a button under the boat that opens a panel with every emoji (the theme's `profileSymbols` become the suggestions shown first), and the chosen emoji goes onto the sail of the boat on the `home` at once (`homeSymbolAt` in the theme says where). The symbol is the avatar for now, so the empty "avatar" place is gone.
-- The plan alert is a speech bubble with dots on the place (bigger and bouncing for today, small for tomorrow) instead of a glowing rectangle.
-- The `home` lists say what they are ("Aqui descansam…"), since a title such as the reserve's alone did not explain itself. Map places have bigger art and a quieter name; the pirate parrot and lighthouse are larger.
+- The plan alert is a speech bubble with dots above the place, not over its art (bigger and bouncing for today, small for tomorrow), instead of a glowing rectangle.
+- There is no reserve list on the profile: a collectible sent away leaves the `home` and is seen with the others in the `showcase`, so the "reserve" name no longer confuses. Nothing is deleted. The panel offers the theme's suggestions and then the animals and plants only, with larger squares.
+- An adult's symbol also shows on the big ship at the pier (`symbolAt` on the place, new and optional in the theme).
+- The `party` list says what it is. Map places have bigger art and a quieter name; the pirate parrot and lighthouse are larger.
 
 ### Fixed
 

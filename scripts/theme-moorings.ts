@@ -29,7 +29,12 @@ interface SymbolAt {
 
 export function checkThemeMoorings(
   themeFile: string,
-  theme: { map: { aspectRatio: number; moorings?: Record<string, KindMoorings> }; profileSymbols: string[]; homeSymbolAt?: Record<string, SymbolAt> },
+  theme: {
+    map: { aspectRatio: number; moorings?: Record<string, KindMoorings> };
+    profileSymbols: string[];
+    homeSymbolAt?: Record<string, SymbolAt>;
+    places: Record<string, { symbolAt?: SymbolAt }>;
+  },
 ): void {
   theme.profileSymbols.forEach((symbol, index) => {
     if (!isSingleEmoji(symbol)) {
@@ -62,10 +67,12 @@ export function checkThemeMoorings(
     });
   }
 
-  // On the home, the symbol is placed over the art as drawn: the centre and the size must fit in it.
-  for (const [kind, { x, y, size }] of Object.entries(theme.homeSymbolAt ?? {})) {
-    if (x - size / 2 < 0 || x + size / 2 > 100 || y < 0 || y > 100) {
-      throw new ThemeValidationError(themeFile, `/homeSymbolAt/${kind}`, 'does not fit inside the art');
-    }
+  // On the home and on a place, the symbol is placed over the art as drawn: the centre and the size must fit in it.
+  const fits = ({ x, y, size }: SymbolAt) => x - size / 2 >= 0 && x + size / 2 <= 100 && y >= 0 && y <= 100;
+  for (const [kind, at] of Object.entries(theme.homeSymbolAt ?? {})) {
+    if (!fits(at)) throw new ThemeValidationError(themeFile, `/homeSymbolAt/${kind}`, 'does not fit inside the art');
+  }
+  for (const [role, place] of Object.entries(theme.places)) {
+    if (place.symbolAt && !fits(place.symbolAt)) throw new ThemeValidationError(themeFile, `/places/${role}/symbolAt`, 'does not fit inside the art');
   }
 }

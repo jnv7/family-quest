@@ -894,7 +894,7 @@ describe('the home', () => {
     await child.see('Escolher o meu símbolo');
     expect(child.root.textContent).not.toContain('avatar');
     await child.see('que andam contigo');
-    await child.see('Aqui descansam');
+    expect(child.root.textContent).not.toContain('Aqui descansam'); // no reserve on the profile
     expect(child.root.querySelector('.home-art')?.textContent).toBe('emoji' in theme.homeVariants.child ? theme.homeVariants.child.emoji : '');
     await vi.waitFor(() => expect(cards(child, 0)).toHaveLength(1));
     expect(cards(child, 1)).toHaveLength(1);
@@ -919,19 +919,18 @@ describe('the home', () => {
     await vi.waitFor(() => expect(catalogueName()).toBe(original));
   });
 
-  it('sends a party member to the reserve, then brings it back; the pending one asks who leaves when the party is full', async () => {
+  it('sends a party member away: it leaves the profile and shows in the showcase, and is not deleted', async () => {
     const { child, worldId, first } = await childAtHome();
-    await child.click('button', 'Para a reserva');
+    await child.click('button', 'Enviar para a vitrina');
     await vi.waitFor(() => expect(profileSam(worldId).partyIds).toEqual([]));
     expect(state(worldId).collectibles.get(first)!.reserveAt).toBe(now);
-    await vi.waitFor(() => expect(cards(child, 2)).toHaveLength(1));
-    expect(cards(child, 0)).toHaveLength(0);
-
-    const inReserve = cards(child, 2)[0]!.querySelector<HTMLButtonElement>('button.primary')!;
-    inReserve.click();
-    await vi.waitFor(() => expect(profileSam(worldId).partyIds).toEqual([first]));
-    expect(state(worldId).collectibles.get(first)!.reserveAt).toBeNull();
+    await vi.waitFor(() => expect(cards(child, 0)).toHaveLength(0));
+    expect(child.root.querySelectorAll('li.collectible-card')).toHaveLength(1); // only the pending one is left
     expect(state(worldId).collectibles.size).toBe(2);
+
+    await child.click('button', 'Voltar');
+    await child.click('button.place', 'Vitrina');
+    await vi.waitFor(() => expect(child.root.querySelectorAll('.showcase-item')).toHaveLength(1));
   });
 
   it('shows the tier name instead of crashing when the theme lacks the slot of a collectible', async () => {
@@ -1018,6 +1017,7 @@ describe('moorings and symbols', () => {
     id: THEME_ID,
     profileSymbols: SYMBOLS,
     homeSymbolAt: { child: { x: 50, y: 40, size: 40 } },
+    places: { ...base.places, home: { ...base.places.home, art: base.homeVariants.adult, symbolAt: { x: 50, y: 40, size: 40 } } },
     map: {
       ...base.map,
       moorings: {
@@ -1134,26 +1134,42 @@ describe('moorings and symbols', () => {
     expect(admin.root.querySelector('.boat')).toBeNull();
   });
 
-  it('opens a panel with every emoji, puts the chosen one on the sail of the home boat and on the map, and clears it', async () => {
+  it('opens a panel with the suggestions and the animals, puts the chosen one on the sail of the home boat and on the map, and clears it', async () => {
     const { worldId, ids } = await seed([{ name: 'Sam' }]);
     const child = await asChild(worldId, 'Sam');
     await child.click('button.boat', '');
     await child.click('button', 'Escolher o meu símbolo');
     await child.see('Sugestões');
-    // Not among the theme's suggestions, but in the full list.
-    const ROCKET = '🚀';
-    expect(SYMBOLS).not.toContain(ROCKET);
-    expect(child.root.querySelectorAll('.symbol-panel [data-emoji]').length).toBeGreaterThan(1000);
-    (child.root.querySelector(`.symbol-panel [data-emoji="${ROCKET}"]`) as HTMLElement).click();
-    await vi.waitFor(() => expect(backend.state.get(worldId)!.profiles.get(ids.Sam!)!.avatar.symbol).toBe(ROCKET));
-    await vi.waitFor(() => expect(child.root.querySelector('.home-boat .boat-symbol')?.textContent).toBe(ROCKET));
+    // Not among the theme's suggestions, but among the animals; nothing else is offered.
+    const ELEPHANT = '🐘';
+    expect(SYMBOLS).not.toContain(ELEPHANT);
+    const offered = [...child.root.querySelectorAll<HTMLElement>('.symbol-panel [data-emoji]')].map((el) => el.dataset.emoji!);
+    expect(offered.length).toBeGreaterThan(100);
+    expect(offered).not.toContain('🚀');
+    expect(offered.slice(0, SYMBOLS.length)).toEqual(SYMBOLS); // the theme's suggestions come first
+    (child.root.querySelector(`.symbol-panel [data-emoji="${ELEPHANT}"]`) as HTMLElement).click();
+    await vi.waitFor(() => expect(backend.state.get(worldId)!.profiles.get(ids.Sam!)!.avatar.symbol).toBe(ELEPHANT));
+    await vi.waitFor(() => expect(child.root.querySelector('.home-boat .boat-symbol')?.textContent).toBe(ELEPHANT));
     expect(child.root.querySelector('.symbol-panel')!.hasAttribute('hidden')).toBe(true); // closed after choosing
     await child.click('button', 'Voltar');
-    await vi.waitFor(() => expect(child.root.querySelector('.boat-symbol')?.textContent).toBe(ROCKET));
+    await vi.waitFor(() => expect(child.root.querySelector('.boat-symbol')?.textContent).toBe(ELEPHANT));
     await child.click('button.boat', '');
     await child.click('button', 'Escolher o meu símbolo');
     await child.click('button', 'Sem símbolo');
     await vi.waitFor(() => expect(backend.state.get(worldId)!.profiles.get(ids.Sam!)!.avatar.symbol).toBeNull());
+  });
+
+  it('shows the adult symbol on the big ship at the pier, and not the child symbol', async () => {
+    const { worldId } = await seed([{ name: 'Sam', symbol: CRAB }]);
+    const admin = await asAdult(worldId);
+    await admin.click('button.place', 'Casa');
+    await admin.click('button', 'Escolher o meu símbolo');
+    (admin.root.querySelector('.symbol-panel [data-emoji="🐬"]') as HTMLElement).click();
+    await admin.click('button', 'Voltar');
+    await vi.waitFor(() => expect(admin.find('button.place .place-slot .boat-symbol')?.textContent).toBe('🐬'));
+    const child = await asChild(worldId, 'Sam');
+    await vi.waitFor(() => expect(boats(child)).toHaveLength(1));
+    expect(child.root.querySelector('button.place .place-slot .boat-symbol')).toBeNull(); // the child has a boat of their own
   });
 
   it('shows the symbol next to the name when the theme gives no place for it on the home art', async () => {

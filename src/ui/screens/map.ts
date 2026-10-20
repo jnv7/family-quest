@@ -31,6 +31,7 @@ export const renderMap: WorldScreen = (ctx, root, { worldId }) => {
   );
   let cancelTransition = () => {};
   let boardButton: HTMLElement | null = null;
+  const placeSlots = new Map<PlaceRole, HTMLElement>();
 
   // Boats come before the places in the DOM, so a place always receives its own taps.
   const moorings = theme.map.moorings;
@@ -40,13 +41,18 @@ export const renderMap: WorldScreen = (ctx, root, { worldId }) => {
   for (const role of PLACES) {
     const place = theme.places[role];
     const destination = DESTINATIONS[role];
+    // A place may carry the active profile's symbol (the big ship at the pier): its art then sits in a
+    // slot the symbol is positioned in.
+    const art = artElement(theme, place.art, 'place-art');
+    const slot = place.symbolAt ? h('span', { class: 'place-slot' }, art) : null;
+    if (slot) placeSlots.set(role, slot);
     const button = h('button', {
       class: `place${destination ? '' : ' soon'}`,
       disabled: !destination,
       title: destination ? undefined : ctx.text('map.soon'),
       style: `left:${place.x}%;top:${place.y}%;width:${place.width}%;height:${place.height}%`,
     },
-      artElement(theme, place.art, 'place-art'),
+      slot ?? art,
       h('span', { class: 'place-name' }, ctx.text(`map.${role}`)),
     );
     if (destination) {
@@ -90,6 +96,19 @@ export const renderMap: WorldScreen = (ctx, root, { worldId }) => {
     );
   };
 
+  /** The symbol over a place's art, for the active profile, when the art is the look of their kind. */
+  const drawPlaceSymbols = (profile: Profile) => {
+    for (const [role, slot] of placeSlots) {
+      const place = theme.places[role];
+      const at = place.symbolAt!;
+      slot.querySelector('.boat-symbol')?.remove();
+      if (!profile.avatar.symbol || JSON.stringify(place.art) !== JSON.stringify(theme.homeVariants[profile.kind])) continue;
+      slot.append(
+        h('span', { class: 'boat-symbol', 'aria-hidden': 'true', style: `left:${at.x}%;top:${at.y}%;--symbol-size:${at.size}` }, profile.avatar.symbol),
+      );
+    }
+  };
+
   // The board lights up when a planned task is due today or tomorrow: a neutral effect, the
   // same for every theme (ADR 0006), with two intensities and no text (SPEC.md §2).
   let world: World | null = null;
@@ -118,6 +137,7 @@ export const renderMap: WorldScreen = (ctx, root, { worldId }) => {
       stopTasks = ctx.store.tasks.observeTasks(worldId, profile.id, (value) => ((tasks = value), light()), unlit);
     }
     drawBoats(profiles, profile.id);
+    drawPlaceSymbols(profile);
     title.textContent = ctx.text('map.hello', { name: profile.displayName });
     const buttons = [h('button', { onClick: () => ctx.go({ name: 'profiles' }) }, ctx.text('map.switch'))];
     if (canOfferInstall(ctx)) buttons.push(h('button', { onClick: () => ctx.go({ name: 'install' }) }, ctx.text('map.install')));

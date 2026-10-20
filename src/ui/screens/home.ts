@@ -10,9 +10,10 @@ import emojiGroups from '../emoji.json';
 
 /**
  * The home: the active profile's own place (SPEC.md §7.5). It shows the profile with the
- * theme's look for its kind with its symbol on the sail, and a button that opens every emoji to
- * choose it from, then the party, the pending collectibles and the reserve. Nothing here is counted or compared (SPEC.md §2), and nothing can
- * be deleted: a collectible only moves between the party and the reserve.
+ * theme's look for its kind with its symbol on the sail, and a button that opens a panel of emoji
+ * (the theme's suggestions, then the animals and plants) to choose it from, then the party and the pending collectibles. A collectible sent away leaves the
+ * profile and is seen in the showcase with the others (SPEC.md §6); it is not deleted. Nothing here
+ * is counted or compared (SPEC.md §2).
  */
 export const renderHome: WorldScreen = (ctx, root, { worldId }) => {
   const problem = h('div');
@@ -20,7 +21,6 @@ export const renderHome: WorldScreen = (ctx, root, { worldId }) => {
   const symbolPanel = h('section', { class: 'symbol-panel', hidden: true });
   const partySection = h('section', { class: 'stack' });
   const pendingSection = h('section', { class: 'stack' });
-  const reserveSection = h('section', { class: 'stack' });
 
   let ruleset: Ruleset | null = null;
   let profile: Profile | null = null;
@@ -103,7 +103,7 @@ export const renderHome: WorldScreen = (ctx, root, { worldId }) => {
       }, ctx.text('home.chooseSymbol')),
     );
     if (collectibles === null || ruleset === null) return;
-    const { party, pending, reserve } = collectionOf(collectibles, profile.partyIds);
+    const { party, pending } = collectionOf(collectibles, profile.partyIds);
     const list = (items: Collectible[], extras: (c: Collectible) => Array<HTMLElement | null>) =>
       items.map((collectible) => card(collectible, extras(collectible)));
 
@@ -115,9 +115,6 @@ export const renderHome: WorldScreen = (ctx, root, { worldId }) => {
     );
     section(pendingSection, ctx.text('home.pending'), null, null, list(pending, (c) => [controls.choices(c)]));
     pendingSection.hidden = pending.length === 0;
-    section(reserveSection, ctx.text('home.reserve'), ctx.text('home.reserveHint'), ctx.text('home.reserveEmpty'),
-      list(reserve, (c) => [nameLine(c), controls.choices(c)]),
-    );
   }
 
   root.append(
@@ -127,7 +124,6 @@ export const renderHome: WorldScreen = (ctx, root, { worldId }) => {
     symbolPanel,
     partySection,
     pendingSection,
-    reserveSection,
     h('div', { class: 'stack' }, h('button', { onClick: () => ctx.go({ name: 'map' }) }, ctx.text('app.back'))),
   );
 

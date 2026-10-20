@@ -18,6 +18,8 @@ export interface Place {
   width: number;
   height: number;
   art: Art;
+  /** Where the active profile's symbol goes over this art, when the art is the profile kind's `homeVariants` art. */
+  symbolAt?: SymbolAt;
   transition: { kind: 'move' | 'fade' | 'none'; durationMs: number };
 }
 
