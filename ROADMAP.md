@@ -4,7 +4,7 @@ Each release is one minor version, developed on its own `release/0.x` branch (`G
 
 The behaviour each release implements is specified in `SPEC.md`.
 
-**Last closed release: 0.4 — Adult pilot** (2026-10-20, tag `v0.4`; [release notes](docs/release-notes/0.4.md)). **Current release:** none; the next one is 0.5, the children pilot ([plan](docs/plans/0.5.md)).
+**Last closed release: 0.5 — Children pilot** (2026-10-20, tag `v0.5`; [release notes](docs/release-notes/0.5.md)). **Current release:** none; the next one is 0.6, rewards ([plan](docs/plans/0.6.md)).
 
 ## Release plan
 
