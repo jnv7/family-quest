@@ -266,7 +266,7 @@ Interface text that does not belong to a theme lives in locale files under `src/
 
 The engine reads the theme only through a typed `theme` module. A validator (`npm run validate-theme`) checks that the theme has enough slots in each `tier`, that no text is missing, and that every placeholder used in `src/i18n/` has a name in the theme. A collectible stores `slot` and `tier`, never the theme's name, so a new theme changes the look of everything already obtained without migrating data.
 
-Drawings made by the children belong to the theme they were made for. Before they are committed to the public repository, they are checked for names, signatures or anything else that identifies the family. **[decided]** **[proposal]** The default theme for tests is a minimal theme (emoji and text), included in the repository.
+Theme art is CC0 (Kenney) or made for this repository, plus emoji; the children choose it from a short list. **[decided]** If children's drawings are added later (radar), they belong to the theme they were made for, and before they are committed to the public repository they are checked for names, signatures or anything else that identifies the family. **[decided]** **[proposal]** The default theme for tests is a minimal theme (emoji and text), included in the repository.
 
 ## 9. Code architecture
 
