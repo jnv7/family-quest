@@ -4,7 +4,7 @@ Each release is one minor version, developed on its own `release/0.x` branch (`G
 
 The behaviour each release implements is specified in `SPEC.md`.
 
-**Last closed release: 0.2 — Core** (2026-10-19, tag `v0.2`; [release notes](docs/release-notes/0.2.md)). **Current release:** none; the next one is 0.3, whose deliveries are in [docs/plans/0.3.md](docs/plans/0.3.md).
+**Last closed release: 0.3 — Recurrence and alerts** (2026-10-20, tag `v0.3`; [release notes](docs/release-notes/0.3.md)). **Current release:** none; the next one is 0.4, the adult pilot ([plan](docs/plans/0.4.md)).
 
 ## Release plan
 
