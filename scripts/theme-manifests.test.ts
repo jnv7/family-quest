@@ -7,7 +7,7 @@ const themes = readThemes('src/themes');
 
 describe('theme manifests', () => {
   it('finds the themes that have a theme.json', () => {
-    expect(themes.map((t) => t.theme.id).sort()).toEqual(['minimal', 'minimal-farm', 'piratas-do-farol']);
+    expect(themes.map((t) => t.theme.id).sort()).toEqual(['minimal', 'minimal-farm', 'pirates']);
   });
 
   it('gives every theme its own id, name, colours and icons', () => {

@@ -1,6 +1,6 @@
 {
   "$schema": "../../../schemas/theme.schema.json",
-  "id": "piratas-do-farol",
+  "id": "pirates",
   "name": "Piratas do Farol",
   "locale": "pt-PT",
   "roles": {

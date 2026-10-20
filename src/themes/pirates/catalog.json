@@ -2,7 +2,7 @@
   "$schema": "../../../schemas/catalog.schema.json",
   "slots": [
     {
-      "slot": "caranguejo",
+      "slot": "crab",
       "tier": "low",
       "name": "Caranguejo Rabugento",
       "art": {
@@ -10,7 +10,7 @@
       }
     },
     {
-      "slot": "gaivota",
+      "slot": "seagull",
       "tier": "low",
       "name": "Gaivota Gulosa",
       "art": {
@@ -18,7 +18,7 @@
       }
     },
     {
-      "slot": "estrela-do-mar",
+      "slot": "starfish",
       "tier": "low",
       "name": "Estrela-do-mar Sonolenta",
       "art": {
@@ -26,7 +26,7 @@
       }
     },
     {
-      "slot": "peixe-balao",
+      "slot": "pufferfish",
       "tier": "low",
       "name": "Peixe-balão Teimoso",
       "art": {
@@ -34,7 +34,7 @@
       }
     },
     {
-      "slot": "papagaio",
+      "slot": "parrot",
       "tier": "mid",
       "name": "Papagaio Tagarela",
       "art": {
@@ -42,7 +42,7 @@
       }
     },
     {
-      "slot": "polvo",
+      "slot": "octopus",
       "tier": "mid",
       "name": "Polvo Malabarista",
       "art": {
@@ -50,7 +50,7 @@
       }
     },
     {
-      "slot": "tartaruga",
+      "slot": "turtle",
       "tier": "mid",
       "name": "Tartaruga Navegadora",
       "art": {
@@ -58,7 +58,7 @@
       }
     },
     {
-      "slot": "macaco",
+      "slot": "monkey",
       "tier": "mid",
       "name": "Macaco Gatuno",
       "art": {
@@ -74,7 +74,7 @@
       }
     },
     {
-      "slot": "baleia-dourada",
+      "slot": "golden-whale",
       "tier": "high",
       "name": "Baleia Dourada",
       "art": {
@@ -82,7 +82,7 @@
       }
     },
     {
-      "slot": "fantasma",
+      "slot": "ghost",
       "tier": "high",
       "name": "Capitão Fantasma",
       "art": {
@@ -90,7 +90,7 @@
       }
     },
     {
-      "slot": "sereia",
+      "slot": "mermaid",
       "tier": "high",
       "name": "Sereia do Farol",
       "art": {
