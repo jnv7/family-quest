@@ -1,0 +1,207 @@
+{
+  "$schema": "../../../schemas/theme.schema.json",
+  "id": "pirates",
+  "name": "Piratas do Farol",
+  "locale": "pt-PT",
+  "roles": {
+    "world": {
+      "singular": "ilha",
+      "plural": "ilhas",
+      "gender": "f"
+    },
+    "profile": {
+      "singular": "pirata",
+      "plural": "piratas",
+      "gender": "m"
+    },
+    "board": {
+      "singular": "papagaio na doca",
+      "plural": "papagaios na doca",
+      "gender": "m"
+    },
+    "checkin": {
+      "singular": "farol",
+      "plural": "faróis",
+      "gender": "m"
+    },
+    "home": {
+      "singular": "barco",
+      "plural": "barcos",
+      "gender": "m"
+    },
+    "vault": {
+      "singular": "gruta do tesouro",
+      "plural": "grutas do tesouro",
+      "gender": "f"
+    },
+    "showcase": {
+      "singular": "bar",
+      "plural": "bares",
+      "gender": "m"
+    },
+    "reward": {
+      "singular": "baú",
+      "plural": "baús",
+      "gender": "m"
+    },
+    "collectible": {
+      "singular": "bicho",
+      "plural": "bichos",
+      "gender": "m"
+    },
+    "party": {
+      "singular": "tripulação",
+      "plural": "tripulações",
+      "gender": "f"
+    },
+    "reserve": {
+      "singular": "ilha",
+      "plural": "ilhas",
+      "gender": "f"
+    }
+  },
+  "tiers": {
+    "low": "Comum",
+    "mid": "Raro",
+    "high": "Lendário"
+  },
+  "rewardArt": {
+    "low": {
+      "emoji": "📦"
+    },
+    "mid": {
+      "emoji": "🧰"
+    },
+    "high": {
+      "emoji": "💰"
+    }
+  },
+  "map": {
+    "background": {
+      "emoji": "🌊"
+    },
+    "aspectRatio": 0.5625
+  },
+  "places": {
+    "board": {
+      "x": 8,
+      "y": 8,
+      "width": 38,
+      "height": 20,
+      "art": {
+        "emoji": "🦜"
+      },
+      "transition": {
+        "kind": "move",
+        "durationMs": 400
+      }
+    },
+    "checkin": {
+      "x": 54,
+      "y": 8,
+      "width": 38,
+      "height": 20,
+      "art": {
+        "emoji": "🗼"
+      },
+      "transition": {
+        "kind": "move",
+        "durationMs": 400
+      }
+    },
+    "home": {
+      "x": 31,
+      "y": 38,
+      "width": 38,
+      "height": 22,
+      "art": {
+        "emoji": "⛵"
+      },
+      "transition": {
+        "kind": "fade",
+        "durationMs": 300
+      }
+    },
+    "vault": {
+      "x": 8,
+      "y": 70,
+      "width": 38,
+      "height": 20,
+      "art": {
+        "emoji": "🪙"
+      },
+      "transition": {
+        "kind": "move",
+        "durationMs": 400
+      }
+    },
+    "showcase": {
+      "x": 54,
+      "y": 70,
+      "width": 38,
+      "height": 20,
+      "art": {
+        "emoji": "🍺"
+      },
+      "transition": {
+        "kind": "move",
+        "durationMs": 400
+      }
+    }
+  },
+  "homeVariants": {
+    "adult": {
+      "emoji": "🚢"
+    },
+    "child": {
+      "emoji": "⛵"
+    }
+  },
+  "install": {
+    "name": "Piratas do Farol",
+    "themeColor": "#14324a",
+    "backgroundColor": "#eaf4fa",
+    "icons": {
+      "small": {
+        "image": "assets/icons/icon-192.png"
+      },
+      "large": {
+        "image": "assets/icons/icon-512.png"
+      },
+      "maskable": {
+        "image": "assets/icons/icon-maskable-512.png"
+      },
+      "apple": {
+        "image": "assets/icons/apple-touch-icon.png"
+      }
+    }
+  },
+  "character": {
+    "art": {
+      "emoji": "🧓"
+    },
+    "lines": {
+      "greeting": [
+        "Ahoy, marinheiro! Que trabalho trazes hoje?",
+        "O mar está calmo. Boa altura para uma tarefa.",
+        "Chegaste a tempo! O farol já está aceso."
+      ],
+      "congrats": [
+        "Bem feito, pirata! Mais um baú para a gruta.",
+        "Isso sim! Até o papagaio ficou impressionado.",
+        "Por mil trovões, que bom trabalho!",
+        "Tarefa cumprida! O tesouro agradece."
+      ],
+      "doubt": [
+        "Hum… tens a certeza? Sem pressa, a maré espera.",
+        "Não faz mal. Volta quando estiveres pronto.",
+        "Os bons piratas não se apressam. Fica para depois."
+      ],
+      "farewell": [
+        "Boa viagem! O farol fica aceso para ti.",
+        "Nada por fazer. Descansa, que o mar também descansa.",
+        "Até à próxima maré, pirata!"
+      ]
+    }
+  }
+}

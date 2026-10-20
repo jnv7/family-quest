@@ -38,6 +38,8 @@ export interface ThemeFile {
   locale: 'pt-PT';
   roles: Record<Role, Noun>;
   tiers: Record<Tier, string>;
+  /** Art of an unopened reward: the tier is visible before opening. */
+  rewardArt: Record<Tier, Art>;
   map: { background: Art; aspectRatio: number };
   places: Record<PlaceRole, Place>;
   homeVariants: { adult: Art; child: Art };

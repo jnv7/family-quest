@@ -12,7 +12,11 @@ import { playTransition } from '../transition';
 const PLACES: readonly PlaceRole[] = ['board', 'checkin', 'home', 'vault', 'showcase'];
 
 /** Places that already lead somewhere; the others appear on the map but wait for their release. */
-const DESTINATIONS: Partial<Record<PlaceRole, Route>> = { board: { name: 'board' }, checkin: { name: 'checkin' } };
+const DESTINATIONS: Partial<Record<PlaceRole, Route>> = {
+  board: { name: 'board' },
+  checkin: { name: 'checkin' },
+  vault: { name: 'vault' },
+};
 
 /** The main screen: a map with five places, laid out by the theme (SPEC.md §7). */
 export const renderMap: WorldScreen = (ctx, root, { worldId }) => {

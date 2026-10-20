@@ -4,7 +4,7 @@ Each release is one minor version, developed on its own `release/0.x` branch (`G
 
 The behaviour each release implements is specified in `SPEC.md`.
 
-**Last closed release: 0.5 — Children pilot** (2026-10-20, tag `v0.5`; [release notes](docs/release-notes/0.5.md)). **Current release:** none; the next one is 0.6, rewards ([plan](docs/plans/0.6.md)).
+**Last closed release: 0.6 — Rewards** (2026-10-20, tag `v0.6`; [release notes](docs/release-notes/0.6.md)). **Current release:** none; the next one is 0.7, whose deliveries are in [docs/plans/0.7.md](docs/plans/0.7.md).
 
 ## Release plan
 
@@ -92,7 +92,7 @@ Exit criteria:
 
 ### 0.7 — `showcase`, `home` and art
 
-Scope: each person's `home`, the `showcase`, and final art (Kenney assets under CC0, plus the children's drawings).
+Scope: each person's `home`, the `showcase`, and final art: Kenney assets under CC0, and emoji, chosen by the children from a short list (product owner, 2026-10-20: no children's drawings in this release). Delivery plan in [docs/plans/0.7.md](docs/plans/0.7.md).
 
 Exit criteria:
 
@@ -115,6 +115,7 @@ Ideas that are outside the current release. They are neither implemented on own 
 
 | Idea | Origin |
 | --- | --- |
+| Children's drawings as theme art, with consent, a licence for the public repository, metadata stripped and a privacy check (`SPEC.md` §8) | Deferred by the product owner, 2026-10-20 |
 | Theme text layer 3: a theme may reword any neutral message by key and define terms used only in its own texts (`{#term}`), validated by `validate-theme` (ADR 0006) | Product owner, 2026-10-19 |
 | Per-locale theme texts: move layers 2 and 3 of each theme into `src/themes/{themeId}/locales/{locale}.json` when a second locale arrives (ADR 0006) | Product owner, 2026-10-19 |
 | Move the default theme id out of `src/main.ts` into a single configuration value (ADR 0006) | Spec review, 2026-10-19 |

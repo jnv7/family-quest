@@ -1,4 +1,5 @@
-import type { ProfileId, Task } from '../../core/model';
+import { drawTier, tierOddsFor } from '../../core/draw';
+import type { ProfileId, Task, World } from '../../core/model';
 import { visibleOpenTasks } from '../../core/tasks';
 import type { WorldScreen } from '../context';
 import { artElement } from '../art';
@@ -11,23 +12,31 @@ import { observeSelf } from '../self';
  * Where a task is completed, in one tap on the task itself (SPEC.md §7.4), so
  * two taps from the map. A task with a question shows it with "yes" and "no":
  * yes completes it, no leaves it open and the character answers kindly, with no
- * failure recorded (the proposal in SPEC.md §6).
+ * failure recorded (the proposal in SPEC.md §6). Completing also draws the reward's tier
+ * (SPEC.md §6) and says that it went to the vault, which adds no tap.
  */
 export const renderCheckin: WorldScreen = (ctx, root, { worldId }) => {
   const { character } = ctx.theme;
   const bubble = h('p', { class: 'bubble', role: 'status' });
+  const note = h('p', { class: 'reward-note', role: 'status' });
   const list = h('ul', { class: 'rows checkin-tasks' });
   const empty = h('div');
   const problem = h('div');
   let spoken = false;
+  // The odds belong to the world, so a task can be completed once the world has arrived (at once, from the cache).
+  let world: World | null = null;
+  let tasks: Task[] | null = null;
 
   const say = (kind: keyof typeof character.lines) => {
     bubble.textContent = pickLine(character.lines[kind], ctx.randomInt);
   };
 
   const complete = (task: Task, answer: 'yes' | null) => {
-    ctx.settle(ctx.store.tasks.completeTask(worldId, task.id, { answer, talkFlag: task.talkFlag }).settled);
+    if (!world) return;
+    const rewardTier = drawTier(tierOddsFor(task.level, world.ruleset), ctx.randomInt);
+    ctx.settle(ctx.store.tasks.completeTask(worldId, task.id, { answer, talkFlag: task.talkFlag, rewardTier }).settled);
     say('congrats');
+    note.textContent = ctx.text('checkin.reward');
   };
 
   const row = (task: Task) => {
@@ -51,7 +60,8 @@ export const renderCheckin: WorldScreen = (ctx, root, { worldId }) => {
     );
   };
 
-  const show = (tasks: Task[]) => {
+  const show = () => {
+    if (tasks === null || world === null) return;
     if (!spoken) {
       say(tasks.length > 0 ? 'greeting' : 'farewell');
       spoken = true;
@@ -60,9 +70,15 @@ export const renderCheckin: WorldScreen = (ctx, root, { worldId }) => {
     empty.replaceChildren(...(tasks.length === 0 ? [h('p', { class: 'message' }, ctx.text('checkin.empty'))] : []));
   };
 
+  // A failure to read the world is shown like any other: the screen cannot complete anything without it.
+  const stopWorld = observeWithRetry(ctx, problem, (onError) =>
+    ctx.store.worlds.observeWorld(worldId, (value) => ((world = value), show()), onError),
+  );
+
   root.append(
     h('h1', {}, ctx.text('checkin.title')),
     h('div', { class: 'character' }, artElement(ctx.theme, character.art, 'character-art'), bubble),
+    note,
     problem,
     list,
     empty,
@@ -80,11 +96,12 @@ export const renderCheckin: WorldScreen = (ctx, root, { worldId }) => {
     stopTasks();
     watchedProfile = profile.id;
     stopTasks = observeWithRetry(ctx, problem, (onError) =>
-      ctx.store.tasks.observeOpenTasks(worldId, profile.id, (tasks) => show(visibleOpenTasks(tasks)), onError),
+      ctx.store.tasks.observeOpenTasks(worldId, profile.id, (value) => ((tasks = visibleOpenTasks(value)), show()), onError),
     );
   });
   return () => {
     stopTasks();
+    stopWorld();
     stopSelf();
   };
 };

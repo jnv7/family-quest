@@ -24,6 +24,8 @@ import {
 } from 'firebase/firestore';
 import { signInAnonymously, type Auth } from 'firebase/auth';
 import { weekKey } from '../../core/calendar';
+import { oddsProblem } from '../../core/draw';
+import { checkPartyChange } from '../../core/party';
 import { taskDefProblem } from '../../core/taskDefs';
 import { assertPlanAllowed } from '../plan';
 import { newRecurringTaskProblem, settleRecurringWrites } from '../recurring';
@@ -32,11 +34,14 @@ import {
   DEFAULT_RULESET,
   LIMITS,
   SCHEMA_VERSION,
+  TIERS,
   type Clock,
+  type Collectible,
   type DocMeta,
   type Member,
   type Profile,
   type RandomInt,
+  type Reward,
   type Task,
   type TaskDef,
   type Uid,
@@ -53,13 +58,19 @@ import {
 } from '../DataStore';
 import {
   decodeAll,
+  decodeCollectible,
   decodeMember,
   decodeProfile,
+  decodeReward,
   decodeTask,
   decodeTaskDef,
   decodeWorld,
+  encodeCollectible,
   encodeMember,
   encodeProfile,
+  encodeReward,
+  encodeReserveAt,
+  encodeRewardOpening,
   encodeTask,
   encodeTaskCompletion,
   encodeTaskDef,
@@ -67,10 +78,14 @@ import {
 } from './converters';
 import { toDataStoreError } from './errors';
 import {
+  collectibleDoc,
+  collectiblesCollection,
   membersCollection,
   memberDoc,
   profileDoc,
   profilesCollection,
+  rewardDoc,
+  rewardsCollection,
   taskDefDoc,
   taskDefsCollection,
   taskDoc,
@@ -237,6 +252,15 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
           (error) => onError?.(toDataStoreError(error)),
         ),
 
+      setTierOdds: (worldId, tierOdds) =>
+        write(undefined, async () => {
+          for (const level of TIERS) {
+            const problem = oddsProblem(tierOdds[level]);
+            if (problem) throw invalid(`The reward odds of level ${level} are not valid (${problem})`);
+          }
+          await updateDoc(worldDoc(db, worldId), { 'ruleset.tierOdds': tierOdds });
+        }),
+
       createProfile(worldId, input) {
         const profileId = doc(profilesCollection(db, worldId)).id;
         return write({ profileId }, async () => {
@@ -327,15 +351,25 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
           if (!world || !task) throw new DataStoreError('not-found', `Task ${taskId} does not exist`);
           if (task.question !== null && input.answer !== 'yes') throw invalid('A task with a question is completed by answering yes');
           if (task.question === null && input.answer !== null) throw invalid('A task without a question has no answer');
-          await updateDoc(
+          if (!(TIERS as readonly string[]).includes(input.rewardTier)) throw invalid(`Unknown reward tier: ${String(input.rewardTier)}`);
+          const completionWeek = weekKey(doneAt, world.ruleset.timezone);
+          const reward: Reward = {
+            schemaVersion: SCHEMA_VERSION,
+            createdAt: doneAt,
+            id: taskId,
+            profileId: task.profileId,
+            weekKey: completionWeek,
+            tier: input.rewardTier,
+            openedAt: null,
+          };
+          // One batch: the rules accept the reward only together with the task moving to done.
+          const batch = writeBatch(db);
+          batch.update(
             taskDoc(db, worldId, taskId),
-            encodeTaskCompletion({
-              doneAt,
-              answer: input.answer,
-              talkFlag: input.talkFlag,
-              weekKey: weekKey(doneAt, world.ruleset.timezone),
-            }),
+            encodeTaskCompletion({ doneAt, answer: input.answer, talkFlag: input.talkFlag, weekKey: completionWeek }),
           );
+          batch.set(rewardDoc(db, worldId, taskId), encodeReward(reward));
+          await batch.commit();
         });
       },
 
@@ -422,6 +456,99 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
           );
           if (finished) stop();
         }),
+    },
+
+    rewards: {
+      openReward(worldId, rewardId, input) {
+        const openedAt = clock();
+        return write(undefined, async () => {
+          checkText('Slot', input.slot, LIMITS.slot);
+          const [worldSnapshot, rewardSnapshot, memberSnapshot] = await Promise.all([
+            readDoc(worldDoc(db, worldId)),
+            readDoc(rewardDoc(db, worldId, rewardId)),
+            readDoc(memberDoc(db, worldId, requireUid())),
+          ]);
+          const world = worldSnapshot.exists() ? decodeWorld(worldSnapshot) : null;
+          const reward = rewardSnapshot.exists() ? decodeReward(rewardSnapshot) : null;
+          if (!world || !reward) throw new DataStoreError('not-found', `Reward ${rewardId} does not exist`);
+          const member = memberSnapshot.exists() ? decodeMember(memberSnapshot) : null;
+          // Refused here as the rules would refuse it, so the screen never shows a false collectible.
+          if (member?.profileId !== reward.profileId) throw denied('Only the owner opens a reward');
+          if (reward.openedAt !== null) throw denied('A reward is opened once');
+          const collectible: Collectible = {
+            schemaVersion: SCHEMA_VERSION,
+            createdAt: openedAt,
+            id: rewardId,
+            profileId: reward.profileId,
+            slot: input.slot,
+            tier: reward.tier,
+            nickname: null,
+            obtainedWeekKey: weekKey(openedAt, world.ruleset.timezone),
+            obtainedAt: openedAt,
+            reserveAt: null,
+          };
+          // One batch: the rules accept the collectible only together with the reward being opened.
+          const batch = writeBatch(db);
+          batch.update(rewardDoc(db, worldId, rewardId), encodeRewardOpening(openedAt));
+          batch.set(collectibleDoc(db, worldId, rewardId), encodeCollectible(collectible));
+          await batch.commit();
+        });
+      },
+
+      // Equality filters only, so no composite index is needed; the order is applied here.
+      observeUnopenedRewards: (worldId, profileId, onValue, onError) =>
+        onSnapshot(
+          query(rewardsCollection(db, worldId), where('profileId', '==', profileId), where('openedAt', '==', null)),
+          (snapshot) =>
+            onValue(decodeAll(snapshot.docs, decodeReward).sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1))),
+          (error) => onError?.(toDataStoreError(error)),
+        ),
+    },
+
+    collectibles: {
+      arrangeParty(worldId, profileId, change) {
+        const now = clock();
+        return write(undefined, async () => {
+          const ids = [...new Set([...change.partyIds, ...change.toReserve, ...change.fromReserve])];
+          const [worldSnapshot, profileSnapshot, memberSnapshot, ...collectibleSnapshots] = await Promise.all([
+            readDoc(worldDoc(db, worldId)),
+            readDoc(profileDoc(db, worldId, profileId)),
+            readDoc(memberDoc(db, worldId, requireUid())),
+            ...ids.map((id) => readDoc(collectibleDoc(db, worldId, id))),
+          ]);
+          const world = worldSnapshot.exists() ? decodeWorld(worldSnapshot) : null;
+          const profile = profileSnapshot.exists() ? decodeProfile(profileSnapshot) : null;
+          if (!world || !profile) throw new DataStoreError('not-found', `Profile ${profileId} does not exist`);
+          const member = memberSnapshot.exists() ? decodeMember(memberSnapshot) : null;
+          if (member?.profileId !== profileId) throw denied('Only the owner arranges the party');
+          // The party's current members are read too, so a stale id in it is reported, not ignored.
+          const current = await Promise.all(
+            profile.partyIds.filter((id) => !ids.includes(id)).map((id) => readDoc(collectibleDoc(db, worldId, id))),
+          );
+          const owned = [...collectibleSnapshots, ...current].flatMap((snapshot) => {
+            const collectible = snapshot.exists() ? decodeCollectible(snapshot) : null;
+            return collectible && collectible.profileId === profileId ? [collectible] : [];
+          });
+          const problem = checkPartyChange(profile, owned, change, world.ruleset.partySize);
+          if (problem) throw invalid(`The party change is not valid (${problem})`);
+
+          const batch = writeBatch(db);
+          for (const id of change.toReserve) batch.update(collectibleDoc(db, worldId, id), encodeReserveAt(now));
+          for (const id of change.fromReserve) batch.update(collectibleDoc(db, worldId, id), encodeReserveAt(null));
+          const same = profile.partyIds.length === change.partyIds.length && profile.partyIds.every((id, i) => id === change.partyIds[i]);
+          if (!same) batch.update(profileDoc(db, worldId, profileId), { partyIds: change.partyIds });
+          await batch.commit();
+        });
+      },
+
+      // One equality filter, so no composite index is needed; the order is applied here.
+      observeCollectibles: (worldId, profileId, onValue, onError) =>
+        onSnapshot(
+          query(collectiblesCollection(db, worldId), where('profileId', '==', profileId)),
+          (snapshot) =>
+            onValue(decodeAll(snapshot.docs, decodeCollectible).sort((a, b) => b.obtainedAt - a.obtainedAt || (a.id < b.id ? -1 : 1))),
+          (error) => onError?.(toDataStoreError(error)),
+        ),
     },
 
     taskDefs: {

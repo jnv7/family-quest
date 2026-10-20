@@ -2,7 +2,7 @@
  * The shared "server" of the memory adapter: committed state plus the check
  * that every batch must pass, standing in for `firestore.rules`.
  */
-import type { Member, Profile, Task, TaskDef, Uid, World, WorldId } from '../../core/model';
+import type { Collectible, Member, Profile, Reward, Task, TaskDef, Uid, World, WorldId } from '../../core/model';
 import type { DataStoreError, Unsubscribe } from '../DataStore';
 
 export interface WorldState {
@@ -11,6 +11,8 @@ export interface WorldState {
   profiles: Map<string, Profile>;
   tasks: Map<string, Task>;
   taskDefs: Map<string, TaskDef>;
+  rewards: Map<string, Reward>;
+  collectibles: Map<string, Collectible>;
 }
 
 export type MemoryState = Map<WorldId, WorldState>;
@@ -18,6 +20,7 @@ export type MemoryState = Map<WorldId, WorldState>;
 /** One document write. `create` sets a whole document; `patch` merges fields into an existing one. */
 export type Op =
   | { worldId: WorldId; collection: 'world'; id: WorldId; create: World }
+  | { worldId: WorldId; collection: 'world'; id: WorldId; patch: Partial<World> }
   | { worldId: WorldId; collection: 'members'; id: Uid; create: Member }
   | { worldId: WorldId; collection: 'members'; id: Uid; patch: Partial<Member> }
   | { worldId: WorldId; collection: 'profiles'; id: string; create: Profile }
@@ -25,7 +28,11 @@ export type Op =
   | { worldId: WorldId; collection: 'tasks'; id: string; create: Task }
   | { worldId: WorldId; collection: 'tasks'; id: string; patch: Partial<Task> }
   | { worldId: WorldId; collection: 'taskDefs'; id: string; create: TaskDef }
-  | { worldId: WorldId; collection: 'taskDefs'; id: string; patch: Partial<TaskDef> };
+  | { worldId: WorldId; collection: 'taskDefs'; id: string; patch: Partial<TaskDef> }
+  | { worldId: WorldId; collection: 'rewards'; id: string; create: Reward }
+  | { worldId: WorldId; collection: 'rewards'; id: string; patch: Partial<Reward> }
+  | { worldId: WorldId; collection: 'collectibles'; id: string; create: Collectible }
+  | { worldId: WorldId; collection: 'collectibles'; id: string; patch: Partial<Collectible> };
 
 /** An atomic group of writes, with the server-side check that may refuse all of them. */
 export interface Batch {
@@ -47,13 +54,20 @@ export interface MemoryBackend {
 export function applyOps(state: MemoryState, ops: readonly Op[]): void {
   for (const op of ops) {
     if (op.collection === 'world') {
-      state.set(op.worldId, {
-        world: structuredClone(op.create),
-        members: new Map(),
-        profiles: new Map(),
-        tasks: new Map(),
-        taskDefs: new Map(),
-      });
+      if ('create' in op) {
+        state.set(op.worldId, {
+          world: structuredClone(op.create),
+          members: new Map(),
+          profiles: new Map(),
+          tasks: new Map(),
+          taskDefs: new Map(),
+          rewards: new Map(),
+          collectibles: new Map(),
+        });
+      } else {
+        const existing = state.get(op.worldId);
+        if (existing) Object.assign(existing.world, structuredClone(op.patch));
+      }
       continue;
     }
     const world = state.get(op.worldId);

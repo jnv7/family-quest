@@ -68,7 +68,7 @@ All collections live under `worlds/{worldId}`. Every document has `schemaVersion
 - `timezone`: `Europe/Lisbon`; `weekStartsOn`: Monday.
 - `openingDay`: ISO weekday on which the current week's rewards can be opened; default 7 (Sunday). **[decided]**
 - `pendingDays`: how many days a newly obtained collectible stays in its owner's pending list before moving to the reserve; default 1. **[decided]** (value is configurable)
-- `tierOdds`: probability of each reward `tier`, per task `level`. **[proposal]** The `mid` row (65/25/10) comes from the product owner; the other two rows are guesses to be tuned. Each row holds integers that sum to 100; the client validates this whenever the ruleset is saved. **[decided]**
+- `tierOdds`: probability of each reward `tier`, per task `level`. **[decided]** The values below are the product owner's. Each row holds integers that sum to 100; the client validates this whenever the ruleset is saved. A world keeps the odds it was created with, so an admin edits them in management (section 7.8).
 
 | Task `level` | `low` | `mid` | `high` |
 | --- | --- | --- | --- |
@@ -218,9 +218,9 @@ The main screen is a **map** with five tappable places. Each tap starts a short 
 3. **`board`.** All open tasks of the active profile, including those from past periods, and, highlighted, planned `big` tasks for tomorrow and today (the visual alert, 0.3). Entry point for creating a task: adults for any profile, children for themselves.
 4. **`checkin`.** Pick an open task, tap done. Shows the question when there is one. "I think I did better" button.
 5. **`home`.** Avatar and `party` of the active profile, plus its pending collectibles. Edit the `party` (remove, add). Name a collectible. Edit the avatar (0.8).
-6. **`vault`.** The active profile's unopened `rewards`. Only that profile's own rewards.
+6. **`vault`.** The active profile's unopened `rewards`, grouped by week, each shown with the theme's art for its `tier` (the tier is visible before opening **[decided]**). Only that profile's own rewards. A reward is opened here from the opening day on; the collectible that comes out is shown and can join the `party` at once, or stay pending. Until the full `home` place arrives (0.7), the vault also lists the pending collectibles in a "recent" section, with the same choices.
 7. **`showcase`.** The latest 30 from the reserve.
-8. **Management (`admin` only).** Create and archive profiles, create and edit `taskDefs`, view tasks per profile (including `talkFlag`), show the join link and QR code again. Profiles and worlds are always created through the app, with generated ids, never by editing data by hand. **[decided]**
+8. **Management (`admin` only).** Create and archive profiles, create and edit `taskDefs`, edit the reward odds (`tierOdds`), view tasks per profile (including `talkFlag`), show the join link and QR code again. Profiles and worlds are always created through the app, with generated ids, never by editing data by hand. **[decided]**
 
 Adults play like everyone else. The theme can give an adult's `home` a different look (in the pirate theme, a luxury ship).
 
@@ -255,6 +255,7 @@ Folder `src/themes/{themeId}/` with:
   - `id`, `name` and `locale` (`pt-PT`);
   - for each glossary role, the singular and plural visible name;
   - for each map place, its position, size and animation;
+  - `rewardArt`: the art of an unopened reward, per tier;
   - `homeVariants` per `kind`;
   - `install`: the name and colours of the installed app and its icons, from which one manifest per theme is built (ADR 0005);
   - the `checkin` character's lines (greeting, congratulations, doubt, farewell), short and fixed in number.
@@ -265,7 +266,7 @@ Interface text that does not belong to a theme lives in locale files under `src/
 
 The engine reads the theme only through a typed `theme` module. A validator (`npm run validate-theme`) checks that the theme has enough slots in each `tier`, that no text is missing, and that every placeholder used in `src/i18n/` has a name in the theme. A collectible stores `slot` and `tier`, never the theme's name, so a new theme changes the look of everything already obtained without migrating data.
 
-Drawings made by the children belong to the theme they were made for. Before they are committed to the public repository, they are checked for names, signatures or anything else that identifies the family. **[decided]** **[proposal]** The default theme for tests is a minimal theme (emoji and text), included in the repository.
+Theme art is CC0 (Kenney) or made for this repository, plus emoji; the children choose it from a short list. **[decided]** If children's drawings are added later (radar), they belong to the theme they were made for, and before they are committed to the public repository they are checked for names, signatures or anything else that identifies the family. **[decided]** **[proposal]** The default theme for tests is a minimal theme (emoji and text), included in the repository.
 
 ## 9. Code architecture
 
@@ -319,7 +320,6 @@ See `ROADMAP.md`. Each release is a minor version developed on its own `release/
 
 | Topic | Status |
 | --- | --- |
-| `tierOdds` for the `low` and `high` levels | Proposal in section 4; awaiting the product owner |
 | Weekly guaranteed minimum | Off by default |
 | What happens when the answer to the question is "no" | Proposal in section 6 |
 | Firestore read quota with real-time listeners | Measure in 0.2 against the free limits |

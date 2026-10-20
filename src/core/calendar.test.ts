@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dateKey, isoWeekday, lastDayOfPeriod, monthKey, periodKey, weekKey } from './calendar';
+import { addDays, dateKey, isoWeekday, lastDayOfPeriod, monthKey, periodKey, weekKey } from './calendar';
 import type { IsoWeekday } from './model';
 
 const LISBON = 'Europe/Lisbon';
@@ -93,5 +93,26 @@ describe('lastDayOfPeriod', () => {
     expect(() => lastDayOfPeriod('daily', '2026-W43')).toThrow();
     expect(() => lastDayOfPeriod('weekly', '2026-10')).toThrow();
     expect(() => lastDayOfPeriod('monthly', '2026-10-19')).toThrow();
+  });
+});
+
+describe('addDays', () => {
+  it.each([
+    ['2026-10-18', 1, '2026-10-19'],
+    ['2026-10-31', 1, '2026-11-01'],
+    ['2026-12-31', 1, '2027-01-01'],
+    ['2026-02-28', 1, '2026-03-01'],
+    ['2028-02-28', 1, '2028-02-29'],
+    ['2026-10-24', 2, '2026-10-26'], // across the change to winter time on 25 October
+    ['2026-03-28', 2, '2026-03-30'], // across the change to summer time
+    ['2026-10-19', -1, '2026-10-18'],
+    ['2026-10-19', 0, '2026-10-19'],
+  ])('%s + %i days is %s', (date, days, expected) => {
+    expect(addDays(date, days)).toBe(expected);
+  });
+
+  it('rejects what is not a date key or a whole number of days', () => {
+    expect(() => addDays('2026-W43', 1)).toThrow();
+    expect(() => addDays('2026-10-18', 1.5)).toThrow(RangeError);
   });
 });

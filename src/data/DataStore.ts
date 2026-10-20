@@ -7,23 +7,28 @@
  *
  * "Admin only" means: the device's active profile is an adult profile.
  *
- * Scope: operations needed up to release 0.3. Rewards, collectibles and the
- * party (0.6) are added by that release, as separate sub-interfaces.
+ * Scope: operations needed up to release 0.6 (rewards, collectibles and the party).
  */
 import type { NewRecurringTask } from '../core/generation';
+import type { PartyChange } from '../core/party';
 import type {
   Answer,
   Cadence,
+  Collectible,
   Member,
   Plan,
   Profile,
   ProfileId,
   ProfileKind,
+  Reward,
+  Ruleset,
+  Slot,
   Task,
   TaskDef,
   TaskDefId,
   TaskId,
   TaskLevel,
+  Tier,
   Uid,
   World,
   WorldId,
@@ -121,6 +126,8 @@ export interface CompleteTaskInput {
   /** `yes` when the task has a question; null otherwise. */
   answer: Answer | null;
   talkFlag: boolean;
+  /** Drawn by the caller with `drawTier(tierOddsFor(task.level, ruleset), randomInt)`. */
+  rewardTier: Tier;
 }
 
 // ---------------------------------------------------------------------------
@@ -156,6 +163,12 @@ export interface WorldStore {
   /** Every profile, archived ones included; the caller filters. */
   observeProfiles(worldId: WorldId, onValue: Observer<Profile[]>, onError?: ObserverError): Unsubscribe;
 
+  /**
+   * Admin only. Replaces the reward odds of the world. Every row must pass `oddsProblem`
+   * (integers summing to 100), or the call is `invalid-argument` before any write.
+   */
+  setTierOdds(worldId: WorldId, tierOdds: Ruleset['tierOdds']): Write;
+
   /** Admin only. */
   createProfile(worldId: WorldId, input: CreateProfileInput): Write<{ profileId: ProfileId }>;
   /** Admin only, and only child profiles. Profiles are never deleted. */
@@ -183,7 +196,8 @@ export interface TaskStore {
 
   /**
    * Moves an open task of the active profile to done, with the week of `now`.
-   * From 0.6 the same batch also creates the reward.
+   * The same batch creates `rewards/{taskId}` with `input.rewardTier`, the task's
+   * profile and completion week, and `openedAt: null`.
    */
   completeTask(worldId: WorldId, taskId: TaskId, input: CompleteTaskInput): Write;
 
@@ -224,9 +238,39 @@ export interface TaskDefStore {
   updateTaskDef(worldId: WorldId, defId: TaskDefId, patch: Partial<TaskDefInput & { active: boolean }>): Write;
 }
 
+export interface RewardStore {
+  /** The profile's unopened rewards, oldest first. Owner or admin. */
+  observeUnopenedRewards(worldId: WorldId, profileId: ProfileId, onValue: Observer<Reward[]>, onError?: ObserverError): Unsubscribe;
+
+  /**
+   * One batch: sets `openedAt` to now on the reward and creates `collectibles/{rewardId}` with the
+   * reward's profile and tier, the given `slot`, no nickname, `obtainedWeekKey` of now,
+   * `obtainedAt` now and `reserveAt: null`. Owner only, once: a reward already opened (here or
+   * on another device) is `permission-denied`, and nothing changes. The caller checks `canOpen`
+   * first and draws the slot with `drawSlot(theme catalogue, reward.tier, randomInt)`.
+   */
+  openReward(worldId: WorldId, rewardId: TaskId, input: { slot: Slot }): Write;
+}
+
+export interface CollectibleStore {
+  /** The profile's collectibles, newest first. Every member can read them (the showcase needs other people's); the interface never shows the owner. */
+  observeCollectibles(worldId: WorldId, profileId: ProfileId, onValue: Observer<Collectible[]>, onError?: ObserverError): Unsubscribe;
+
+  /**
+   * One batch: `profile.partyIds := change.partyIds`, plus the `reserveAt` changes (`toReserve`
+   * get the time of the call, `fromReserve` get null). Owner only. The adapter runs
+   * `checkPartyChange` first and rejects with `invalid-argument` before any write if it fails.
+   * The profile is not written when its `partyIds` do not change, so the silent move of old
+   * pending collectibles to the reserve never overwrites a party another device just edited.
+   */
+  arrangeParty(worldId: WorldId, profileId: ProfileId, change: PartyChange): Write;
+}
+
 export interface DataStore {
   readonly session: SessionStore;
   readonly worlds: WorldStore;
   readonly tasks: TaskStore;
   readonly taskDefs: TaskDefStore;
+  readonly rewards: RewardStore;
+  readonly collectibles: CollectibleStore;
 }

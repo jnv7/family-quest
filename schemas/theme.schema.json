@@ -12,6 +12,7 @@
     "locale",
     "roles",
     "tiers",
+    "rewardArt",
     "map",
     "places",
     "homeVariants",
@@ -105,6 +106,27 @@
         },
         "high": {
           "$ref": "#/$defs/label"
+        }
+      }
+    },
+    "rewardArt": {
+      "description": "Art of an unopened reward, per tier. The tier is visible before opening.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "low",
+        "mid",
+        "high"
+      ],
+      "properties": {
+        "low": {
+          "$ref": "#/$defs/art"
+        },
+        "mid": {
+          "$ref": "#/$defs/art"
+        },
+        "high": {
+          "$ref": "#/$defs/art"
         }
       }
     },

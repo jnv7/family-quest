@@ -7,6 +7,8 @@
  * observers show the server state again.
  */
 import { weekKey } from '../../core/calendar';
+import { oddsProblem } from '../../core/draw';
+import { checkPartyChange } from '../../core/party';
 import { taskDefProblem } from '../../core/taskDefs';
 import { assertPlanAllowed } from '../plan';
 import { newRecurringTaskProblem, settleRecurringWrites } from '../recurring';
@@ -16,12 +18,15 @@ import {
   DEFAULT_RULESET,
   LIMITS,
   SCHEMA_VERSION,
+  TIERS,
   type Clock,
+  type Collectible,
   type DocMeta,
   type Member,
   type Profile,
   type ProfileId,
   type RandomInt,
+  type Reward,
   type Task,
   type TaskDef,
   type TaskDefId,
@@ -310,6 +315,20 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
       observeProfiles: (worldId, onValue, onError) =>
         observeAsMember(worldId, ({ ws }) => ({ value: [...ws.profiles.values()] }), onValue, onError),
 
+      setTierOdds: (worldId, tierOdds) =>
+        submit(undefined, (view, uid) => {
+          const ws = requireWorld(view, worldId);
+          for (const level of TIERS) {
+            const problem = oddsProblem(tierOdds[level]);
+            if (problem) throw invalid(`The reward odds of level ${level} are not valid (${problem})`);
+          }
+          const ruleset = { ...ws.world.ruleset, tierOdds: structuredClone(tierOdds) };
+          return {
+            ops: [{ worldId, collection: 'world', id: worldId, patch: { ruleset } }],
+            check: (state) => (accessOf(state, worldId, uid)?.isAdmin ? null : denied('Only an admin changes the reward odds')),
+          };
+        }),
+
       createProfile(worldId, input: CreateProfileInput) {
         const profileId = autoId();
         return submit({ profileId }, (view, uid) => {
@@ -436,7 +455,18 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
           const task = requireTask(view, worldId, taskId);
           if (task.question !== null && input.answer !== 'yes') throw invalid('A task with a question is completed by answering yes');
           if (task.question === null && input.answer !== null) throw invalid('A task without a question has no answer');
+          if (!(TIERS as readonly string[]).includes(input.rewardTier)) throw invalid(`Unknown reward tier: ${String(input.rewardTier)}`);
           const doneAt = clock();
+          const completionWeek = weekKey(doneAt, ws.world.ruleset.timezone);
+          const reward: Reward = {
+            schemaVersion: SCHEMA_VERSION,
+            createdAt: doneAt,
+            id: taskId,
+            profileId: task.profileId,
+            weekKey: completionWeek,
+            tier: input.rewardTier,
+            openedAt: null,
+          };
           return {
             ops: [
               {
@@ -448,11 +478,14 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
                   doneAt,
                   answer: input.answer,
                   talkFlag: input.talkFlag,
-                  weekKey: weekKey(doneAt, ws.world.ruleset.timezone),
+                  weekKey: completionWeek,
                 },
               },
+              { worldId, collection: 'rewards', id: taskId, create: reward },
             ],
-            check: (state) => checkOwnerOfOpenTask(state, worldId, taskId, uid),
+            check: (state) =>
+              checkOwnerOfOpenTask(state, worldId, taskId, uid) ??
+              (state.get(worldId)?.rewards.has(taskId) ? denied('A reward is never replaced') : null),
           };
         }),
 
@@ -523,6 +556,95 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
         const access = accessOf(backend.state, worldId, uid);
         if (!access || !canReadTasksOf(access, profileId)) throw denied('Tasks of another profile');
       },
+    },
+
+    collectibles: {
+      arrangeParty: (worldId, profileId, change) =>
+        submit(undefined, (view, uid) => {
+          const ws = requireWorld(view, worldId);
+          const profile = ws.profiles.get(profileId);
+          if (!profile) throw notFound(`Profile ${profileId} does not exist`);
+          const owned = [...ws.collectibles.values()].filter((c) => c.profileId === profileId);
+          const problem = checkPartyChange(profile, owned, change, ws.world.ruleset.partySize);
+          if (problem) throw invalid(`The party change is not valid (${problem})`);
+          const now = clock();
+          const ops: Op[] = [
+            ...change.toReserve.map((id): Op => ({ worldId, collection: 'collectibles', id, patch: { reserveAt: now } })),
+            ...change.fromReserve.map((id): Op => ({ worldId, collection: 'collectibles', id, patch: { reserveAt: null } })),
+          ];
+          if (!sameIds(profile.partyIds, change.partyIds)) {
+            ops.push({ worldId, collection: 'profiles', id: profileId, patch: { partyIds: [...change.partyIds] } });
+          }
+          return {
+            ops,
+            check: (state) => {
+              const access = accessOf(state, worldId, uid);
+              if (!access) return denied('Not a member of this world');
+              if (access.member.profileId !== profileId) return denied('Only the owner arranges the party');
+              if ([...change.toReserve, ...change.fromReserve].some((id) => access.ws.collectibles.get(id)?.profileId !== profileId)) {
+                return denied('A collectible is the owner’s to move');
+              }
+              return null;
+            },
+          };
+        }),
+
+      observeCollectibles: (worldId, profileId, onValue, onError) =>
+        observeAsMember(
+          worldId,
+          (access) => {
+            // Every member reads collectibles (the showcase lists other people's); the interface hides the owner.
+            const mine = [...access.ws.collectibles.values()].filter((c) => c.profileId === profileId);
+            return { value: mine.sort((a, b) => b.obtainedAt - a.obtainedAt || (a.id < b.id ? -1 : 1)) };
+          },
+          onValue,
+          onError,
+        ),
+    },
+
+    rewards: {
+      openReward: (worldId, rewardId, input) =>
+        submit(undefined, (view, uid) => {
+          checkText('Slot', input.slot, LIMITS.slot);
+          const ws = requireWorld(view, worldId);
+          const reward = ws.rewards.get(rewardId);
+          if (!reward) throw notFound(`Reward ${rewardId} does not exist`);
+          const { member } = requireAccess(view, worldId, uid);
+          if (member.profileId !== reward.profileId) throw denied('Only the owner opens a reward');
+          if (reward.openedAt !== null) throw denied('A reward is opened once');
+          const openedAt = clock();
+          const collectible: Collectible = {
+            schemaVersion: SCHEMA_VERSION,
+            createdAt: openedAt,
+            id: rewardId,
+            profileId: reward.profileId,
+            slot: input.slot,
+            tier: reward.tier,
+            nickname: null,
+            obtainedWeekKey: weekKey(openedAt, ws.world.ruleset.timezone),
+            obtainedAt: openedAt,
+            reserveAt: null,
+          };
+          return {
+            ops: [
+              { worldId, collection: 'rewards', id: rewardId, patch: { openedAt } },
+              { worldId, collection: 'collectibles', id: rewardId, create: collectible },
+            ],
+            check: (state) => checkOwnerOpensOnce(state, worldId, uid, rewardId),
+          };
+        }),
+
+      observeUnopenedRewards: (worldId, profileId, onValue, onError) =>
+        observeAsMember(
+          worldId,
+          (access) => {
+            if (!canReadTasksOf(access, profileId)) return { error: denied('Rewards of another profile') };
+            const unopened = [...access.ws.rewards.values()].filter((r) => r.profileId === profileId && r.openedAt === null);
+            return { value: unopened.sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1)) };
+          },
+          onValue,
+          onError,
+        ),
     },
 
     taskDefs: {
@@ -604,6 +726,20 @@ function byTitleThenId(a: TaskDef, b: TaskDef): number {
 /** A patch without the keys set to `undefined`, which must not overwrite anything. */
 function definedFields<T extends object>(patch: T): T {
   return Object.fromEntries(Object.entries(patch).filter(([, value]) => value !== undefined)) as T;
+}
+
+const sameIds = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((id, index) => id === b[index]);
+
+/** Only the owner opens a reward, only once; the collectible is never replaced. */
+function checkOwnerOpensOnce(state: MemoryState, worldId: WorldId, uid: Uid, rewardId: TaskId): DataStoreError | null {
+  const access = accessOf(state, worldId, uid);
+  if (!access) return denied('Not a member of this world');
+  const reward = access.ws.rewards.get(rewardId);
+  if (!reward) return notFound(`Reward ${rewardId} does not exist`);
+  if (access.member.profileId !== reward.profileId) return denied('Only the owner opens a reward');
+  if (reward.openedAt !== null) return denied('A reward is opened once');
+  if (access.ws.collectibles.has(rewardId)) return denied('A collectible is never replaced');
+  return null;
 }
 
 /** Only the owner changes a task, and only while it is open. */

@@ -6,6 +6,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.4] — 2026-10-20
+
+Closes release 0.6.
+
+### Added
+
+- The pirate theme package (id `pirates`; only its visible texts are Portuguese), as data only: names with gender, tier names, the lighthouse sage's lines, a catalogue of four collectibles per tier, and emoji placeholder art with lighthouse icons for the installed app. The product owner wrote the approved texts; the final art replaces the emoji in 0.7 with no data migration. It is offered when creating a world and joins `validate-theme`.
+
+## [0.6.3] — 2026-10-20
+
+Completes the scope of release 0.6.
+
+### Added
+
+- Party, pending and reserve. After a reveal, a new collectible can join the party at once, or wait ("later"). With a full party the screen asks who leaves, and that one goes to the reserve. A "recent" section in the `vault` lists the pending collectibles with the same choices. Nothing offers to delete or release a collectible.
+- The automatic move: when the app opens, after a profile switch, and when the `vault` opens, pending collectibles older than `pendingDays` (counted in Lisbon days) go to the reserve, silently. The party is not rewritten by it.
+- Domain: `addDays` (calendar arithmetic in UTC, tested across month and year ends and both daylight saving changes), `collectibleState`, `pendingToReserve` and `checkPartyChange` (party size, duplicates, ownership, and `toReserve`/`fromReserve` consistent with the new party).
+- `DataStore`: `collectibles.arrangeParty` in one batch, with both adapters and the contract suite. The adapter runs the checks first and refuses with `invalid-argument` before any write.
+
+## [0.6.2] — 2026-10-20
+
+### Added
+
+- Opening rewards. In the `vault`, a reward whose week is closed, or whose week is the current one from the opening day on (Sunday by default, Lisbon time), has an "open" button; before that it says, calmly, from which weekday it opens. Opening draws a catalogue slot of the reward's tier, plays a short neutral reveal (the same in every theme) and shows the collectible with its name and the theme's tier name. Each person opens only their own.
+- One batch opens a reward and creates its collectible, so two devices of the same profile opening the same reward end with a single collectible: the second batch is refused, and its screen follows the true state.
+- Domain: `canOpen`, tested across the opening day, a skipped Sunday, the daylight saving change and the turn of the year.
+- `DataStore`: `rewards.openReward` and `collectibles.observeCollectibles`, with both adapters and the contract suite. `observeCollectibles` comes one delivery earlier than the plan listed, because the acceptance of opening reads the collectible. Any member can read collectibles, as the rules say (the showcase lists other people's); the interface never shows the owner.
+
+## [0.6.1] — 2026-10-19
+
+### Added
+
+- Rewards are born with the completion. Completing a task now draws the reward's tier from the world's odds for the task's level, using `crypto`, and creates the reward in the same batch. The check-in says it went to the vault, still at two taps from the map. Tasks completed before this release produce no reward.
+- The `vault` is a place on the map: it lists the person's own unopened rewards, grouped by week, each with the theme's art for its tier. It shows no counts for anyone else and compares nothing. Opening comes in 0.6.2.
+- Reward odds in management: an admin edits, for each task level, the chance of each tier (integers that sum to 100). Existing worlds keep the odds they were created with, so this is how they receive new ones.
+- Themes have a new required block, `rewardArt`, with the art of an unopened reward per tier. Both bundled themes carry emoji placeholders.
+- Domain: `tierOddsFor`, `drawTier`, `drawSlot` and `oddsProblem`, with the draw simulation (10,000 draws per level, chi-square below 13.82).
+- `DataStore`: `rewardTier` in `CompleteTaskInput`, `rewards.observeUnopenedRewards` and `worlds.setTierOdds`, with both adapters and the contract suite.
+
+### Changed
+
+- `SPEC.md`: the odds of the `low` and `high` levels are decided; the tier is visible before opening.
+
 ## [0.5.0] — 2026-10-20
 
 Release 0.5: Children pilot. No code changes. The exit criteria were met, according to the product owner.

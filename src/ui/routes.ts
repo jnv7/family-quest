@@ -10,6 +10,7 @@ export type Route =
   | { name: 'map' }
   | { name: 'board' }
   | { name: 'checkin' }
+  | { name: 'vault' }
   | { name: 'newTask' }
   | { name: 'manage' }
   | { name: 'share' }
@@ -22,6 +23,7 @@ const SEGMENTS = {
   map: 'map',
   board: 'board',
   checkin: 'checkin',
+  vault: 'vault',
   newTask: 'new-task',
   manage: 'manage',
   share: 'share',

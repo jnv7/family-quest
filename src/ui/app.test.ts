@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Tier } from '../core/model';
 import { createRandomInt } from '../core/random';
 import { DataStoreError, type DataStore } from '../data/DataStore';
 import { createMemoryBackend, createMemoryStore } from '../data/memory';
@@ -455,7 +456,7 @@ async function createTask(device: Awaited<ReturnType<typeof openDevice>>, title:
 }
 
 describe('the map', () => {
-  it('lays out the five places of the theme, and only the board and the check-in lead somewhere yet', async () => {
+  it('lays out the five places of the theme, and only the board, the check-in and the vault lead somewhere yet', async () => {
     const { admin } = await createFamily();
     await admin.click('button', 'Continuar');
     await admin.see('Olá, Alex!');
@@ -468,7 +469,7 @@ describe('the map', () => {
       'Cofre',
       'Vitrina',
     ]);
-    expect(places.filter((p) => !p.disabled).map((p) => p.querySelector('.place-name')?.textContent)).toEqual(['Quadro', 'Registo']);
+    expect(places.filter((p) => !p.disabled).map((p) => p.querySelector('.place-name')?.textContent)).toEqual(['Quadro', 'Registo', 'Cofre']);
     expect(places[0]!.style.left).toBe('8%'); // position comes from theme.json
 
     await admin.click('button.place', 'Quadro');
@@ -624,6 +625,10 @@ describe('the check-in', () => {
     await child.notSee('Arrumar o quarto');
     expect(lines.congrats).toContain(bubble(child));
     expect(storedTask(worldId)).toMatchObject({ status: 'done', doneAt: now, weekKey: '2026-W43', answer: null, talkFlag: false });
+    // The reward went to the vault, and the same tap said so.
+    await child.see('Ganhaste um prémio! Foi para o cofre.');
+    const reward = [...backend.state.get(worldId)!.rewards.values()][0]!;
+    expect(reward).toMatchObject({ weekKey: '2026-W43', openedAt: null });
   });
 
   it('shows the question, completes on yes, and on no leaves the task open with a friendly line', async () => {
@@ -672,6 +677,223 @@ describe('the check-in', () => {
     await child.see('Nada para concluir');
     expect(lines.farewell).toContain(bubble(child));
     expect(child.root.textContent).not.toContain('Só para mim');
+  });
+});
+
+describe('the vault', () => {
+  it('lists the unopened rewards of the active profile only, with the art of their tier, grouped by week', async () => {
+    const { admin, child, worldId } = await familyWithChild();
+    await createTask(admin, 'Arrumar o quarto', 'Sam');
+    await admin.click('button', 'Voltar');
+    await createTask(admin, 'Regar as plantas', 'Sam');
+    await admin.click('button', 'Voltar');
+
+    await child.click('button.place', 'Registo');
+    await child.click('button', 'Feito');
+    await vi.waitFor(() => expect(backend.state.get(worldId)!.rewards.size).toBe(1));
+    now += 7 * 86_400_000; // the next week
+    await child.click('button', 'Feito');
+    await vi.waitFor(() => expect(backend.state.get(worldId)!.rewards.size).toBe(2));
+
+    await child.click('button', 'Voltar');
+    await child.click('button.place', 'Cofre');
+    await vi.waitFor(() => expect(child.root.querySelectorAll('li.reward')).toHaveLength(2));
+    expect([...child.root.querySelectorAll('.vault-week h2')].map((el) => el.textContent)).toEqual(['Semana 43', 'Semana 44']);
+    for (const item of child.root.querySelectorAll<HTMLElement>('li.reward')) {
+      const art = theme.rewardArt[item.dataset.tier as Tier];
+      expect(item.querySelector('.reward-art')?.textContent).toBe('emoji' in art ? art.emoji : '');
+    }
+    // The adult's own vault holds none of the child's rewards.
+    await admin.click('button.place', 'Cofre');
+    await admin.see('Ainda não tens prémios para abrir.');
+  });
+});
+
+describe('opening rewards', () => {
+  const SUNDAY = Date.parse('2026-10-25T10:00:00Z');
+
+  /** A child with one reward earned on Tuesday, standing in the vault. */
+  async function childWithReward() {
+    const { admin, child, worldId } = await familyWithChild();
+    await createTask(admin, 'Arrumar o quarto', 'Sam');
+    await child.click('button.place', 'Registo');
+    await child.click('button', 'Feito');
+    await vi.waitFor(() => expect(backend.state.get(worldId)!.rewards.size).toBe(1));
+    await child.click('button', 'Voltar');
+    return { admin, child, worldId };
+  }
+
+  it('waits for the opening day with a calm line, and opens from Sunday with a reveal of the drawn tier', async () => {
+    const { child, worldId } = await childWithReward();
+
+    await child.click('button.place', 'Cofre');
+    await child.see('Abre a partir de domingo.');
+    expect(child.find('button', 'Abrir')).toBeUndefined();
+
+    now = SUNDAY;
+    await child.click('button', 'Voltar');
+    await child.click('button.place', 'Cofre');
+    await child.click('button', 'Abrir');
+
+    const reward = [...backend.state.get(worldId)!.rewards.values()][0]!;
+    await vi.waitFor(() => expect(backend.state.get(worldId)!.collectibles.size).toBe(1));
+    const collectible = [...backend.state.get(worldId)!.collectibles.values()][0]!;
+    expect(collectible).toMatchObject({ tier: reward.tier, profileId: reward.profileId, obtainedAt: SUNDAY, reserveAt: null });
+    const entry = theme.catalog.slots.find((slot) => slot.slot === collectible.slot)!;
+    expect(entry.tier).toBe(reward.tier);
+
+    await child.see(`Saiu um cromo!`);
+    await child.see(entry.name);
+    await child.see(theme.tiers[reward.tier]);
+    expect(child.root.querySelectorAll('li.reward')).toHaveLength(0);
+
+    // The new collectible is pending: "later" closes the reveal, and it waits among the recent ones.
+    await child.click('button', 'Mais tarde');
+    await child.see('Recentes');
+    await child.see(entry.name);
+  });
+
+  it('opens a reward from a closed week at any time', async () => {
+    const { child, worldId } = await childWithReward();
+    now = Date.parse('2026-10-26T08:00:00Z'); // Monday of the next week
+    await child.click('button.place', 'Cofre');
+    await child.click('button', 'Abrir');
+    await vi.waitFor(() => expect(backend.state.get(worldId)!.collectibles.size).toBe(1));
+  });
+
+  it('ends with one collectible when another device of the same profile opened the reward first', async () => {
+    const { child, worldId } = await childWithReward();
+    now = SUNDAY;
+    await child.click('button.place', 'Cofre');
+    await child.see('Abrir');
+
+    const second = await openDevice('child-device-2', { hash: `#/join/${worldId}` });
+    const profileId = [...backend.state.get(worldId)!.profiles.values()].find((p) => p.displayName === 'Sam')!.id;
+    await second.click('button.profile', 'Sam');
+    await second.click('button.place', 'Cofre');
+    await second.click('button', 'Abrir');
+    await vi.waitFor(() => expect(backend.state.get(worldId)!.collectibles.size).toBe(1));
+    const stored = [...backend.state.get(worldId)!.collectibles.values()][0]!;
+    expect(stored.profileId).toBe(profileId);
+
+    // The first device was still showing the reward: it leaves the list, and nothing is duplicated.
+    await vi.waitFor(() => expect(child.find('button', 'Abrir')).toBeUndefined());
+    expect(backend.state.get(worldId)!.collectibles.size).toBe(1);
+  });
+});
+
+describe('the party and the reserve', () => {
+  const SUNDAY = Date.parse('2026-10-25T10:00:00Z');
+  const state = (worldId: string) => backend.state.get(worldId)!;
+  const profileSam = (worldId: string) => [...state(worldId).profiles.values()].find((p) => p.displayName === 'Sam')!;
+
+  /** A child who earned `count` rewards in a closed week, standing in the vault. */
+  async function childWithRewards(count: number) {
+    const { admin, child, worldId } = await familyWithChild();
+    for (let i = 0; i < count; i++) {
+      await createTask(admin, `Tarefa ${i}`, 'Sam');
+      await admin.click('button', 'Voltar');
+    }
+    await child.click('button.place', 'Registo');
+    for (let i = 0; i < count; i++) {
+      await child.click('button', 'Feito');
+      await vi.waitFor(() => expect(state(worldId).rewards.size).toBe(i + 1));
+    }
+    await child.click('button', 'Voltar');
+    now = SUNDAY;
+    await child.click('button.place', 'Cofre');
+    return { admin, child, worldId };
+  }
+
+  const openAll = async (child: Awaited<ReturnType<typeof openDevice>>, worldId: string, count: number) => {
+    for (let i = 0; i < count; i++) {
+      await child.click('button', 'Abrir');
+      await vi.waitFor(() => expect(state(worldId).collectibles.size).toBe(i + 1));
+      await child.click('button', 'Mais tarde');
+    }
+  };
+
+  it('puts a new collectible in the party when there is room, from the reveal', async () => {
+    const { child, worldId } = await childWithRewards(1);
+    await child.click('button', 'Abrir');
+    await child.click('button', 'Pôr na equipa');
+    const id = [...state(worldId).collectibles.keys()][0]!;
+    await vi.waitFor(() => expect(profileSam(worldId).partyIds).toEqual([id]));
+    expect([...state(worldId).collectibles.values()][0]!.reserveAt).toBeNull();
+    await child.notSee('Pôr na equipa');
+  });
+
+  it('asks who leaves when the party is full, sends that one to the reserve, and never offers to delete', async () => {
+    const { child, worldId } = await childWithRewards(6);
+    await openAll(child, worldId, 5);
+    const recent = () => [...child.root.querySelectorAll<HTMLButtonElement>('.recent-card button.primary')];
+    for (let i = 0; i < 5; i++) {
+      await vi.waitFor(() => expect(recent().length).toBeGreaterThan(0));
+      recent()[0]!.click();
+      await vi.waitFor(() => expect(profileSam(worldId).partyIds).toHaveLength(i + 1));
+    }
+
+    await child.click('button', 'Abrir');
+    await child.see('Quem sai?');
+    const partyBefore = [...profileSam(worldId).partyIds];
+    const newcomer = [...state(worldId).collectibles.values()].find((c) => !partyBefore.includes(c.id))!;
+    await child.click('button.swap', 'Trocar por');
+    await vi.waitFor(() => expect(profileSam(worldId).partyIds).toContain(newcomer.id));
+    const party = profileSam(worldId).partyIds;
+    expect(party).toHaveLength(5);
+    const left = partyBefore.find((id) => !party.includes(id))!;
+    expect(state(worldId).collectibles.get(left)!.reserveAt).toBe(now);
+    expect(state(worldId).collectibles.size).toBe(6);
+    expect([...child.root.querySelectorAll('button')].map((b) => b.textContent).join(' ')).not.toMatch(/apagar|eliminar|largar|libertar/i);
+  });
+
+  it('moves a collectible left pending to the reserve on the first app open of the next day, and not before', async () => {
+    const { child, worldId } = await childWithRewards(1);
+    await child.click('button', 'Abrir');
+    await child.click('button', 'Mais tarde');
+    const id = [...state(worldId).collectibles.keys()][0]!;
+    expect(state(worldId).collectibles.get(id)!.reserveAt).toBeNull();
+
+    // The same day, the app is opened again: it is still pending.
+    now = SUNDAY + 3 * 3_600_000;
+    const sameDay = await openDevice('child-device', { savedWorld: worldId });
+    await sameDay.see('Olá, Sam!');
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(state(worldId).collectibles.get(id)!.reserveAt).toBeNull();
+
+    // The next day, the first open puts it in the reserve, without any screen asking.
+    now = SUNDAY + 24 * 3_600_000;
+    const nextDay = await openDevice('child-device', { savedWorld: worldId });
+    await nextDay.see('Olá, Sam!');
+    await vi.waitFor(() => expect(state(worldId).collectibles.get(id)!.reserveAt).toBe(now));
+    expect(profileSam(worldId).partyIds).toEqual([]);
+    expect(state(worldId).collectibles.size).toBe(1);
+  });
+});
+
+describe('the reward odds', () => {
+  const worldOdds = (worldId: string) => backend.state.get(worldId)!.world.ruleset.tierOdds;
+  const oddsInputs = (device: Awaited<ReturnType<typeof openDevice>>) =>
+    [...[...device.root.querySelectorAll('form')].at(-1)!.querySelectorAll<HTMLInputElement>('input')];
+  const submitLast = (device: Awaited<ReturnType<typeof openDevice>>) =>
+    [...device.root.querySelectorAll('form')].at(-1)!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+
+  it('shows the odds of the world, saves new ones, and refuses a row that does not sum to 100', async () => {
+    const { admin, worldId } = await familyWithChild();
+    await admin.click('button', 'Gerir');
+    await admin.see('Probabilidades dos prémios');
+    await vi.waitFor(() => expect(oddsInputs(admin).map((input) => input.value).slice(0, 3)).toEqual(['80', '17', '3']));
+
+    const fields = oddsInputs(admin);
+    [fields[0]!.value, fields[1]!.value, fields[2]!.value] = ['70', '25', '5'];
+    submitLast(admin);
+    await vi.waitFor(() => expect(worldOdds(worldId).low).toEqual({ low: 70, mid: 25, high: 5 }));
+    expect(worldOdds(worldId).high).toEqual({ low: 45, mid: 35, high: 20 });
+
+    fields[0]!.value = '10';
+    submitLast(admin);
+    await admin.see('somam 100');
+    expect(worldOdds(worldId).low).toEqual({ low: 70, mid: 25, high: 5 });
   });
 });
 

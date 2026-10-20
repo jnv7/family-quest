@@ -65,6 +65,17 @@
     "mid": "Médio",
     "high": "Grande"
   },
+  "rewardArt": {
+    "low": {
+      "emoji": "🥚"
+    },
+    "mid": {
+      "emoji": "🧺"
+    },
+    "high": {
+      "emoji": "🌟"
+    }
+  },
   "map": {
     "background": {
       "emoji": "🌾"

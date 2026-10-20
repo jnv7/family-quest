@@ -8,6 +8,7 @@ import { h } from './dom';
 import { createGenerator } from './generation';
 import type { Installer } from './install';
 import type { Navigation } from './navigation';
+import { createReserveKeeper } from './reserve';
 import { applyThemeToPage } from './pageTheme';
 import { hashFor, parseHash, type Route } from './routes';
 import { renderCreate } from './screens/create';
@@ -21,6 +22,7 @@ import { renderNewTask } from './screens/newTask';
 import { renderProfiles } from './screens/profiles';
 import { renderShare } from './screens/share';
 import { renderStart } from './screens/start';
+import { renderVault } from './screens/vault';
 import type { WorldMemory } from './worldMemory';
 
 export interface AppOptions {
@@ -132,6 +134,8 @@ export async function startApp(options: AppOptions): Promise<() => void> {
         return needsWorld(renderBoard);
       case 'checkin':
         return needsWorld(renderCheckin);
+      case 'vault':
+        return needsWorld(renderVault);
       case 'newTask':
         return needsWorld(renderNewTask);
       case 'manage':
@@ -143,6 +147,8 @@ export async function startApp(options: AppOptions): Promise<() => void> {
 
   // Recurring tasks are generated for the active profile, whichever screen is showing.
   const generator = createGenerator(ctx);
+  // Old pending collectibles go to the reserve when the app opens, whichever screen is showing.
+  const keeper = createReserveKeeper(ctx);
 
   // The world's own theme is the truth: follow it, and remember it for the next launch.
   let watchedWorld: string | null = null;
@@ -170,6 +176,7 @@ export async function startApp(options: AppOptions): Promise<() => void> {
     if (route.name === 'join' && route.themeId) useTheme(route.themeId); // a join link is themed before joining
     followWorldTheme();
     generator.follow(world.get());
+    keeper.follow(world.get());
     dispose = screenFor(route)(ctx, root);
   }
 
@@ -183,6 +190,7 @@ export async function startApp(options: AppOptions): Promise<() => void> {
     stopListening();
     stopWatchingWorld();
     generator.stop();
+    keeper.stop();
     dispose();
     root.replaceChildren();
   };

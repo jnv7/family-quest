@@ -7,7 +7,7 @@
  * not know. It never coerces such a document.
  */
 import { Timestamp, type DocumentData, type DocumentSnapshot, type QueryDocumentSnapshot } from 'firebase/firestore';
-import { SCHEMA_VERSION, type Member, type Millis, type Profile, type Task, type TaskDef, type World } from '../../core/model';
+import { SCHEMA_VERSION, type Collectible, type Member, type Millis, type Profile, type Reward, type Task, type TaskDef, type World } from '../../core/model';
 
 type Snapshot = DocumentSnapshot | QueryDocumentSnapshot;
 
@@ -86,6 +86,58 @@ export function decodeTaskDef(snapshot: Snapshot): TaskDef | null {
   const data = readKnown(snapshot);
   return data && ({ ...data, id: snapshot.id, createdAt: toMillis(data.createdAt) } as TaskDef);
 }
+
+export function encodeReward(reward: Reward): DocumentData {
+  return {
+    ...withoutKey(reward, 'id'),
+    createdAt: toTimestamp(reward.createdAt),
+    openedAt: reward.openedAt === null ? null : toTimestamp(reward.openedAt),
+  };
+}
+
+export function decodeReward(snapshot: Snapshot): Reward | null {
+  const data = readKnown(snapshot);
+  return (
+    data &&
+    ({
+      ...data,
+      id: snapshot.id,
+      createdAt: toMillis(data.createdAt),
+      openedAt: data.openedAt === null ? null : toMillis(data.openedAt),
+    } as Reward)
+  );
+}
+
+export function encodeCollectible(collectible: Collectible): DocumentData {
+  return {
+    ...withoutKey(collectible, 'id'),
+    createdAt: toTimestamp(collectible.createdAt),
+    obtainedAt: toTimestamp(collectible.obtainedAt),
+    reserveAt: collectible.reserveAt === null ? null : toTimestamp(collectible.reserveAt),
+  };
+}
+
+export function decodeCollectible(snapshot: Snapshot): Collectible | null {
+  const data = readKnown(snapshot);
+  return (
+    data &&
+    ({
+      ...data,
+      id: snapshot.id,
+      createdAt: toMillis(data.createdAt),
+      obtainedAt: toMillis(data.obtainedAt),
+      reserveAt: data.reserveAt === null ? null : toMillis(data.reserveAt),
+    } as Collectible)
+  );
+}
+
+/** The one field written when a collectible moves to or leaves the reserve. */
+export const encodeReserveAt = (reserveAt: Millis | null): DocumentData => ({
+  reserveAt: reserveAt === null ? null : toTimestamp(reserveAt),
+});
+
+/** The one field written when a reward is opened. */
+export const encodeRewardOpening = (openedAt: Millis): DocumentData => ({ openedAt: toTimestamp(openedAt) });
 
 /** Fields written when a task is completed. */
 export function encodeTaskCompletion(fields: {
