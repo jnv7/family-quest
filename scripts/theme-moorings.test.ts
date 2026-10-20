@@ -79,6 +79,16 @@ describe('moorings in a theme', () => {
   });
 });
 
+describe('the symbol on the home art', () => {
+  it('passes inside the art, and fails outside it, naming the file and the kind', () => {
+    expect(() => themeWith((t) => (t.homeSymbolAt = { child: { x: 50, y: 40, size: 40 } })).validate()).not.toThrow();
+    const theme = themeWith((t) => (t.homeSymbolAt = { child: { x: 95, y: 40, size: 40 } }));
+    const error = failure(theme.validate);
+    expect(error.file).toBe(theme.file);
+    expect(error.jsonPath).toBe('/homeSymbolAt/child');
+  });
+});
+
 describe('profile symbols in a theme', () => {
   it('fail for a duplicate, naming the file and the path', () => {
     const theme = themeWith((t) => (t.profileSymbols[3] = t.profileSymbols[0]));

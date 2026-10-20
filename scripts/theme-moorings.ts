@@ -3,6 +3,7 @@
  * Run by `validate-theme` after the schema, which already guarantees the shapes, sizes above zero,
  * at least 12 symbols and no duplicates.
  */
+import { isSingleEmoji } from '../src/core/emoji.ts';
 import { ThemeValidationError } from './theme-error.ts';
 
 interface Spot {
@@ -20,11 +21,18 @@ interface KindMoorings {
 const overlaps = (a: Spot, b: Spot): boolean =>
   a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
-export function checkThemeMoorings(themeFile: string, theme: { map: { aspectRatio: number; moorings?: Record<string, KindMoorings> }; profileSymbols: string[] }): void {
-  const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+interface SymbolAt {
+  x: number;
+  y: number;
+  size: number;
+}
+
+export function checkThemeMoorings(
+  themeFile: string,
+  theme: { map: { aspectRatio: number; moorings?: Record<string, KindMoorings> }; profileSymbols: string[]; homeSymbolAt?: Record<string, SymbolAt> },
+): void {
   theme.profileSymbols.forEach((symbol, index) => {
-    const graphemes = [...segmenter.segment(symbol)];
-    if (graphemes.length !== 1 || !/\p{Extended_Pictographic}/u.test(symbol)) {
+    if (!isSingleEmoji(symbol)) {
       throw new ThemeValidationError(themeFile, `/profileSymbols/${index}`, `"${symbol}" must be a single emoji`);
     }
   });
@@ -52,5 +60,12 @@ export function checkThemeMoorings(themeFile: string, theme: { map: { aspectRati
         throw new ThemeValidationError(themeFile, `${base}/symbolAt`, `does not fit inside spot ${index}`);
       }
     });
+  }
+
+  // On the home, the symbol is placed over the art as drawn: the centre and the size must fit in it.
+  for (const [kind, { x, y, size }] of Object.entries(theme.homeSymbolAt ?? {})) {
+    if (x - size / 2 < 0 || x + size / 2 > 100 || y < 0 || y > 100) {
+      throw new ThemeValidationError(themeFile, `/homeSymbolAt/${kind}`, 'does not fit inside the art');
+    }
   }
 }

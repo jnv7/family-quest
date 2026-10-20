@@ -9,7 +9,6 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createRandomInt } from '../../core/random';
 import { EMULATOR_PROJECT_ID } from './config';
 import { runDataStoreContract } from '../datastore.contract';
-import type { ProfileSymbols } from '../symbols';
 import { createFirebaseServices, createFirestoreStore, type FirebaseServices } from './index';
 
 const services: FirebaseServices[] = [];
@@ -18,10 +17,10 @@ let counter = 0;
 const randomInt = createRandomInt((array) => crypto.getRandomValues(array));
 
 /** A device: its own Firebase app, so its own anonymous user and its own cache. */
-async function connect(clock: () => number, profileSymbols: ProfileSymbols) {
+async function connect(clock: () => number) {
   const device = createFirebaseServices({ name: `device-${counter++}`, emulator: true, persistent: false });
   services.push(device);
-  const store = createFirestoreStore({ firestore: device.firestore, auth: device.auth, clock, randomInt, profileSymbols });
+  const store = createFirestoreStore({ firestore: device.firestore, auth: device.auth, clock, randomInt });
   await store.session.signIn();
   return { store, device };
 }
@@ -30,11 +29,11 @@ afterAll(async () => {
   await Promise.all(services.map((s) => s.dispose()));
 });
 
-runDataStoreContract('firestore', async ({ clock, profileSymbols }) => ({
-  admin: (await connect(clock, profileSymbols)).store,
-  child: (await connect(clock, profileSymbols)).store,
-  child2: (await connect(clock, profileSymbols)).store,
-  newcomer: (await connect(clock, profileSymbols)).store,
+runDataStoreContract('firestore', async ({ clock }) => ({
+  admin: (await connect(clock)).store,
+  child: (await connect(clock)).store,
+  child2: (await connect(clock)).store,
+  newcomer: (await connect(clock)).store,
 }));
 
 describe('documents with an unknown schemaVersion', () => {
@@ -52,7 +51,7 @@ describe('documents with an unknown schemaVersion', () => {
   });
 
   it('are skipped and reported, and the observer keeps working', async () => {
-    const { store } = await connect(() => Date.now(), () => null);
+    const { store } = await connect(() => Date.now());
     const created = store.worlds.createWorld({ name: 'Home', themeId: 'minimal', creatorDisplayName: 'Alex' });
     await created.settled;
     const { worldId, profileId } = created.result;
@@ -83,7 +82,7 @@ describe('documents with an unknown schemaVersion', () => {
   });
 
   it('reads a profile written before symbols existed with a null symbol', async () => {
-    const { store } = await connect(() => Date.now(), () => null);
+    const { store } = await connect(() => Date.now());
     const created = store.worlds.createWorld({ name: 'Home', themeId: 'minimal', creatorDisplayName: 'Alex' });
     await created.settled;
     const { worldId } = created.result;

@@ -21,7 +21,6 @@ import {
   type TaskDef,
   type World,
 } from '../core/model';
-import type { ProfileSymbols } from './symbols';
 import { DataStoreError, type DataStore, type ShowcaseItem, type DataStoreErrorCode, type TaskDefInput, type Unsubscribe, type Write } from './DataStore';
 
 /** Signed-in devices that share one backend. */
@@ -35,11 +34,7 @@ export interface ContractDevices {
 }
 
 /** Builds fresh devices for one test; every store must read time from `clock`. */
-export type MakeDevices = (env: { clock: Clock; profileSymbols: ProfileSymbols }) => Promise<ContractDevices> | ContractDevices;
-
-/** The symbols the contract's worlds offer: its worlds use the theme id `minimal`. */
-export const CONTRACT_SYMBOLS = ['🐬', '🦀', '🐙'] as const;
-const profileSymbols: ProfileSymbols = (themeId) => (themeId === 'minimal' ? CONTRACT_SYMBOLS : null);
+export type MakeDevices = (env: { clock: Clock }) => Promise<ContractDevices> | ContractDevices;
 
 const START: Millis = Date.parse('2026-10-18T12:00:00Z');
 
@@ -103,7 +98,7 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
     /** A world with an admin, a child on one profile (two devices) and a newcomer. */
     async function setup() {
       now = START;
-      const devices = await makeDevices({ clock, profileSymbols });
+      const devices = await makeDevices({ clock });
       const { admin, child, child2, newcomer } = devices;
 
       const created = admin.worlds.createWorld({ name: 'Home', themeId: 'minimal', creatorDisplayName: 'Alex' });
@@ -827,12 +822,14 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
         profiles.close();
       });
 
-      it('refuses an emoji outside the theme list before any write', async () => {
+      it('accepts any single emoji, and refuses anything else before any write', async () => {
         const { admin, child, worldId, childProfileId } = await setup();
         const profiles = profilesOf(admin, worldId);
-        await rejectsWith(child.worlds.setProfileSymbol(worldId, childProfileId, '🚀'), 'invalid-argument');
+        await child.worlds.setProfileSymbol(worldId, childProfileId, '🏴‍☠️').settled;
+        await eventually(() => expect(symbolOf(profiles, childProfileId)).toBe('🏴‍☠️'));
         await rejectsWith(child.worlds.setProfileSymbol(worldId, childProfileId, 'x'), 'invalid-argument');
-        expect(symbolOf(profiles, childProfileId)).toBeNull();
+        await rejectsWith(child.worlds.setProfileSymbol(worldId, childProfileId, '🐬🦀'), 'invalid-argument');
+        expect(symbolOf(profiles, childProfileId)).toBe('🏴‍☠️');
         profiles.close();
       });
 
@@ -842,7 +839,7 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
         await created.settled;
         const profiles = profilesOf(admin, worldId);
         await eventually(() => expect(symbolOf(profiles, created.result.profileId)).toBe('🐬'));
-        await rejectsWith(admin.worlds.createProfile(worldId, { displayName: 'Kim', kind: 'child', symbol: '🚀' }), 'invalid-argument');
+        await rejectsWith(admin.worlds.createProfile(worldId, { displayName: 'Kim', kind: 'child', symbol: 'x' }), 'invalid-argument');
         await eventually(() => expect(profiles.value!.some((p) => p.displayName === 'Kim')).toBe(false));
         profiles.close();
       });

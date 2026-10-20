@@ -6,17 +6,18 @@ import { h } from '../dom';
 import { observeWithRetry } from '../observe';
 import { createPartyControls, createRenamer, entryOf, nameOf } from '../party';
 import { observeSelf } from '../self';
+import emojiGroups from '../emoji.json';
 
 /**
  * The home: the active profile's own place (SPEC.md §7.5). It shows the profile with the
- * theme's look for its kind, an empty place for the avatar (0.8), the party, the pending
- * collectibles and the reserve. Nothing here is counted or compared (SPEC.md §2), and nothing can
+ * theme's look for its kind with its symbol on the sail, and a button that opens every emoji to
+ * choose it from, then the party, the pending collectibles and the reserve. Nothing here is counted or compared (SPEC.md §2), and nothing can
  * be deleted: a collectible only moves between the party and the reserve.
  */
 export const renderHome: WorldScreen = (ctx, root, { worldId }) => {
   const problem = h('div');
   const header = h('section', { class: 'home-header' });
-  const symbolSection = h('section', { class: 'symbols' });
+  const symbolPanel = h('section', { class: 'symbol-panel', hidden: true });
   const partySection = h('section', { class: 'stack' });
   const pendingSection = h('section', { class: 'stack' });
   const reserveSection = h('section', { class: 'stack' });
@@ -42,47 +43,79 @@ export const renderHome: WorldScreen = (ctx, root, { worldId }) => {
     );
   };
 
-  const section = (target: HTMLElement, title: string, empty: string | null, items: HTMLElement[]) => {
+  const section = (target: HTMLElement, title: string, hint: string | null, empty: string | null, items: HTMLElement[]) => {
     const body = items.length === 0 ? (empty ? h('p', { class: 'message' }, empty) : null) : h('ul', { class: 'collectible-list' }, ...items);
-    target.replaceChildren(...(body ? [h('h2', {}, title), body] : [h('h2', {}, title)]));
+    target.replaceChildren(...[h('h2', {}, title), hint ? h('p', { class: 'hint' }, hint) : null, body].flatMap((part) => (part ? [part] : [])));
   };
 
-  /** The owner chooses the symbol that appears on their boat, from the theme's list (SPEC.md §7). */
-  const drawSymbols = (active: Profile) => {
-    const choose = (symbol: string | null) => ctx.settle(ctx.store.worlds.setProfileSymbol(worldId, active.id, symbol).settled);
-    symbolSection.replaceChildren(
-      h('h2', {}, ctx.text('home.symbol')),
-      h('div', { class: 'symbol-grid' },
-        h('button', { 'aria-pressed': String(active.avatar.symbol === null), onClick: () => choose(null) }, ctx.text('home.symbolNone')),
-        ...ctx.theme.profileSymbols.map((emoji) =>
-          h('button', { class: 'symbol', 'aria-pressed': String(active.avatar.symbol === emoji), onClick: () => choose(emoji) }, emoji),
-        ),
-      ),
+  /**
+   * The boat on the home: the theme's art for the profile's kind, with the symbol on its sail where
+   * the theme says (`homeSymbolAt`), or next to the name when it does not say.
+   */
+  const boat = (active: Profile): HTMLElement => {
+    const at = ctx.theme.homeSymbolAt?.[active.kind];
+    const symbol = active.avatar.symbol;
+    return h('div', { class: 'home-boat' },
+      artElement(ctx.theme, ctx.theme.homeVariants[active.kind], 'home-art'),
+      symbol && at
+        ? h('span', { class: 'boat-symbol', 'aria-hidden': 'true', style: `left:${at.x}%;top:${at.y}%;--symbol-size:${at.size}` }, symbol)
+        : null,
     );
+  };
+
+  const choose = (symbol: string | null) => {
+    if (!profile) return;
+    ctx.settle(ctx.store.worlds.setProfileSymbol(worldId, profile.id, symbol).settled);
+    symbolPanel.hidden = true;
+  };
+
+  /** Every emoji, grouped, with the theme's suggestions first; built once, the first time it opens. */
+  const buildPanel = () => {
+    const grid = (emojis: readonly string[]) =>
+      h('div', { class: 'symbol-grid' }, ...emojis.map((emoji) => h('button', { class: 'symbol', type: 'button', 'data-emoji': emoji }, emoji)));
+    symbolPanel.replaceChildren(
+      h('div', { class: 'symbol-bar' },
+        h('h2', {}, ctx.text('home.symbolPanel')),
+        h('button', { type: 'button', onClick: () => choose(null) }, ctx.text('home.symbolNone')),
+        h('button', { type: 'button', onClick: () => (symbolPanel.hidden = true) }, ctx.text('home.symbolClose')),
+      ),
+      h('h3', {}, ctx.text('home.symbolSuggested')),
+      grid(ctx.theme.profileSymbols),
+      ...emojiGroups.flatMap((group) => [h('h3', {}, ctx.text(`emoji.group.${group.id}`)), grid(group.emojis)]),
+    );
+    symbolPanel.addEventListener('click', (event) => {
+      const emoji = (event.target as HTMLElement).closest<HTMLElement>('[data-emoji]')?.dataset.emoji;
+      if (emoji) choose(emoji);
+    });
   };
 
   function draw(): void {
     if (!profile) return;
+    const beside = profile.avatar.symbol && !ctx.theme.homeSymbolAt?.[profile.kind] ? ` ${profile.avatar.symbol}` : '';
     header.replaceChildren(
-      artElement(ctx.theme, ctx.theme.homeVariants[profile.kind], 'home-art'),
-      h('p', { class: 'reveal-name' }, profile.displayName),
-      h('p', { class: 'avatar-place' }, ctx.text('home.avatarSoon')),
+      boat(profile),
+      h('p', { class: 'reveal-name' }, `${profile.displayName}${beside}`),
+      h('button', {
+        onClick: () => {
+          if (symbolPanel.childElementCount === 0) buildPanel();
+          symbolPanel.hidden = !symbolPanel.hidden;
+        },
+      }, ctx.text('home.chooseSymbol')),
     );
-    drawSymbols(profile);
     if (collectibles === null || ruleset === null) return;
     const { party, pending, reserve } = collectionOf(collectibles, profile.partyIds);
     const list = (items: Collectible[], extras: (c: Collectible) => Array<HTMLElement | null>) =>
       items.map((collectible) => card(collectible, extras(collectible)));
 
-    section(partySection, ctx.text('home.party'), ctx.text('home.partyEmpty'),
+    section(partySection, ctx.text('home.party'), ctx.text('home.partyHint'), ctx.text('home.partyEmpty'),
       list(party, (c) => [
         nameLine(c),
         h('button', { onClick: () => controls.toReserve(c) }, ctx.text('home.toReserve')),
       ]),
     );
-    section(pendingSection, ctx.text('home.pending'), null, list(pending, (c) => [controls.choices(c)]));
+    section(pendingSection, ctx.text('home.pending'), null, null, list(pending, (c) => [controls.choices(c)]));
     pendingSection.hidden = pending.length === 0;
-    section(reserveSection, ctx.text('home.reserve'), ctx.text('home.reserveEmpty'),
+    section(reserveSection, ctx.text('home.reserve'), ctx.text('home.reserveHint'), ctx.text('home.reserveEmpty'),
       list(reserve, (c) => [nameLine(c), controls.choices(c)]),
     );
   }
@@ -91,7 +124,7 @@ export const renderHome: WorldScreen = (ctx, root, { worldId }) => {
     h('h1', {}, ctx.text('home.title')),
     problem,
     header,
-    symbolSection,
+    symbolPanel,
     partySection,
     pendingSection,
     reserveSection,

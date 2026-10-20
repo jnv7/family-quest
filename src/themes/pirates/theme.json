@@ -161,10 +161,10 @@
   },
   "places": {
     "board": {
-      "x": 20.6,
-      "y": 65.9,
-      "width": 20,
-      "height": 11,
+      "x": 13.5,
+      "y": 62.3,
+      "width": 34,
+      "height": 18,
       "art": {
         "image": "assets/places/board.svg"
       },
@@ -174,10 +174,10 @@
       }
     },
     "checkin": {
-      "x": 32.0,
-      "y": 7.4,
-      "width": 36,
-      "height": 20,
+      "x": 30.0,
+      "y": 6.5,
+      "width": 40,
+      "height": 22,
       "art": {
         "image": "assets/places/checkin.svg"
       },
@@ -232,6 +232,18 @@
     },
     "child": {
       "image": "assets/home/child.webp"
+    }
+  },
+  "homeSymbolAt": {
+    "adult": {
+      "x": 50,
+      "y": 38,
+      "size": 42
+    },
+    "child": {
+      "x": 50,
+      "y": 42,
+      "size": 50
     }
   },
   "install": {

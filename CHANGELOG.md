@@ -15,6 +15,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `validate-theme`: spots inside the map and not overlapping, `symbolAt` inside its spot, and each symbol a single emoji.
 - The pirate theme moors up to eight children at a T-shaped pier, with the example boats removed from the map image; the child boat is a small ship with a plain sail that carries the symbol.
 
+### Changed (product owner's review, 2026-10-20)
+
+- Any emoji can be a symbol, not only the theme's: the `home` has a button under the boat that opens a panel with every emoji (the theme's `profileSymbols` become the suggestions shown first), and the chosen emoji goes onto the sail of the boat on the `home` at once (`homeSymbolAt` in the theme says where). The symbol is the avatar for now, so the empty "avatar" place is gone.
+- The plan alert is a speech bubble with dots on the place (bigger and bouncing for today, small for tomorrow) instead of a glowing rectangle.
+- The `home` lists say what they are ("Aqui descansam…"), since a title such as the reserve's alone did not explain itself. Map places have bigger art and a quieter name; the pirate parrot and lighthouse are larger.
+
 ### Fixed
 
 - A theme's picture of the map was drawn at 12% opacity, as the faint backdrop meant for emoji; images are now shown in full. Map places no longer have a border, and their art fits above the name.

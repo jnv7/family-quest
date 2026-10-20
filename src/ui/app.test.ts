@@ -4,7 +4,7 @@ import type { Tier } from '../core/model';
 import { createRandomInt } from '../core/random';
 import { DataStoreError, type DataStore } from '../data/DataStore';
 import { createMemoryBackend, createMemoryStore } from '../data/memory';
-import { hasTheme, loadTheme, type Theme } from '../theme';
+import { loadTheme, type Theme } from '../theme';
 import { startApp } from './app';
 import type { Installer, InstallMode, Platform } from './install';
 import { memoryNavigation } from './navigation';
@@ -47,7 +47,7 @@ async function openDevice(
   if (options.savedTheme) world.setTheme(options.savedTheme);
   const root = document.createElement('main');
   document.body.append(root);
-  const store = (options.wrap ?? ((s) => s))(createMemoryStore(backend, { uid, clock, randomInt, profileSymbols }));
+  const store = (options.wrap ?? ((s) => s))(createMemoryStore(backend, { uid, clock, randomInt }));
   stops.push(await startApp({ root, store, theme: options.theme ?? theme, baseUrl: BASE_URL, world, clock, randomInt, navigation: memoryNavigation(options.hash ?? ''), installer: options.installer ?? fakeInstaller(), assetBase: '/family-quest/', launchTheme: options.launchTheme ?? null }));
 
   const find = (selector: string, text?: string) =>
@@ -106,10 +106,6 @@ async function createFamily() {
   const worldId = admin.world.get()!;
   return { admin, worldId };
 }
-
-/** Symbols of themes that exist only in a test, then those of the bundled themes. */
-const testSymbols = new Map<string, string[]>();
-const profileSymbols = (themeId: string) => testSymbols.get(themeId) ?? (hasTheme(themeId) ? loadTheme(themeId).profileSymbols : null);
 
 describe('creating a world', () => {
   it('shows the join link as a QR code and the code, then lands on the home of the new adult profile', async () => {
@@ -298,7 +294,7 @@ describe('recurring tasks on the board', () => {
     const sam = [...ws.profiles.values()].find((p) => p.displayName === 'Sam')!;
 
     // A device whose cache missed the first task generated a second one for a later period.
-    const extra = createMemoryStore(backend, { uid: 'child-device', clock, randomInt, profileSymbols });
+    const extra = createMemoryStore(backend, { uid: 'child-device', clock, randomInt });
     await extra.session.signIn();
     const task = (periodKey: string) => ({ id: `${defId}_${periodKey}_${sam.id}`, defId, periodKey, profileId: sam.id, title: 'Fazer a cama', level: 'mid' as const, question: null });
     now -= 86_400_000;
@@ -892,10 +888,13 @@ describe('the home', () => {
   const cards = (device: Awaited<ReturnType<typeof openDevice>>, section: number) =>
     [...device.root.querySelectorAll('section.stack')[section]!.querySelectorAll('li.collectible-card')];
 
-  it('shows the profile with the look of its kind, an empty avatar place, the party and the pending collectibles, with no counts', async () => {
+  it('shows the profile with the look of its kind, the button to choose a symbol, the party and the pending collectibles, with no counts', async () => {
     const { child } = await childAtHome();
     await child.see('Sam');
-    await child.see('O avatar chega em breve.');
+    await child.see('Escolher o meu símbolo');
+    expect(child.root.textContent).not.toContain('avatar');
+    await child.see('que andam contigo');
+    await child.see('Aqui descansam');
     expect(child.root.querySelector('.home-art')?.textContent).toBe('emoji' in theme.homeVariants.child ? theme.homeVariants.child.emoji : '');
     await vi.waitFor(() => expect(cards(child, 0)).toHaveLength(1));
     expect(cards(child, 1)).toHaveLength(1);
@@ -1018,6 +1017,7 @@ describe('moorings and symbols', () => {
     ...base,
     id: THEME_ID,
     profileSymbols: SYMBOLS,
+    homeSymbolAt: { child: { x: 50, y: 40, size: 40 } },
     map: {
       ...base.map,
       moorings: {
@@ -1030,11 +1030,9 @@ describe('moorings and symbols', () => {
   };
   const spots = harbour.map.moorings!.child!.spots;
   const [DOLPHIN, CRAB, OCTOPUS] = SYMBOLS as [string, string, string];
-  testSymbols.set(THEME_ID, SYMBOLS);
-
   /** A world with the test theme, seeded through the store: the adult "Alex" and the given children. */
   async function seed(children: Array<{ name: string; symbol?: string | null; archived?: boolean }>) {
-    const store = createMemoryStore(backend, { uid: 'seed', clock, randomInt, profileSymbols });
+    const store = createMemoryStore(backend, { uid: 'seed', clock, randomInt });
     await store.session.signIn();
     const created = store.worlds.createWorld({ name: 'Casa', themeId: THEME_ID, creatorDisplayName: 'Alex' });
     await created.settled;
@@ -1121,7 +1119,7 @@ describe('moorings and symbols', () => {
     await vi.waitFor(() => expect(boats(child)).toHaveLength(2));
     expect(boats(child).map((boat) => boat.tagName)).toEqual(['DIV', 'BUTTON']); // Robin is the second boat
     (boats(child)[1] as HTMLElement).click();
-    await child.see('O teu símbolo');
+    await child.see('Escolher o meu símbolo');
     await child.click('button', 'Voltar');
     await child.click('button', 'Trocar de perfil');
     await child.click('button.profile', 'Sam');
@@ -1136,19 +1134,36 @@ describe('moorings and symbols', () => {
     expect(admin.root.querySelector('.boat')).toBeNull();
   });
 
-  it('lets a child choose and clear a symbol in the home, and the boat follows', async () => {
+  it('opens a panel with every emoji, puts the chosen one on the sail of the home boat and on the map, and clears it', async () => {
     const { worldId, ids } = await seed([{ name: 'Sam' }]);
     const child = await asChild(worldId, 'Sam');
     await child.click('button.boat', '');
-    await child.see('O teu símbolo');
-    await child.click('button.symbol', OCTOPUS);
-    await vi.waitFor(() => expect(backend.state.get(worldId)!.profiles.get(ids.Sam!)!.avatar.symbol).toBe(OCTOPUS));
-    expect(child.find('button.symbol[aria-pressed="true"]')?.textContent).toBe(OCTOPUS);
+    await child.click('button', 'Escolher o meu símbolo');
+    await child.see('Sugestões');
+    // Not among the theme's suggestions, but in the full list.
+    const ROCKET = '🚀';
+    expect(SYMBOLS).not.toContain(ROCKET);
+    expect(child.root.querySelectorAll('.symbol-panel [data-emoji]').length).toBeGreaterThan(1000);
+    (child.root.querySelector(`.symbol-panel [data-emoji="${ROCKET}"]`) as HTMLElement).click();
+    await vi.waitFor(() => expect(backend.state.get(worldId)!.profiles.get(ids.Sam!)!.avatar.symbol).toBe(ROCKET));
+    await vi.waitFor(() => expect(child.root.querySelector('.home-boat .boat-symbol')?.textContent).toBe(ROCKET));
+    expect(child.root.querySelector('.symbol-panel')!.hasAttribute('hidden')).toBe(true); // closed after choosing
     await child.click('button', 'Voltar');
-    await vi.waitFor(() => expect(child.root.querySelector('.boat-symbol')?.textContent).toBe(OCTOPUS));
+    await vi.waitFor(() => expect(child.root.querySelector('.boat-symbol')?.textContent).toBe(ROCKET));
     await child.click('button.boat', '');
+    await child.click('button', 'Escolher o meu símbolo');
     await child.click('button', 'Sem símbolo');
     await vi.waitFor(() => expect(backend.state.get(worldId)!.profiles.get(ids.Sam!)!.avatar.symbol).toBeNull());
+  });
+
+  it('shows the symbol next to the name when the theme gives no place for it on the home art', async () => {
+    const { worldId } = await seed([]);
+    const admin = await asAdult(worldId); // the test theme places the symbol for children only
+    await admin.click('button.place', 'Casa');
+    await admin.click('button', 'Escolher o meu símbolo');
+    (admin.root.querySelector('.symbol-panel [data-emoji="🐬"]') as HTMLElement).click();
+    await vi.waitFor(() => expect(admin.find('.home-header .reveal-name')?.textContent).toBe('Alex 🐬'));
+    expect(admin.root.querySelector('.home-boat .boat-symbol')).toBeNull();
   });
 
   it('lets an admin choose the symbol of a new profile in the management screen', async () => {

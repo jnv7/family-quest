@@ -2,11 +2,11 @@ import { createRandomInt } from '../../core/random';
 import { runDataStoreContract } from '../datastore.contract';
 import { createMemoryBackend, createMemoryStore } from './index';
 
-runDataStoreContract('memory', async ({ clock, profileSymbols }) => {
+runDataStoreContract('memory', async ({ clock }) => {
   const backend = createMemoryBackend();
   const randomInt = createRandomInt((array) => crypto.getRandomValues(array));
   const connect = async (uid: string) => {
-    const store = createMemoryStore(backend, { uid, clock, randomInt, profileSymbols });
+    const store = createMemoryStore(backend, { uid, clock, randomInt });
     await store.session.signIn();
     return store;
   };

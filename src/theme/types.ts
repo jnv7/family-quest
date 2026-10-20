@@ -64,8 +64,10 @@ export interface ThemeFile {
   /** Art of an unopened reward: the tier is visible before opening. */
   rewardArt: Record<Tier, Art>;
   map: { background: Art; aspectRatio: number; moorings?: ThemeMoorings };
-  /** The emoji a profile can choose as its symbol: at least 12, unique, one emoji each. */
+  /** Emoji suggested first when a profile chooses its symbol: at least 12, unique, one emoji each. */
   profileSymbols: string[];
+  /** Where a profile's symbol goes over its `homeVariants` art on the home, per kind; without it the symbol is shown by the name. */
+  homeSymbolAt?: Partial<Record<'adult' | 'child', SymbolAt>>;
   places: Record<PlaceRole, Place>;
   homeVariants: { adult: Art; child: Art };
   install: Install;

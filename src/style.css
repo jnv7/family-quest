@@ -290,8 +290,8 @@ button.place {
   grid-template-rows: minmax(0, 1fr) auto;
   align-content: center;
   justify-items: center;
-  gap: 0.25rem;
-  padding: 0.25rem;
+  gap: 0.1rem;
+  padding: 0.1rem;
   border: 0;
   border-radius: 1rem;
   /* No panel behind the art: a themed map is painted, so the name carries the contrast instead. */
@@ -316,10 +316,10 @@ img.place-art {
 }
 
 .place-name {
-  font-size: 0.8rem;
-  padding: 0.1rem 0.5rem;
+  font-size: 0.7rem;
+  padding: 0 0.4rem;
   border-radius: 0.75rem;
-  background: color-mix(in srgb, Canvas 88%, transparent);
+  background: color-mix(in srgb, Canvas 70%, transparent);
 }
 
 /* Board and forms */
@@ -400,35 +400,77 @@ button.better[aria-pressed='true'] {
   background: color-mix(in srgb, var(--accent) 18%, Canvas);
 }
 
-/* The plan alert (SPEC.md §7): neutral, the same in every theme, two intensities. */
-button.place[data-alert] {
-  animation: alert-glow 2.4s ease-in-out infinite;
+/*
+ * The plan alert (SPEC.md §7): neutral, the same in every theme, two intensities and no words.
+ * The place seems to want to say something: a speech bubble with dots, bigger and bouncing when
+ * the planned task is due today, small and still when it is due tomorrow.
+ */
+button.place[data-alert]::after {
+  content: '…';
+  position: absolute;
+  top: -0.1rem;
+  right: 0.1rem;
+  min-width: 1.6rem;
+  padding: 0 0.45rem 0.35rem;
+  border: 2px solid var(--line);
+  border-radius: 1rem;
+  background: Canvas;
+  color: CanvasText;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: center;
+  pointer-events: none;
 }
 
-button.place[data-alert='today'] {
-  --alert-color: var(--accent);
-  --alert-size: 0.9rem;
+/* The tail of the bubble. */
+button.place[data-alert]::before {
+  content: '';
+  position: absolute;
+  top: 1.45rem;
+  right: 0.9rem;
+  width: 0.6rem;
+  height: 0.6rem;
+  border: solid var(--line);
+  border-width: 0 2px 2px 0;
+  background: Canvas;
+  transform: rotate(45deg) skew(10deg, 10deg);
+  pointer-events: none;
 }
 
-button.place[data-alert='tomorrow'] {
-  --alert-color: var(--accent);
-  --alert-size: 0.4rem;
+button.place[data-alert='today']::after {
+  font-size: 1.6rem;
+  border-color: var(--accent);
+  animation: alert-bob 1.6s ease-in-out infinite;
 }
 
-@keyframes alert-glow {
+button.place[data-alert='today']::before {
+  border-color: var(--accent);
+  top: 1.85rem;
+}
+
+button.place[data-alert='tomorrow']::after {
+  font-size: 1rem;
+  min-width: 1.3rem;
+}
+
+button.place[data-alert='tomorrow']::before {
+  top: 1.2rem;
+}
+
+@keyframes alert-bob {
   0%,
   100% {
-    box-shadow: 0 0 0 0 transparent;
+    transform: translateY(0);
   }
   50% {
-    box-shadow: 0 0 var(--alert-size) calc(var(--alert-size) / 2) var(--alert-color);
+    transform: translateY(-0.25rem);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  button.place[data-alert] {
+  button.place[data-alert='today']::after {
     animation: none;
-    box-shadow: 0 0 var(--alert-size) calc(var(--alert-size) / 2) var(--alert-color);
   }
 }
 
@@ -574,15 +616,8 @@ button.place[data-alert='tomorrow'] {
   max-width: 8rem;
 }
 
-.home-header p,
-.avatar-place {
+.home-header p {
   margin: 0;
-}
-
-.avatar-place {
-  padding: 0.5rem 1rem;
-  border: 1px dashed var(--line);
-  border-radius: 0.75rem;
 }
 
 .collectible-list {
@@ -606,11 +641,6 @@ button.place[data-alert='tomorrow'] {
   margin: 0;
 }
 
-.symbols {
-  display: grid;
-  gap: 0.5rem;
-}
-
 .symbol-grid {
   display: flex;
   flex-wrap: wrap;
@@ -625,10 +655,6 @@ button.place[data-alert='tomorrow'] {
 
 .symbol-grid .symbol {
   font-size: 1.5rem;
-}
-
-.symbol-grid button[aria-pressed='true'] {
-  outline: 3px solid var(--accent);
 }
 
 .rename {
@@ -652,4 +678,51 @@ button.place[data-alert='tomorrow'] {
   gap: 0.25rem;
   width: 100%;
   padding: 0.5rem;
+}
+
+/* The boat on the home, with the profile's symbol on its sail. */
+.home-boat {
+  position: relative;
+  width: min(60%, 14rem);
+  container-type: inline-size;
+}
+
+img.home-art {
+  display: block;
+  width: 100%;
+  max-width: none;
+  height: auto;
+}
+
+.symbol-panel {
+  max-height: 55dvh;
+  padding: 0.75rem;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+}
+
+.symbol-bar {
+  position: sticky;
+  top: -0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  background: Canvas;
+}
+
+.symbol-bar h2 {
+  flex: 1;
+  margin: 0;
+}
+
+.symbol-panel h3 {
+  margin: 0.75rem 0 0.25rem;
+}
+
+.hint {
+  margin: 0;
+  opacity: 0.7;
 }

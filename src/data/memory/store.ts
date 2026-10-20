@@ -14,7 +14,7 @@ import { assertPlanAllowed } from '../plan';
 import { newRecurringTaskProblem, settleRecurringWrites } from '../recurring';
 import type { NewRecurringTask } from '../../core/generation';
 import { nicknameTooLong, normaliseNickname } from '../../core/collection';
-import { assertSymbolAllowed, type ProfileSymbols } from '../symbols';
+import { assertSymbolAllowed } from '../symbols';
 import {
   DEFAULT_AVATAR,
   DEFAULT_RULESET,
@@ -58,8 +58,6 @@ export interface MemoryStoreOptions {
   uid: Uid;
   clock: Clock;
   randomInt: RandomInt;
-  /** The emoji a profile may choose in a world, by theme id (the app passes the bundled themes). */
-  profileSymbols: ProfileSymbols;
 }
 
 /** Same length as a Firestore auto-id (docs/architecture.md §3). */
@@ -339,8 +337,8 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
         return submit({ profileId }, (view, uid) => {
           checkText('Display name', input.displayName, LIMITS.displayName);
           if (input.kind !== 'adult' && input.kind !== 'child') throw invalid(`Unknown profile kind: ${String(input.kind)}`);
-          const ws = requireWorld(view, worldId);
-          assertSymbolAllowed(options.profileSymbols(ws.world.themeId), input.symbol);
+          requireWorld(view, worldId);
+          assertSymbolAllowed(input.symbol);
           const profile: Profile = {
             ...newDoc(),
             id: profileId,
@@ -362,9 +360,8 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
 
       setProfileSymbol: (worldId, profileId, symbol) =>
         submit(undefined, (view, uid) => {
-          const ws = requireWorld(view, worldId);
-          assertSymbolAllowed(options.profileSymbols(ws.world.themeId), symbol);
-          const profile = ws.profiles.get(profileId);
+          assertSymbolAllowed(symbol);
+          const profile = requireWorld(view, worldId).profiles.get(profileId);
           if (!profile) throw notFound(`Profile ${profileId} does not exist`);
           return {
             ops: [{ worldId, collection: 'profiles', id: profileId, patch: { avatar: { ...profile.avatar, symbol } } }],
