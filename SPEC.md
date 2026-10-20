@@ -94,7 +94,7 @@ A device in the world. `uid` comes from anonymous authentication.
 | --- | --- | --- |
 | `displayName` | string | |
 | `kind` | `adult` or `child` | Immutable. Adult profiles carry admin rights (section 5); otherwise `kind` affects only appearance and limits, and the mechanics are the same |
-| `avatar` | map | Layers as indices (`body`, `hair`, `outfit`, `accessory`). Never an image |
+| `avatar` | map | Layers as indices (`body`, `hair`, `outfit`, `accessory`), plus `symbol`: one emoji chosen from the theme's `profileSymbols`, or null until chosen. Never an image. A profile read without `symbol` has `symbol: null`. The rules only require `avatar` to be a map, so `symbol` needs no rules change **[decided]** |
 | `partyIds` | list of ids | Up to `partySize`; the source of truth for the `party` |
 | `archived` | boolean | Profiles are never deleted. Only child profiles can be archived, so a world always keeps at least one adult profile, and therefore an admin |
 
@@ -213,14 +213,24 @@ A newly obtained collectible is pending. It stays in its owner's list, where the
 
 The main screen is a **map** with five tappable places. Each tap starts a short animation to that place. The position, drawing and animation of each place belong to the theme. The avatar cannot be moved freely. **[decided]**
 
+**Moorings: the family on the map.** **[decided]** (product owner, 2026-10-20) A theme may declare moorings: fixed spots on the map, per profile `kind`. The engine draws one boat (`homeVariants[kind]`) at each mooring, one per non-archived profile of that kind.
+
+- **Order:** profiles fill the moorings in creation order (`createdAt`, then `id`), so every device draws the same layout.
+- **Symbol on the sail:** each boat shows its profile's `avatar.symbol` at the theme's symbol spot (on the sail, in the pirate theme), so each person's boat can be told apart. A profile with no symbol shows its boat without one.
+- **Decoration only:** the boats are not tappable. They show no name, count, collectible or party, so `SPEC.md` §2 still holds. Each person's own place stays the `home` place.
+- **More profiles than moorings:** the extra profiles are not drawn. This is a limit of the theme, not an error. A theme should declare enough moorings (the pirate theme: at least 6 for children).
+- **Themes without moorings:** a theme that declares none shows the map exactly as before.
+
+The pirate theme declares moorings for children only, at the pier. Adults keep the large ship, which is the `home` place art.
+
 1. **First launch.** Create a world (choosing its theme, when there is more than one), which shows the join link and QR code, or join with a link or code. Then pick a profile. Once the theme is known, the app offers to install itself (never from the bare address).
 2. **Profile picker.** Netflix-style list of the world's non-archived profiles. Reachable later to switch profile.
 3. **`board`.** All open tasks of the active profile, including those from past periods, and, highlighted, planned `big` tasks for tomorrow and today (the visual alert, 0.3). Entry point for creating a task: adults for any profile, children for themselves.
 4. **`checkin`.** Pick an open task, tap done. Shows the question when there is one. "I think I did better" button.
-5. **`home`.** The active profile with the theme's look for its kind (`homeVariants`), an empty, labelled place for the avatar (0.8), its `party`, its pending collectibles and its reserve (newest first). Each collectible in the `party` or the reserve can be renamed (the nickname is trimmed, empty clears it, at most 30 characters). A `party` member goes to the reserve in one tap, with no confirmation, because nothing is lost; a collectible joins the `party` from pending or the reserve, and with a full `party` the screen asks who leaves. No counts and no comparisons. Edit the avatar (0.8).
+5. **`home`.** The active profile with the theme's look for its kind (`homeVariants`), an empty, labelled place for the avatar (0.8), its `party`, its pending collectibles and its reserve (newest first). Each collectible in the `party` or the reserve can be renamed (the nickname is trimmed, empty clears it, at most 30 characters). A `party` member goes to the reserve in one tap, with no confirmation, because nothing is lost; a collectible joins the `party` from pending or the reserve, and with a full `party` the screen asks who leaves. No counts and no comparisons. Edit the avatar (0.8). The owner chooses or changes the profile's symbol here, from the theme's `profileSymbols`.
 6. **`vault`.** The active profile's unopened `rewards`, grouped by week, each shown with the theme's art for its `tier` (the tier is visible before opening **[decided]**). Only that profile's own rewards. A reward is opened here from the opening day on; the collectible that comes out is shown and can join the `party` at once, or stay pending. The vault also lists the pending collectibles in a "recent" section, with the same choices as the `home`.
 7. **`showcase`.** The latest 30 from the reserve, from everyone, as a grid of art and name. Tapping one shows it larger, with its name and tier name. It never shows the owner, a date or a count. An admin can also rename any of them (moderation). **[decided]**
-8. **Management (`admin` only).** Create and archive profiles, create and edit `taskDefs`, edit the reward odds (`tierOdds`), view tasks per profile (including `talkFlag`), show the join link and QR code again. Profiles and worlds are always created through the app, with generated ids, never by editing data by hand. **[decided]**
+8. **Management (`admin` only).** Create and archive profiles (optionally choosing the new profile's symbol), create and edit `taskDefs`, edit the reward odds (`tierOdds`), view tasks per profile (including `talkFlag`), show the join link and QR code again. Profiles and worlds are always created through the app, with generated ids, never by editing data by hand. **[decided]**
 
 Adults play like everyone else. The theme can give an adult's `home` a different look (in the pirate theme, a luxury ship).
 
@@ -255,6 +265,8 @@ Folder `src/themes/{themeId}/` with:
   - `id`, `name` and `locale` (`pt-PT`);
   - for each glossary role, the singular and plural visible name;
   - for each map place, its position, size and animation;
+  - optionally, `map.moorings` per `kind`: a list of spots (`x`, `y`, `width`, `height` in percent of the map, like places), plus where on the boat the profile symbol goes (`symbolAt`: `x`, `y` and `size`, in percent of the spot) (section 7);
+  - `profileSymbols`: the list of emoji a profile can choose as its symbol, neutral or themed, at least 12, without duplicates;
   - `rewardArt`: the art of an unopened reward, per tier;
   - `homeVariants` per `kind`;
   - `install`: the name and colours of the installed app and its icons, from which one manifest per theme is built (ADR 0005);

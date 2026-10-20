@@ -92,7 +92,7 @@ Exit criteria:
 
 ### 0.7 — `showcase`, `home` and art
 
-Scope: each person's `home`, the `showcase`, and final art: Kenney assets under CC0, and emoji, chosen by the children from a short list (product owner, 2026-10-20: no children's drawings in this release). Delivery plan in [docs/plans/0.7.md](docs/plans/0.7.md).
+Scope: each person's `home`, the `showcase`, and final art: Kenney assets under CC0, and emoji, chosen by the children from a short list (product owner, 2026-10-20: no children's drawings in this release); and moorings on the map, with one boat per child showing their chosen symbol on the sail (product owner, 2026-10-20). Delivery plan in [docs/plans/0.7.md](docs/plans/0.7.md).
 
 Exit criteria:
 

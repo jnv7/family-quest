@@ -124,7 +124,7 @@ These rules hold for every change; review and CI enforce them:
 1. **No branching on themes.** No code outside `src/themes/` compares, switches on, or maps over a specific theme id. Code reads the active theme through `src/theme/` and uses only what the schema defines.
 2. **One default, in configuration.** The only theme id named outside `src/themes/` and tests is the default theme, and it lives in one configuration value, not in logic.
 3. **Schema-only data.** A theme provides data that the schemas in `schemas/` describe. A field the schema does not define does not exist for the engine. Theme files never contain code, expressions or behaviour flags.
-4. **New capability = new schema field.** When a theme needs a new visual capability (for example, a new kind of transition), it is added to the schema and the engine for every theme at once, never for one theme.
+4. **New capability = new schema field.** When a theme needs a new visual capability (for example, a new kind of transition), it is added to the schema and the engine for every theme at once, never for one theme. Example: the map's `moorings` (0.7.5). The theme declares spots, and the engine draws one boat per profile for any theme that declares them.
 5. **Stable stored references.** Stored data references a theme only by `themeId`, `slot` and `tier`.
 
 ### Text layers
