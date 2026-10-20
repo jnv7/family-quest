@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Final art for the pirate theme, with no data change (slot ids and the theme id are untouched; the collectibles keep their emoji art for now): a painted map of one island with a pier, a path network and a forest, built from Kenney's Pirate Pack tiles (CC0); a lighthouse, cave, tavern and parrot, three chests (wood, silver, gold) for the rewards and an old pirate for the check-in, drawn for this repository as SVG (MIT); and a large ship for adults and a rowing boat for children, from the Pirate Pack. Credits are listed and `CREDITS.md` is regenerated.
+- Final art for the pirate theme, with no data change (slot ids and the theme id are untouched; the collectibles keep their emoji art for now): a painted map of one island with a pier, a path network and a forest, built from Kenney's Pirate Pack tiles (CC0); a lighthouse, cave, tavern and parrot, three chests (wood, silver, gold) for the rewards and an old pirate for the check-in, drawn for this repository as SVG (MIT); and a large ship with golden sails for adults and a rowing boat for children, from the Pirate Pack. The map shows the adults' ship at the pier and three moored rowing boats. Credits are listed and `CREDITS.md` is regenerated.
 - The showcase is now a "taberna" (the former "bar"), with the gender updated.
 
 ### Changed
