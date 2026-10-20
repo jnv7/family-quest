@@ -10,6 +10,9 @@ import { observeSelf } from '../self';
 import type { PlaceRole } from '../../theme/types';
 import { playTransition } from '../transition';
 
+/** The share of its size each symbol keeps when one, two or three of them share a sail. */
+const PLACE_SYMBOL_SCALES = [1, 0.78, 0.58] as const;
+
 const PLACES: readonly PlaceRole[] = ['board', 'checkin', 'home', 'vault', 'showcase'];
 
 /** Places that already lead somewhere; the others appear on the map but wait for their release. */
@@ -96,15 +99,32 @@ export const renderMap: WorldScreen = (ctx, root, { worldId }) => {
     );
   };
 
-  /** The symbol over a place's art, for the active profile, when the art is the look of their kind. */
-  const drawPlaceSymbols = (profile: Profile) => {
+  /**
+   * The symbols over a place's art, when the art is the look of a profile kind (the big ship at the
+   * pier is the adults' ship): those of every non-archived profile of that kind, in creation order,
+   * so everyone sees whose ship it is. Up to three share the sail, smaller as they grow in number.
+   */
+  const drawPlaceSymbols = (profiles: readonly Profile[]) => {
     for (const [role, slot] of placeSlots) {
       const place = theme.places[role];
       const at = place.symbolAt!;
-      slot.querySelector('.boat-symbol')?.remove();
-      if (!profile.avatar.symbol || JSON.stringify(place.art) !== JSON.stringify(theme.homeVariants[profile.kind])) continue;
+      slot.querySelectorAll('.boat-symbol').forEach((symbol) => symbol.remove());
+      const kinds = (['adult', 'child'] as const).filter((kind) => JSON.stringify(place.art) === JSON.stringify(theme.homeVariants[kind]));
+      const symbols = profiles
+        .filter((profile) => kinds.includes(profile.kind) && !profile.archived && profile.avatar.symbol)
+        .sort((a, b) => a.createdAt - b.createdAt || (a.id < b.id ? -1 : 1))
+        .slice(0, PLACE_SYMBOL_SCALES.length)
+        .map((profile) => profile.avatar.symbol!);
+      const scale = PLACE_SYMBOL_SCALES[symbols.length - 1] ?? 1;
+      const step = at.size * scale * 1.1;
       slot.append(
-        h('span', { class: 'boat-symbol', 'aria-hidden': 'true', style: `left:${at.x}%;top:${at.y}%;--symbol-size:${at.size}` }, profile.avatar.symbol),
+        ...symbols.map((symbol, i) =>
+          h('span', {
+            class: 'boat-symbol',
+            'aria-hidden': 'true',
+            style: `left:${at.x + (i - (symbols.length - 1) / 2) * step}%;top:${at.y}%;--symbol-size:${at.size * scale}`,
+          }, symbol),
+        ),
       );
     }
   };
@@ -137,7 +157,7 @@ export const renderMap: WorldScreen = (ctx, root, { worldId }) => {
       stopTasks = ctx.store.tasks.observeTasks(worldId, profile.id, (value) => ((tasks = value), light()), unlit);
     }
     drawBoats(profiles, profile.id);
-    drawPlaceSymbols(profile);
+    drawPlaceSymbols(profiles);
     title.textContent = ctx.text('map.hello', { name: profile.displayName });
     const buttons = [h('button', { onClick: () => ctx.go({ name: 'profiles' }) }, ctx.text('map.switch'))];
     if (canOfferInstall(ctx)) buttons.push(h('button', { onClick: () => ctx.go({ name: 'install' }) }, ctx.text('map.install')));

@@ -381,38 +381,57 @@ img.character-art {
   min-height: 2.5rem;
 }
 
-.rows li.checkin-task {
-  display: grid;
-  justify-content: stretch;
-  justify-items: stretch;
-  gap: 0.5rem;
-  padding: 0.75rem 0;
+/*
+ * Task cards: the tasks are what a person came for, so each one stands out from the page, with its
+ * button in front of it and the title in bold.
+ */
+.rows.tasks,
+.rows.checkin-tasks {
+  gap: 0.75rem;
 }
 
+.rows.tasks li,
+.rows.checkin-tasks li {
+  padding: 0.85rem 1rem;
+  border: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--accent) 9%, Canvas);
+  box-shadow: 0 0.2rem 0 color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.rows.tasks li > span,
 .task-title {
-  font-weight: 600;
+  font-size: 1.15rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.rows li.checkin-task {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  justify-content: stretch;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.task-actions {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.task-actions button {
+  min-width: 4.5rem;
+  min-height: 3rem;
+  font-weight: 700;
+}
+
+.task-body {
+  display: grid;
+  gap: 0.25rem;
 }
 
 .question {
   margin: 0;
-}
-
-.answers {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
-}
-
-button.better {
-  min-height: 2.25rem;
-  font-size: 0.85rem;
-  opacity: 0.75;
-}
-
-button.better[aria-pressed='true'] {
-  opacity: 1;
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 18%, Canvas);
 }
 
 /*
@@ -473,7 +492,7 @@ button.place[data-alert='tomorrow']::after {
 }
 
 button.place[data-alert='tomorrow']::before {
-  top: 0.3rem;
+  top: 0.62rem;
   right: 0.75rem;
   width: 0.45rem;
   height: 0.45rem;
@@ -496,13 +515,13 @@ button.place[data-alert='tomorrow']::before {
 }
 
 .rows li.planned-today {
-  border-left: 0.3rem solid var(--accent);
-  padding-left: 0.5rem;
+  border-color: var(--accent);
+  border-left-width: 0.5rem;
+  background: color-mix(in srgb, var(--accent) 18%, Canvas);
 }
 
 .rows li.planned-tomorrow {
-  border-left: 0.3rem solid var(--line);
-  padding-left: 0.5rem;
+  border-left-width: 0.5rem;
 }
 
 /* The vault: unopened rewards, shown by the art of their tier. */
@@ -747,4 +766,8 @@ img.home-art {
 .hint {
   margin: 0;
   opacity: 0.7;
+}
+
+.hint + .rows {
+  margin-top: 0.75rem;
 }
