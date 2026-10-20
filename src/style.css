@@ -250,7 +250,8 @@ button.place {
   gap: 0.25rem;
   padding: 0.25rem;
   border-radius: 1rem;
-  background: color-mix(in srgb, Canvas 88%, transparent);
+  /* No panel behind the art: a themed map is painted, so the name carries the contrast instead. */
+  background: transparent;
 }
 
 button.place:disabled {
@@ -270,6 +271,9 @@ img.place-art {
 
 .place-name {
   font-size: 0.8rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, Canvas 88%, transparent);
 }
 
 /* Board and forms */

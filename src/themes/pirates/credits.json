@@ -2,6 +2,24 @@
   "$schema": "../../../schemas/credits.schema.json",
   "assets": [
     {
+      "file": "assets/character/old-pirate.svg",
+      "author": "Family Quest",
+      "source": "https://github.com/jnv7/family-quest",
+      "licence": "MIT"
+    },
+    {
+      "file": "assets/home/adult.webp",
+      "author": "Kenney (kenney.nl)",
+      "source": "https://kenney.nl/assets/pirate-pack",
+      "licence": "CC0-1.0"
+    },
+    {
+      "file": "assets/home/child.webp",
+      "author": "Kenney (kenney.nl)",
+      "source": "https://kenney.nl/assets/pirate-pack",
+      "licence": "CC0-1.0"
+    },
+    {
       "file": "assets/icons/apple-touch-icon.png",
       "author": "Family Quest",
       "source": "https://github.com/jnv7/family-quest",
@@ -21,6 +39,54 @@
     },
     {
       "file": "assets/icons/icon-maskable-512.png",
+      "author": "Family Quest",
+      "source": "https://github.com/jnv7/family-quest",
+      "licence": "MIT"
+    },
+    {
+      "file": "assets/map.webp",
+      "author": "Kenney (kenney.nl)",
+      "source": "https://kenney.nl/assets/pirate-pack",
+      "licence": "CC0-1.0"
+    },
+    {
+      "file": "assets/places/board.svg",
+      "author": "Family Quest",
+      "source": "https://github.com/jnv7/family-quest",
+      "licence": "MIT"
+    },
+    {
+      "file": "assets/places/checkin.svg",
+      "author": "Family Quest",
+      "source": "https://github.com/jnv7/family-quest",
+      "licence": "MIT"
+    },
+    {
+      "file": "assets/places/showcase.svg",
+      "author": "Family Quest",
+      "source": "https://github.com/jnv7/family-quest",
+      "licence": "MIT"
+    },
+    {
+      "file": "assets/places/vault.svg",
+      "author": "Family Quest",
+      "source": "https://github.com/jnv7/family-quest",
+      "licence": "MIT"
+    },
+    {
+      "file": "assets/rewards/high.svg",
+      "author": "Family Quest",
+      "source": "https://github.com/jnv7/family-quest",
+      "licence": "MIT"
+    },
+    {
+      "file": "assets/rewards/low.svg",
+      "author": "Family Quest",
+      "source": "https://github.com/jnv7/family-quest",
+      "licence": "MIT"
+    },
+    {
+      "file": "assets/rewards/mid.svg",
       "author": "Family Quest",
       "source": "https://github.com/jnv7/family-quest",
       "licence": "MIT"

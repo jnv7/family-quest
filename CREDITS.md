@@ -27,7 +27,21 @@ Emoji are drawn by each phone's system font and need no credit.
 
 ### Family Quest
 
+- `assets/character/old-pirate.svg`: [MIT](https://opensource.org/license/mit), [source](https://github.com/jnv7/family-quest)
 - `assets/icons/apple-touch-icon.png`: [MIT](https://opensource.org/license/mit), [source](https://github.com/jnv7/family-quest)
 - `assets/icons/icon-192.png`: [MIT](https://opensource.org/license/mit), [source](https://github.com/jnv7/family-quest)
 - `assets/icons/icon-512.png`: [MIT](https://opensource.org/license/mit), [source](https://github.com/jnv7/family-quest)
 - `assets/icons/icon-maskable-512.png`: [MIT](https://opensource.org/license/mit), [source](https://github.com/jnv7/family-quest)
+- `assets/places/board.svg`: [MIT](https://opensource.org/license/mit), [source](https://github.com/jnv7/family-quest)
+- `assets/places/checkin.svg`: [MIT](https://opensource.org/license/mit), [source](https://github.com/jnv7/family-quest)
+- `assets/places/showcase.svg`: [MIT](https://opensource.org/license/mit), [source](https://github.com/jnv7/family-quest)
+- `assets/places/vault.svg`: [MIT](https://opensource.org/license/mit), [source](https://github.com/jnv7/family-quest)
+- `assets/rewards/high.svg`: [MIT](https://opensource.org/license/mit), [source](https://github.com/jnv7/family-quest)
+- `assets/rewards/low.svg`: [MIT](https://opensource.org/license/mit), [source](https://github.com/jnv7/family-quest)
+- `assets/rewards/mid.svg`: [MIT](https://opensource.org/license/mit), [source](https://github.com/jnv7/family-quest)
+
+### Kenney (kenney.nl)
+
+- `assets/home/adult.webp`: [CC0-1.0](https://creativecommons.org/publicdomain/zero/1.0/), [source](https://kenney.nl/assets/pirate-pack)
+- `assets/home/child.webp`: [CC0-1.0](https://creativecommons.org/publicdomain/zero/1.0/), [source](https://kenney.nl/assets/pirate-pack)
+- `assets/map.webp`: [CC0-1.0](https://creativecommons.org/publicdomain/zero/1.0/), [source](https://kenney.nl/assets/pirate-pack)
