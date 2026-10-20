@@ -1,0 +1,82 @@
+{
+  "_note": "First draft of every text of the pirate theme, in European Portuguese, for the product owner to correct. Not loaded by the app. Each part is copied into theme.json (name, roles, tiers, character, install.name) or catalog.json (catalog) when the theme package is built.",
+  "name": "Piratas do Farol",
+  "install": {
+    "name": "Piratas do Farol"
+  },
+  "roles": {
+    "world": { "singular": "ilha", "plural": "ilhas", "gender": "f" },
+    "profile": { "singular": "pirata", "plural": "piratas", "gender": "m" },
+    "board": { "singular": "papagaio na doca", "plural": "papagaios na doca", "gender": "m" },
+    "checkin": { "singular": "farol", "plural": "faróis", "gender": "m" },
+    "home": { "singular": "barco", "plural": "barcos", "gender": "m" },
+    "vault": { "singular": "gruta do tesouro", "plural": "grutas do tesouro", "gender": "f" },
+    "showcase": { "singular": "bar", "plural": "bares", "gender": "m" },
+    "reward": { "singular": "baú", "plural": "baús", "gender": "m" },
+    "collectible": { "singular": "bicho", "plural": "bichos", "gender": "m" },
+    "party": { "singular": "tripulação", "plural": "tripulações", "gender": "f" },
+    "reserve": { "singular": "ilha", "plural": "ilhas", "gender": "f" }
+  },
+  "tiers": {
+    "low": "Comum",
+    "mid": "Raro",
+    "high": "Lendário"
+  },
+  "character": {
+    "name": "O velho sábio do farol",
+    "lines": {
+      "greeting": [
+        "Ahoy, marinheiro! Que trabalho trazes hoje?",
+        "O mar está calmo. Boa altura para uma tarefa.",
+        "Chegaste a tempo! O farol já está aceso."
+      ],
+      "congrats": [
+        "Bem feito, pirata! Mais um baú para a gruta.",
+        "Isso sim! Até o papagaio ficou impressionado.",
+        "Por mil trovões, que bom trabalho!",
+        "Tarefa cumprida! O tesouro agradece."
+      ],
+      "doubt": [
+        "Hum… tens a certeza? Sem pressa, a maré espera.",
+        "Não faz mal. Volta quando estiveres pronto.",
+        "Os bons piratas não se apressam. Fica para depois."
+      ],
+      "farewell": [
+        "Boa viagem! O farol fica aceso para ti.",
+        "Nada por fazer. Descansa, que o mar também descansa.",
+        "Até à próxima maré, pirata!"
+      ]
+    }
+  },
+  "catalog": {
+    "low": [
+      { "slot": "caranguejo", "name": "Caranguejo Rabugento" },
+      { "slot": "gaivota", "name": "Gaivota Gulosa" },
+      { "slot": "estrela-do-mar", "name": "Estrela-do-mar Sonolenta" },
+      { "slot": "peixe-balao", "name": "Peixe-balão Teimoso" }
+    ],
+    "mid": [
+      { "slot": "papagaio", "name": "Papagaio Tagarela" },
+      { "slot": "polvo", "name": "Polvo Malabarista" },
+      { "slot": "tartaruga", "name": "Tartaruga Navegadora" },
+      { "slot": "macaco", "name": "Macaco Gatuno" }
+    ],
+    "high": [
+      { "slot": "kraken", "name": "Kraken Bonzinho" },
+      { "slot": "baleia-dourada", "name": "Baleia Dourada" },
+      { "slot": "fantasma", "name": "Capitão Fantasma" },
+      { "slot": "sereia", "name": "Sereia do Farol" }
+    ]
+  },
+  "messagesToReview": {
+    "note": "These come from the neutral messages with the nouns above. Read them once to check they sound right.",
+    "examples": [
+      "Missões da ilha",
+      "Ganhaste um baú! Foi para a gruta do tesouro.",
+      "Pôr na tripulação",
+      "Não há mais lugares na tripulação. Quem sai?",
+      "Saiu um bicho!",
+      "Probabilidades dos baús"
+    ]
+  }
+}
