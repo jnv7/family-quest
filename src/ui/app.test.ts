@@ -4,7 +4,7 @@ import type { Tier } from '../core/model';
 import { createRandomInt } from '../core/random';
 import { DataStoreError, type DataStore } from '../data/DataStore';
 import { createMemoryBackend, createMemoryStore } from '../data/memory';
-import { loadTheme } from '../theme';
+import { hasTheme, loadTheme, type Theme } from '../theme';
 import { startApp } from './app';
 import type { Installer, InstallMode, Platform } from './install';
 import { memoryNavigation } from './navigation';
@@ -35,7 +35,7 @@ let stops: Array<() => void> = [];
 /** One device: its own store, remembered world and screen, sharing the backend. */
 async function openDevice(
   uid: string,
-  options: { hash?: string; savedWorld?: string; savedTheme?: string; launchTheme?: string; wrap?: (store: DataStore) => DataStore; installer?: Installer } = {},
+  options: { theme?: Theme; hash?: string; savedWorld?: string; savedTheme?: string; launchTheme?: string; wrap?: (store: DataStore) => DataStore; installer?: Installer } = {},
 ) {
   const storage = new Map<string, string>();
   const world = createWorldMemory({
@@ -47,8 +47,8 @@ async function openDevice(
   if (options.savedTheme) world.setTheme(options.savedTheme);
   const root = document.createElement('main');
   document.body.append(root);
-  const store = (options.wrap ?? ((s) => s))(createMemoryStore(backend, { uid, clock, randomInt }));
-  stops.push(await startApp({ root, store, theme, baseUrl: BASE_URL, world, clock, randomInt, navigation: memoryNavigation(options.hash ?? ''), installer: options.installer ?? fakeInstaller(), assetBase: '/family-quest/', launchTheme: options.launchTheme ?? null }));
+  const store = (options.wrap ?? ((s) => s))(createMemoryStore(backend, { uid, clock, randomInt, profileSymbols }));
+  stops.push(await startApp({ root, store, theme: options.theme ?? theme, baseUrl: BASE_URL, world, clock, randomInt, navigation: memoryNavigation(options.hash ?? ''), installer: options.installer ?? fakeInstaller(), assetBase: '/family-quest/', launchTheme: options.launchTheme ?? null }));
 
   const find = (selector: string, text?: string) =>
     [...root.querySelectorAll<HTMLElement>(selector)].find((el) => text === undefined || el.textContent?.includes(text));
@@ -106,6 +106,10 @@ async function createFamily() {
   const worldId = admin.world.get()!;
   return { admin, worldId };
 }
+
+/** Symbols of themes that exist only in a test, then those of the bundled themes. */
+const testSymbols = new Map<string, string[]>();
+const profileSymbols = (themeId: string) => testSymbols.get(themeId) ?? (hasTheme(themeId) ? loadTheme(themeId).profileSymbols : null);
 
 describe('creating a world', () => {
   it('shows the join link as a QR code and the code, then lands on the home of the new adult profile', async () => {
@@ -294,7 +298,7 @@ describe('recurring tasks on the board', () => {
     const sam = [...ws.profiles.values()].find((p) => p.displayName === 'Sam')!;
 
     // A device whose cache missed the first task generated a second one for a later period.
-    const extra = createMemoryStore(backend, { uid: 'child-device', clock, randomInt });
+    const extra = createMemoryStore(backend, { uid: 'child-device', clock, randomInt, profileSymbols });
     await extra.session.signIn();
     const task = (periodKey: string) => ({ id: `${defId}_${periodKey}_${sam.id}`, defId, periodKey, profileId: sam.id, title: 'Fazer a cama', level: 'mid' as const, question: null });
     now -= 86_400_000;
@@ -999,6 +1003,165 @@ describe('the showcase', () => {
     const { admin } = await familyWithChild();
     await admin.click('button.place', 'Vitrina');
     await admin.see('Ainda não há nada');
+  });
+});
+
+describe('moorings and symbols', () => {
+  /**
+   * A test theme with moorings, so no real theme's vocabulary appears here. Its id is not a bundled
+   * theme, so the app keeps the theme it was given (as for any theme id this build does not have).
+   */
+  const THEME_ID = 'harbour-test';
+  const base = loadTheme('minimal');
+  const SYMBOLS = ['🐬', '🦀', '🐙', '🐢', '🐳', '🦊', '🐼', '🦁', '🐸', '🦉', '🦋', '🐝'];
+  const harbour: Theme = {
+    ...base,
+    id: THEME_ID,
+    profileSymbols: SYMBOLS,
+    map: {
+      ...base.map,
+      moorings: {
+        child: {
+          spots: Array.from({ length: 4 }, (_, i) => ({ x: 10 + i * 20, y: 85, width: 8, height: 6 })),
+          symbolAt: { x: 50, y: 40, size: 30 },
+        },
+      },
+    },
+  };
+  const spots = harbour.map.moorings!.child!.spots;
+  const [DOLPHIN, CRAB, OCTOPUS] = SYMBOLS as [string, string, string];
+  testSymbols.set(THEME_ID, SYMBOLS);
+
+  /** A world with the test theme, seeded through the store: the adult "Alex" and the given children. */
+  async function seed(children: Array<{ name: string; symbol?: string | null; archived?: boolean }>) {
+    const store = createMemoryStore(backend, { uid: 'seed', clock, randomInt, profileSymbols });
+    await store.session.signIn();
+    const created = store.worlds.createWorld({ name: 'Casa', themeId: THEME_ID, creatorDisplayName: 'Alex' });
+    await created.settled;
+    const { worldId } = created.result;
+    const ids: Record<string, string> = {};
+    for (const child of children) {
+      now += 1000; // a distinct creation time per profile
+      const profile = store.worlds.createProfile(worldId, { displayName: child.name, kind: 'child', symbol: child.symbol ?? null });
+      await profile.settled;
+      ids[child.name] = profile.result.profileId;
+      if (child.archived) await store.worlds.setProfileArchived(worldId, profile.result.profileId, true).settled;
+    }
+    return { worldId, ids };
+  }
+  const asAdult = async (worldId: string) => {
+    const admin = await openDevice('seed', { theme: harbour, savedWorld: worldId });
+    await admin.see('Olá, Alex!');
+    return admin;
+  };
+  const asChild = async (worldId: string, name: string, uid = 'child-device') => {
+    const device = await openDevice(uid, { theme: harbour, hash: `#/join/${worldId}` });
+    await device.click('button.profile', name);
+    await device.see(`Olá, ${name}!`);
+    return device;
+  };
+  const boats = (device: Awaited<ReturnType<typeof openDevice>>) => [...device.root.querySelectorAll<HTMLElement>('.boat')];
+
+  it('draws no boat for no children', async () => {
+    const { worldId } = await seed([]);
+    const admin = await asAdult(worldId);
+    expect(admin.root.querySelector('.boats')).not.toBeNull();
+    expect(boats(admin)).toHaveLength(0);
+  });
+
+  it('moors one boat per child in creation order, with its symbol on the sail', async () => {
+    const { worldId } = await seed([{ name: 'Sam', symbol: DOLPHIN }, { name: 'Robin', symbol: CRAB }, { name: 'Kim' }]);
+    const admin = await asAdult(worldId);
+    await vi.waitFor(() => expect(boats(admin)).toHaveLength(3));
+    expect(boats(admin).map((boat) => boat.querySelector('.boat-symbol')?.textContent ?? null)).toEqual([DOLPHIN, CRAB, null]);
+    boats(admin).forEach((boat, i) => {
+      expect(boat.style.left).toBe(`${spots[i]!.x}%`);
+      expect(boat.style.top).toBe(`${spots[i]!.y}%`);
+    });
+  });
+
+  it('draws only as many boats as there are spots, in creation order, and skips an archived child', async () => {
+    const names = Array.from({ length: spots.length + 2 }, (_, i) => ({ name: `Criança ${i}`, symbol: null as string | null }));
+    names[0] = { ...names[0]!, archived: true } as never;
+    const { worldId } = await seed(names);
+    const admin = await asAdult(worldId);
+    await vi.waitFor(() => expect(boats(admin)).toHaveLength(spots.length));
+    expect(boats(admin).map((boat) => boat.style.left)).toEqual(spots.map((spot) => `${spot.x}%`));
+  });
+
+  it('draws the same layout on two devices', async () => {
+    const { worldId } = await seed([{ name: 'Sam', symbol: DOLPHIN }, { name: 'Robin', symbol: CRAB }]);
+    const admin = await asAdult(worldId);
+    const child = await asChild(worldId, 'Sam');
+    await vi.waitFor(() => expect(boats(admin)).toHaveLength(2));
+    await vi.waitFor(() => expect(boats(child)).toHaveLength(2));
+    const layout = (device: typeof admin) => boats(device).map((boat) => [boat.style.left, boat.style.top, boat.querySelector('.boat-symbol')?.textContent]);
+    expect(layout(child)).toEqual(layout(admin));
+  });
+
+  it('shows no name on the map, and keeps the other boats out of reach', async () => {
+    const { worldId } = await seed([{ name: 'Sam', symbol: DOLPHIN }, { name: 'Robin', symbol: CRAB }]);
+    const child = await asChild(worldId, 'Sam');
+    await vi.waitFor(() => expect(boats(child)).toHaveLength(2));
+    expect(child.root.querySelector('.map')!.textContent).not.toContain('Robin');
+    expect(child.root.querySelector('.map')!.innerHTML).not.toContain('Robin');
+    const [own, other] = boats(child) as [HTMLElement, HTMLElement];
+    expect(own.tagName).toBe('BUTTON');
+    expect(own.getAttribute('aria-label')).toBe('Abrir a casa');
+    expect(other.tagName).toBe('DIV');
+    expect(other.getAttribute('aria-hidden')).toBe('true');
+    other.click();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(child.root.querySelector('.map')).not.toBeNull(); // still on the map
+  });
+
+  it('opens the home when the own boat is tapped, and follows the profile when it changes', async () => {
+    const { worldId } = await seed([{ name: 'Sam', symbol: DOLPHIN }, { name: 'Robin', symbol: CRAB }]);
+    const child = await asChild(worldId, 'Robin');
+    await vi.waitFor(() => expect(boats(child)).toHaveLength(2));
+    expect(boats(child).map((boat) => boat.tagName)).toEqual(['DIV', 'BUTTON']); // Robin is the second boat
+    (boats(child)[1] as HTMLElement).click();
+    await child.see('O teu símbolo');
+    await child.click('button', 'Voltar');
+    await child.click('button', 'Trocar de perfil');
+    await child.click('button.profile', 'Sam');
+    await vi.waitFor(() => expect(boats(child).map((boat) => boat.tagName)).toEqual(['BUTTON', 'DIV']));
+  });
+
+  it('leaves the map as it was for a theme without moorings', async () => {
+    const { admin } = await createFamily();
+    await admin.click('button', 'Continuar');
+    await admin.see('Olá, Alex!');
+    expect(admin.root.querySelector('.boats')).toBeNull();
+    expect(admin.root.querySelector('.boat')).toBeNull();
+  });
+
+  it('lets a child choose and clear a symbol in the home, and the boat follows', async () => {
+    const { worldId, ids } = await seed([{ name: 'Sam' }]);
+    const child = await asChild(worldId, 'Sam');
+    await child.click('button.boat', '');
+    await child.see('O teu símbolo');
+    await child.click('button.symbol', OCTOPUS);
+    await vi.waitFor(() => expect(backend.state.get(worldId)!.profiles.get(ids.Sam!)!.avatar.symbol).toBe(OCTOPUS));
+    expect(child.find('button.symbol[aria-pressed="true"]')?.textContent).toBe(OCTOPUS);
+    await child.click('button', 'Voltar');
+    await vi.waitFor(() => expect(child.root.querySelector('.boat-symbol')?.textContent).toBe(OCTOPUS));
+    await child.click('button.boat', '');
+    await child.click('button', 'Sem símbolo');
+    await vi.waitFor(() => expect(backend.state.get(worldId)!.profiles.get(ids.Sam!)!.avatar.symbol).toBeNull());
+  });
+
+  it('lets an admin choose the symbol of a new profile in the management screen', async () => {
+    const { worldId } = await seed([]);
+    const admin = await asAdult(worldId);
+    await admin.click('button', 'Gerir');
+    await admin.type('Nome', 'Sam');
+    await admin.choose('Símbolo', DOLPHIN);
+    admin.submit();
+    await vi.waitFor(() => {
+      const sam = [...backend.state.get(worldId)!.profiles.values()].find((p) => p.displayName === 'Sam');
+      expect(sam?.avatar.symbol).toBe(DOLPHIN);
+    });
   });
 });
 

@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.5] — 2026-10-20
+
+### Added
+
+- Moorings: a theme may declare spots on the map per profile kind, and the engine moors one boat (`homeVariants[kind]`) at each, one per non-archived profile, in creation order. Only the active profile's own boat opens their `home`; the others are decoration and show no name, count or collectible. A theme without moorings looks as before.
+- Profile symbols: each profile can have one emoji from the theme's `profileSymbols` (every theme now has at least 12), shown on the sail of its boat. The owner chooses it in the `home`, and an admin can choose it when creating a profile. `DataStore`: `worlds.setProfileSymbol`, and `symbol` in `CreateProfileInput`, with both adapters and the contract suite. `Avatar` gains `symbol` (null when absent, no schema version change, no rules change).
+- `validate-theme`: spots inside the map and not overlapping, `symbolAt` inside its spot, and each symbol a single emoji.
+- The pirate theme moors up to eight children at a T-shaped pier, with the example boats removed from the map image; the child boat is a small ship with a plain sail that carries the symbol.
+
+### Fixed
+
+- A theme's picture of the map was drawn at 12% opacity, as the faint backdrop meant for emoji; images are now shown in full. Map places no longer have a border, and their art fits above the name.
+
 ## [0.7.4] — 2026-10-20
 
 ### Added

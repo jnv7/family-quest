@@ -21,6 +21,7 @@ import {
   type TaskDef,
   type World,
 } from '../core/model';
+import type { ProfileSymbols } from './symbols';
 import { DataStoreError, type DataStore, type ShowcaseItem, type DataStoreErrorCode, type TaskDefInput, type Unsubscribe, type Write } from './DataStore';
 
 /** Signed-in devices that share one backend. */
@@ -34,7 +35,11 @@ export interface ContractDevices {
 }
 
 /** Builds fresh devices for one test; every store must read time from `clock`. */
-export type MakeDevices = (env: { clock: Clock }) => Promise<ContractDevices> | ContractDevices;
+export type MakeDevices = (env: { clock: Clock; profileSymbols: ProfileSymbols }) => Promise<ContractDevices> | ContractDevices;
+
+/** The symbols the contract's worlds offer: its worlds use the theme id `minimal`. */
+export const CONTRACT_SYMBOLS = ['🐬', '🦀', '🐙'] as const;
+const profileSymbols: ProfileSymbols = (themeId) => (themeId === 'minimal' ? CONTRACT_SYMBOLS : null);
 
 const START: Millis = Date.parse('2026-10-18T12:00:00Z');
 
@@ -98,7 +103,7 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
     /** A world with an admin, a child on one profile (two devices) and a newcomer. */
     async function setup() {
       now = START;
-      const devices = await makeDevices({ clock });
+      const devices = await makeDevices({ clock, profileSymbols });
       const { admin, child, child2, newcomer } = devices;
 
       const created = admin.worlds.createWorld({ name: 'Home', themeId: 'minimal', creatorDisplayName: 'Alex' });
@@ -787,6 +792,59 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
         await child.collectibles.arrangeParty(worldId, childProfileId, { partyIds: [b], toReserve: [], fromReserve: [b] }).settled;
         await eventually(() => expect(showcase.value?.map((item) => item.id)).toEqual([a]));
         showcase.close();
+      });
+    });
+
+    describe('profile symbols', () => {
+      const profilesOf = (device: DataStore, worldId: string) => new Watch<Profile[]>((v, e) => device.worlds.observeProfiles(worldId, v, e));
+      const symbolOf = (watch: Watch<Profile[]>, id: string) => watch.value?.find((p) => p.id === id)?.avatar.symbol;
+
+      it('starts with no symbol, and lets the owner choose and clear one without touching the rest of the avatar', async () => {
+        const { admin, child, worldId, childProfileId } = await setup();
+        const profiles = profilesOf(admin, worldId);
+        await eventually(() => expect(symbolOf(profiles, childProfileId)).toBeNull());
+        await child.worlds.setProfileSymbol(worldId, childProfileId, '🦀').settled;
+        await eventually(() => expect(symbolOf(profiles, childProfileId)).toBe('🦀'));
+        expect(profiles.value!.find((p) => p.id === childProfileId)!.avatar).toEqual({ body: 0, hair: 0, outfit: 0, accessory: 0, symbol: '🦀' });
+        await child.worlds.setProfileSymbol(worldId, childProfileId, null).settled;
+        await eventually(() => expect(symbolOf(profiles, childProfileId)).toBeNull());
+        profiles.close();
+      });
+
+      it('lets an admin choose the symbol of another profile', async () => {
+        const { admin, worldId, childProfileId } = await setup();
+        const profiles = profilesOf(admin, worldId);
+        await admin.worlds.setProfileSymbol(worldId, childProfileId, '🐙').settled;
+        await eventually(() => expect(symbolOf(profiles, childProfileId)).toBe('🐙'));
+        profiles.close();
+      });
+
+      it('refuses a child choosing the symbol of another profile', async () => {
+        const { admin, child, worldId, adminProfileId } = await setup();
+        const profiles = profilesOf(admin, worldId);
+        await rejectsWith(child.worlds.setProfileSymbol(worldId, adminProfileId, '🐬'), 'permission-denied');
+        expect(symbolOf(profiles, adminProfileId)).toBeNull();
+        profiles.close();
+      });
+
+      it('refuses an emoji outside the theme list before any write', async () => {
+        const { admin, child, worldId, childProfileId } = await setup();
+        const profiles = profilesOf(admin, worldId);
+        await rejectsWith(child.worlds.setProfileSymbol(worldId, childProfileId, '🚀'), 'invalid-argument');
+        await rejectsWith(child.worlds.setProfileSymbol(worldId, childProfileId, 'x'), 'invalid-argument');
+        expect(symbolOf(profiles, childProfileId)).toBeNull();
+        profiles.close();
+      });
+
+      it('lets an admin choose a symbol when creating a profile, and refuses one outside the list', async () => {
+        const { admin, worldId } = await setup();
+        const created = admin.worlds.createProfile(worldId, { displayName: 'Robin', kind: 'child', symbol: '🐬' });
+        await created.settled;
+        const profiles = profilesOf(admin, worldId);
+        await eventually(() => expect(symbolOf(profiles, created.result.profileId)).toBe('🐬'));
+        await rejectsWith(admin.worlds.createProfile(worldId, { displayName: 'Kim', kind: 'child', symbol: '🚀' }), 'invalid-argument');
+        await eventually(() => expect(profiles.value!.some((p) => p.displayName === 'Kim')).toBe(false));
+        profiles.close();
       });
     });
 

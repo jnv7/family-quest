@@ -16,6 +16,7 @@ import { observeSelf } from '../self';
 export const renderHome: WorldScreen = (ctx, root, { worldId }) => {
   const problem = h('div');
   const header = h('section', { class: 'home-header' });
+  const symbolSection = h('section', { class: 'symbols' });
   const partySection = h('section', { class: 'stack' });
   const pendingSection = h('section', { class: 'stack' });
   const reserveSection = h('section', { class: 'stack' });
@@ -46,6 +47,20 @@ export const renderHome: WorldScreen = (ctx, root, { worldId }) => {
     target.replaceChildren(...(body ? [h('h2', {}, title), body] : [h('h2', {}, title)]));
   };
 
+  /** The owner chooses the symbol that appears on their boat, from the theme's list (SPEC.md §7). */
+  const drawSymbols = (active: Profile) => {
+    const choose = (symbol: string | null) => ctx.settle(ctx.store.worlds.setProfileSymbol(worldId, active.id, symbol).settled);
+    symbolSection.replaceChildren(
+      h('h2', {}, ctx.text('home.symbol')),
+      h('div', { class: 'symbol-grid' },
+        h('button', { 'aria-pressed': String(active.avatar.symbol === null), onClick: () => choose(null) }, ctx.text('home.symbolNone')),
+        ...ctx.theme.profileSymbols.map((emoji) =>
+          h('button', { class: 'symbol', 'aria-pressed': String(active.avatar.symbol === emoji), onClick: () => choose(emoji) }, emoji),
+        ),
+      ),
+    );
+  };
+
   function draw(): void {
     if (!profile) return;
     header.replaceChildren(
@@ -53,6 +68,7 @@ export const renderHome: WorldScreen = (ctx, root, { worldId }) => {
       h('p', { class: 'reveal-name' }, profile.displayName),
       h('p', { class: 'avatar-place' }, ctx.text('home.avatarSoon')),
     );
+    drawSymbols(profile);
     if (collectibles === null || ruleset === null) return;
     const { party, pending, reserve } = collectionOf(collectibles, profile.partyIds);
     const list = (items: Collectible[], extras: (c: Collectible) => Array<HTMLElement | null>) =>
@@ -75,6 +91,7 @@ export const renderHome: WorldScreen = (ctx, root, { worldId }) => {
     h('h1', {}, ctx.text('home.title')),
     problem,
     header,
+    symbolSection,
     partySection,
     pendingSection,
     reserveSection,

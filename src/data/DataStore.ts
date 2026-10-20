@@ -7,7 +7,7 @@
  *
  * "Admin only" means: the device's active profile is an adult profile.
  *
- * Scope: operations needed up to release 0.7 (rewards, collectibles, the party and the showcase).
+ * Scope: operations needed up to release 0.7 (rewards, collectibles, the party, the showcase and profile symbols).
  */
 import type { NewRecurringTask } from '../core/generation';
 import type { PartyChange } from '../core/party';
@@ -104,6 +104,8 @@ export interface CreateWorldInput {
 export interface CreateProfileInput {
   displayName: string;
   kind: ProfileKind;
+  /** One of the theme's `profileSymbols`; otherwise `invalid-argument` before any write. */
+  symbol?: string | null;
 }
 
 export interface CreateAdhocTaskInput {
@@ -174,6 +176,12 @@ export interface WorldStore {
   createProfile(worldId: WorldId, input: CreateProfileInput): Write<{ profileId: ProfileId }>;
   /** Admin only, and only child profiles. Profiles are never deleted. */
   setProfileArchived(worldId: WorldId, profileId: ProfileId, archived: boolean): Write;
+
+  /**
+   * Owner or admin. `symbol` must be one of the theme's `profileSymbols`, or null; otherwise
+   * `invalid-argument` before any write. Only `avatar.symbol` changes.
+   */
+  setProfileSymbol(worldId: WorldId, profileId: ProfileId, symbol: string | null): Write;
 
   /**
    * Sets this device's active profile (Netflix-style picker). Choosing an

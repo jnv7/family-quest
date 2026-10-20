@@ -23,6 +23,29 @@ export interface Place {
 
 export type PlaceRole = 'board' | 'checkin' | 'home' | 'vault' | 'showcase';
 
+/** A fixed spot on the map, in percent of the map like a place. */
+export interface Spot {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Where a boat shows its profile's symbol: centre and size, in percent of the spot (size is a share of its width). */
+export interface SymbolAt {
+  x: number;
+  y: number;
+  size: number;
+}
+
+/** Spots where the engine moors one boat per profile of a kind (SPEC.md §7). */
+export interface KindMoorings {
+  spots: Spot[];
+  symbolAt: SymbolAt;
+}
+
+export type ThemeMoorings = Partial<Record<'adult' | 'child', KindMoorings>>;
+
 /** How the installed app looks (ADR 0005). Icon paths are relative to the theme's folder. */
 export interface Install {
   name: string;
@@ -40,7 +63,9 @@ export interface ThemeFile {
   tiers: Record<Tier, string>;
   /** Art of an unopened reward: the tier is visible before opening. */
   rewardArt: Record<Tier, Art>;
-  map: { background: Art; aspectRatio: number };
+  map: { background: Art; aspectRatio: number; moorings?: ThemeMoorings };
+  /** The emoji a profile can choose as its symbol: at least 12, unique, one emoji each. */
+  profileSymbols: string[];
   places: Record<PlaceRole, Place>;
   homeVariants: { adult: Art; child: Art };
   install: Install;

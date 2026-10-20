@@ -76,16 +76,93 @@
       "image": "assets/rewards/high.svg"
     }
   },
+  "profileSymbols": [
+    "⚓",
+    "🏴‍☠️",
+    "🦜",
+    "🐙",
+    "🦀",
+    "🐚",
+    "🌴",
+    "🗺️",
+    "🧭",
+    "💎",
+    "🐬",
+    "🦈",
+    "🐳",
+    "⭐",
+    "🔱",
+    "🥥"
+  ],
   "map": {
     "background": {
       "image": "assets/map.webp"
     },
-    "aspectRatio": 0.5625
+    "aspectRatio": 0.5625,
+    "moorings": {
+      "child": {
+        "spots": [
+          {
+            "x": 55.19,
+            "y": 77.86,
+            "width": 10.19,
+            "height": 7.81
+          },
+          {
+            "x": 66.3,
+            "y": 77.86,
+            "width": 10.19,
+            "height": 7.81
+          },
+          {
+            "x": 77.41,
+            "y": 77.86,
+            "width": 10.19,
+            "height": 7.81
+          },
+          {
+            "x": 88.52,
+            "y": 77.86,
+            "width": 10.19,
+            "height": 7.81
+          },
+          {
+            "x": 55.19,
+            "y": 89.48,
+            "width": 10.19,
+            "height": 7.81
+          },
+          {
+            "x": 66.3,
+            "y": 89.48,
+            "width": 10.19,
+            "height": 7.81
+          },
+          {
+            "x": 77.41,
+            "y": 89.48,
+            "width": 10.19,
+            "height": 7.81
+          },
+          {
+            "x": 88.52,
+            "y": 89.48,
+            "width": 10.19,
+            "height": 7.81
+          }
+        ],
+        "symbolAt": {
+          "x": 50,
+          "y": 42,
+          "size": 50
+        }
+      }
+    }
   },
   "places": {
     "board": {
       "x": 20.6,
-      "y": 66.9,
+      "y": 65.9,
       "width": 20,
       "height": 11,
       "art": {
@@ -110,10 +187,10 @@
       }
     },
     "home": {
-      "x": 23.0,
-      "y": 76.4,
-      "width": 30,
-      "height": 16,
+      "x": 24.0,
+      "y": 85.0,
+      "width": 28,
+      "height": 15,
       "art": {
         "image": "assets/home/adult.webp"
       },

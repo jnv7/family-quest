@@ -231,6 +231,13 @@ fieldset {
   background: color-mix(in srgb, var(--accent) 12%, Canvas);
 }
 
+/* A theme's picture of the map is shown in full; an emoji stays a faint backdrop. */
+img.map-art {
+  width: 100%;
+  height: 100%;
+  opacity: 1;
+}
+
 .map-art {
   position: absolute;
   inset: 0;
@@ -242,13 +249,50 @@ fieldset {
   pointer-events: none;
 }
 
+/* The family's boats at the theme's moorings (SPEC.md §7). */
+.boats {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.boat {
+  position: absolute;
+  container-type: inline-size;
+  pointer-events: none;
+}
+
+button.boat.own {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: auto;
+}
+
+.boat-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  font-size: 100cqw;
+}
+
+.boat-symbol {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: calc(var(--symbol-size) * 1cqw);
+  line-height: 1;
+}
+
 button.place {
   position: absolute;
   display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
   align-content: center;
   justify-items: center;
   gap: 0.25rem;
   padding: 0.25rem;
+  border: 0;
   border-radius: 1rem;
   /* No panel behind the art: a themed map is painted, so the name carries the contrast instead. */
   background: transparent;
@@ -266,7 +310,9 @@ button.place:disabled {
 
 img.place-art {
   max-width: 100%;
-  max-height: 70%;
+  max-height: 100%;
+  min-height: 0;
+  object-fit: contain;
 }
 
 .place-name {
@@ -558,6 +604,31 @@ button.place[data-alert='tomorrow'] {
 
 .collectible-card p {
   margin: 0;
+}
+
+.symbols {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.symbol-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.symbol-grid button {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+}
+
+.symbol-grid .symbol {
+  font-size: 1.5rem;
+}
+
+.symbol-grid button[aria-pressed='true'] {
+  outline: 3px solid var(--accent);
 }
 
 .rename {

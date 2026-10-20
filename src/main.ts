@@ -2,7 +2,7 @@
 import './style.css';
 import { createRandomInt } from './core/random';
 import type { DataStore } from './data/DataStore';
-import { formatMessage, loadTheme } from './theme';
+import { formatMessage, hasTheme, loadTheme } from './theme';
 import { startApp } from './ui/app';
 import { createInstaller } from './ui/install';
 import { browserNavigation } from './ui/navigation';
@@ -10,6 +10,9 @@ import { createWorldMemory } from './ui/worldMemory';
 
 /** Only one theme exists for now; later releases read the theme from the world. */
 const DEFAULT_THEME_ID = 'minimal';
+
+/** The emoji a profile may choose in a world, from the bundled theme of that world. */
+const profileSymbols = (themeId: string) => (hasTheme(themeId) ? loadTheme(themeId).profileSymbols : null);
 
 /** `VITE_DATA=memory` runs without Firebase; `VITE_DATA=emulator` uses the local emulators. */
 async function createStore(): Promise<DataStore> {
@@ -19,11 +22,11 @@ async function createStore(): Promise<DataStore> {
 
   if (mode === 'memory') {
     const { createMemoryBackend, createMemoryStore } = await import('./data/memory');
-    return createMemoryStore(createMemoryBackend(), { uid: 'dev-device', clock, randomInt });
+    return createMemoryStore(createMemoryBackend(), { uid: 'dev-device', clock, randomInt, profileSymbols });
   }
   const { createFirebaseServices, createFirestoreStore } = await import('./data/firestore');
   const services = createFirebaseServices({ emulator: mode === 'emulator', persistent: mode !== 'emulator' });
-  return createFirestoreStore({ firestore: services.firestore, auth: services.auth, clock, randomInt });
+  return createFirestoreStore({ firestore: services.firestore, auth: services.auth, clock, randomInt, profileSymbols });
 }
 
 function localStorageOrNull(): Storage | null {

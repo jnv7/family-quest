@@ -1,5 +1,6 @@
 import { planAlert } from '../../core/alerts';
-import type { ProfileId, Task, World } from '../../core/model';
+import { mooredBoats } from '../../core/moorings';
+import type { Profile, ProfileId, Task, World } from '../../core/model';
 import type { WorldScreen } from '../context';
 import { artElement } from '../art';
 import { h } from '../dom';
@@ -31,6 +32,11 @@ export const renderMap: WorldScreen = (ctx, root, { worldId }) => {
   let cancelTransition = () => {};
   let boardButton: HTMLElement | null = null;
 
+  // Boats come before the places in the DOM, so a place always receives its own taps.
+  const moorings = theme.map.moorings;
+  const boats = moorings ? h('div', { class: 'boats' }) : null;
+  if (boats) map.append(boats);
+
   for (const role of PLACES) {
     const place = theme.places[role];
     const destination = DESTINATIONS[role];
@@ -55,6 +61,35 @@ export const renderMap: WorldScreen = (ctx, root, { worldId }) => {
 
   root.append(h('header', { class: 'bar' }, title, actions), map);
 
+  /**
+   * One boat per profile at the theme's moorings (SPEC.md §7). Only the active profile's own boat
+   * is a button, and it opens their home like the home place does; the others are decoration, so
+   * they show who is on the island and never open anyone else's home or party.
+   */
+  const drawBoats = (profiles: readonly Profile[], activeId: ProfileId | null) => {
+    if (!boats || !moorings) return;
+    boats.replaceChildren(
+      ...mooredBoats(profiles, moorings, activeId).map((boat) => {
+        const kind = moorings[boat.kind]!;
+        const spot = kind.spots[boat.spotIndex]!;
+        const style = `left:${spot.x}%;top:${spot.y}%;width:${spot.width}%;height:${spot.height}%`;
+        const content = [
+          artElement(theme, theme.homeVariants[boat.kind], 'boat-art'),
+          boat.symbol
+            ? h('span', { class: 'boat-symbol', 'aria-hidden': 'true', style: `left:${kind.symbolAt.x}%;top:${kind.symbolAt.y}%;--symbol-size:${kind.symbolAt.size}` }, boat.symbol)
+            : null,
+        ];
+        if (!boat.own) return h('div', { class: 'boat', 'aria-hidden': 'true', style }, ...content);
+        const button = h('button', { class: 'boat own', style, 'aria-label': ctx.text('map.ownBoat') }, ...content);
+        button.addEventListener('click', () => {
+          cancelTransition();
+          cancelTransition = playTransition(map, button, theme.places.home.transition, () => ctx.go({ name: 'home' }));
+        });
+        return button;
+      }),
+    );
+  };
+
   // The board lights up when a planned task is due today or tomorrow: a neutral effect, the
   // same for every theme (ADR 0006), with two intensities and no text (SPEC.md §2).
   let world: World | null = null;
@@ -70,7 +105,7 @@ export const renderMap: WorldScreen = (ctx, root, { worldId }) => {
   let watchedProfile: ProfileId | null = null;
   let stopTasks = () => {};
 
-  const stopSelf = observeSelf(ctx, worldId, ({ profile, isAdmin }) => {
+  const stopSelf = observeSelf(ctx, worldId, ({ profile, profiles, isAdmin }) => {
     if (!profile) {
       // No active profile (yet, or the choice was refused): pick one.
       ctx.go({ name: 'profiles' }, { replace: true });
@@ -82,6 +117,7 @@ export const renderMap: WorldScreen = (ctx, root, { worldId }) => {
       tasks = [];
       stopTasks = ctx.store.tasks.observeTasks(worldId, profile.id, (value) => ((tasks = value), light()), unlit);
     }
+    drawBoats(profiles, profile.id);
     title.textContent = ctx.text('map.hello', { name: profile.displayName });
     const buttons = [h('button', { onClick: () => ctx.go({ name: 'profiles' }) }, ctx.text('map.switch'))];
     if (canOfferInstall(ctx)) buttons.push(h('button', { onClick: () => ctx.go({ name: 'install' }) }, ctx.text('map.install')));

@@ -289,6 +289,11 @@ describe('profiles', () => {
     await assertFails(updateDoc(doc(db, p('profiles', 'pChild2')), { partyIds: ['a'] }));
   });
 
+  it('the owner writes avatar.symbol without any rules change, and another child cannot', async () => {
+    await assertSucceeds(updateDoc(doc(as(CHILD), p('profiles', 'pChild')), { 'avatar.symbol': '🐬' }));
+    await assertFails(updateDoc(doc(as(CHILD), p('profiles', 'pChild2')), { 'avatar.symbol': '🐬' }));
+  });
+
   it('the party cannot exceed the ruleset size', async () => {
     await assertFails(updateDoc(doc(as(CHILD), p('profiles', 'pChild')), { partyIds: ['a', 'b', 'c', 'd', 'e', 'f'] }));
   });

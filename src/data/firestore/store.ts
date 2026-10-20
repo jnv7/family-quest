@@ -26,6 +26,7 @@ import {
 import { signInAnonymously, type Auth } from 'firebase/auth';
 import { weekKey } from '../../core/calendar';
 import { nicknameTooLong, normaliseNickname } from '../../core/collection';
+import { assertSymbolAllowed, type ProfileSymbols } from '../symbols';
 import { oddsProblem } from '../../core/draw';
 import { checkPartyChange } from '../../core/party';
 import { taskDefProblem } from '../../core/taskDefs';
@@ -48,6 +49,7 @@ import {
   type TaskDef,
   type Uid,
   type World,
+  type WorldId,
 } from '../../core/model';
 import { randomWorldId } from '../../core/random';
 import {
@@ -101,6 +103,8 @@ export interface FirestoreStoreOptions {
   auth: Auth;
   clock: Clock;
   randomInt: RandomInt;
+  /** The emoji a profile may choose in a world, by theme id (the app passes the bundled themes). */
+  profileSymbols: ProfileSymbols;
 }
 
 const invalid = (message: string) => new DataStoreError('invalid-argument', message);
@@ -139,6 +143,15 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
       // Not in the cache: fall through to the server.
     }
     return getDoc(ref);
+  }
+
+  /** Refuses a symbol the world's theme does not offer, before any write. Clearing needs no read. */
+  async function checkSymbol(worldId: WorldId, symbol: string | null | undefined): Promise<void> {
+    if (symbol === null || symbol === undefined) return;
+    const snapshot = await readDoc(worldDoc(db, worldId));
+    const world = snapshot.exists() ? decodeWorld(snapshot) : null;
+    if (!world) throw new DataStoreError('not-found', `World ${worldId} does not exist`);
+    assertSymbolAllowed(options.profileSymbols(world.themeId), symbol);
   }
 
   function observeDoc<T>(
@@ -269,18 +282,25 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
         return write({ profileId }, async () => {
           checkText('Display name', input.displayName, LIMITS.displayName);
           if (input.kind !== 'adult' && input.kind !== 'child') throw invalid(`Unknown profile kind: ${String(input.kind)}`);
+          await checkSymbol(worldId, input.symbol);
           const profile: Profile = {
             ...newDoc(),
             id: profileId,
             displayName: input.displayName,
             kind: input.kind,
-            avatar: { ...DEFAULT_AVATAR },
+            avatar: { ...DEFAULT_AVATAR, symbol: input.symbol ?? null },
             partyIds: [],
             archived: false,
           };
           await setDoc(profileDoc(db, worldId, profileId), encodeProfile(profile));
         });
       },
+
+      setProfileSymbol: (worldId, profileId, symbol) =>
+        write(undefined, async () => {
+          await checkSymbol(worldId, symbol);
+          await updateDoc(profileDoc(db, worldId, profileId), { 'avatar.symbol': symbol });
+        }),
 
       setProfileArchived: (worldId, profileId, archived) =>
         write(undefined, () => updateDoc(profileDoc(db, worldId, profileId), { archived })),
