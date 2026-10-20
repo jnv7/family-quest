@@ -1,0 +1,101 @@
+{
+  "$schema": "../../../schemas/catalog.schema.json",
+  "slots": [
+    {
+      "slot": "caranguejo",
+      "tier": "low",
+      "name": "Caranguejo Rabugento",
+      "art": {
+        "emoji": "🦀"
+      }
+    },
+    {
+      "slot": "gaivota",
+      "tier": "low",
+      "name": "Gaivota Gulosa",
+      "art": {
+        "emoji": "🐦"
+      }
+    },
+    {
+      "slot": "estrela-do-mar",
+      "tier": "low",
+      "name": "Estrela-do-mar Sonolenta",
+      "art": {
+        "emoji": "⭐"
+      }
+    },
+    {
+      "slot": "peixe-balao",
+      "tier": "low",
+      "name": "Peixe-balão Teimoso",
+      "art": {
+        "emoji": "🐡"
+      }
+    },
+    {
+      "slot": "papagaio",
+      "tier": "mid",
+      "name": "Papagaio Tagarela",
+      "art": {
+        "emoji": "🦜"
+      }
+    },
+    {
+      "slot": "polvo",
+      "tier": "mid",
+      "name": "Polvo Malabarista",
+      "art": {
+        "emoji": "🐙"
+      }
+    },
+    {
+      "slot": "tartaruga",
+      "tier": "mid",
+      "name": "Tartaruga Navegadora",
+      "art": {
+        "emoji": "🐢"
+      }
+    },
+    {
+      "slot": "macaco",
+      "tier": "mid",
+      "name": "Macaco Gatuno",
+      "art": {
+        "emoji": "🐒"
+      }
+    },
+    {
+      "slot": "kraken",
+      "tier": "high",
+      "name": "Kraken Bonzinho",
+      "art": {
+        "emoji": "🦑"
+      }
+    },
+    {
+      "slot": "baleia-dourada",
+      "tier": "high",
+      "name": "Baleia Dourada",
+      "art": {
+        "emoji": "🐋"
+      }
+    },
+    {
+      "slot": "fantasma",
+      "tier": "high",
+      "name": "Capitão Fantasma",
+      "art": {
+        "emoji": "👻"
+      }
+    },
+    {
+      "slot": "sereia",
+      "tier": "high",
+      "name": "Sereia do Farol",
+      "art": {
+        "emoji": "🧜‍♀️"
+      }
+    }
+  ]
+}

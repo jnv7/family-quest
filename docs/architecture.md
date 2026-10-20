@@ -192,7 +192,7 @@ Run for every folder in `src/themes/`; it fails on the first error, with the fil
    - every `{@role...}` used in `src/i18n/pt-PT.json` names a known role and form;
    - every `{^...}` wraps a valid placeholder.
 
-Until 0.6, only themes listed in `scripts/validated-themes.json` are checked (the minimal theme). The pirate theme joins in 0.6.
+Only themes listed in `scripts/validated-themes.json` are checked: both minimal themes and, since 0.6, the pirate theme.
 
 ### `lint:theme-leak`
 

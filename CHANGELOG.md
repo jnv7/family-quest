@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- The pirate theme package, as data only: names with gender, tier names, the lighthouse sage's lines, a catalogue of four collectibles per tier, and emoji placeholder art with lighthouse icons for the installed app. The product owner wrote the approved texts; the final art replaces the emoji in 0.7 with no data migration. It is offered when creating a world and joins `validate-theme`.
+
 ## [0.6.3] — 2026-10-20
 
 Completes the scope of release 0.6.
