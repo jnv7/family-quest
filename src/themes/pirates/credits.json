@@ -1,0 +1,29 @@
+{
+  "$schema": "../../../schemas/credits.schema.json",
+  "assets": [
+    {
+      "file": "assets/icons/apple-touch-icon.png",
+      "author": "Family Quest",
+      "source": "https://github.com/jnv7/family-quest",
+      "licence": "MIT"
+    },
+    {
+      "file": "assets/icons/icon-192.png",
+      "author": "Family Quest",
+      "source": "https://github.com/jnv7/family-quest",
+      "licence": "MIT"
+    },
+    {
+      "file": "assets/icons/icon-512.png",
+      "author": "Family Quest",
+      "source": "https://github.com/jnv7/family-quest",
+      "licence": "MIT"
+    },
+    {
+      "file": "assets/icons/icon-maskable-512.png",
+      "author": "Family Quest",
+      "source": "https://github.com/jnv7/family-quest",
+      "licence": "MIT"
+    }
+  ]
+}

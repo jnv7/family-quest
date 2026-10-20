@@ -193,8 +193,19 @@ Run for every folder in `src/themes/`; it fails on the first error, with the fil
 5. **Placeholders:**
    - every `{@role...}` used in `src/i18n/pt-PT.json` names a known role and form;
    - every `{^...}` wraps a valid placeholder.
+6. **Image files** (`scripts/theme-assets.ts`; sizes read from the file bytes by `scripts/image-info.ts`, so no image library is needed to validate):
+   - **formats:** raster art is `webp`; `png` only under `assets/icons/`; `svg` is allowed for vector art;
+   - **credits:** every file in `assets/` has exactly one entry in the theme's `credits.json` (schema `schemas/credits.schema.json`), and every entry points to an existing file;
+   - **licences:** only `CC0-1.0`, and `MIT` for art made for this repository;
+   - **budgets:** map background at most 1080 × 1920 and 400 KB; place art, `homeVariants`, character and reward art at most 512 × 512 and 80 KB; collectible art at most 512 × 512 and 60 KB; all the art of a theme at most 2.5 MB. The kind of a file comes from where the theme uses it;
+   - **metadata:** no EXIF or XMP in any `webp` or `png`.
 
 Only themes listed in `scripts/validated-themes.json` are checked: both minimal themes and, since 0.6, the pirate theme.
+
+### Art tooling
+
+- `npm run art:prepare -- <folder>` (`scripts/art-prepare.ts`, with `sharp` as a dev dependency) converts downloaded source images, kept outside the repository, into the theme's `assets/`: fitted inside the budget of their kind, as sRGB `webp`, with all metadata stripped, lowering the quality until the file fits. A mapping file `art.json` in that folder says which source becomes which target and of which kind. It does not write credits: the developer adds the new files to `credits.json`.
+- `npm run credits` (`scripts/credits.ts`) writes `CREDITS.md` at the repository root from every validated theme's `credits.json`, grouped by theme and by author. CI runs it with `--check`, and a unit test does the same, so the file cannot go stale.
 
 ### `lint:theme-leak`
 
@@ -235,7 +246,7 @@ No framework (`CONTRIBUTING.md`). `src/main.ts` picks the adapter and calls `sta
 - **`AppContext`** (`src/ui/context.ts`) is everything a screen may use: the `DataStore`, the theme, `text()`, `go()`, `notify()` and `settle()`. `settle()` applies the table in §2 to a write's late verdict.
 - **Observer failures.** A screen never leaves, or forgets the world, because an observer failed. `observeWithRetry` (`src/ui/observe.ts`) shows a message with a retry button, and the details go to `console.error`. Only `permission-denied` on the world's own data (the device is no longer a member) clears the remembered world.
 - **Rendering.** Screens render from observers only. Who the device is (`observeSelf`, `src/ui/self.ts`) comes from the memberships and profiles, so a refused profile choice sends the device back to the picker by itself.
-- **Routes** are hash routes (`src/ui/routes.ts`): `#/`, `#/create`, `#/join[/<worldId>[/<themeId>]]`, `#/install`, `#/profiles`, `#/map`, `#/board`, `#/checkin`, `#/vault`, `#/new-task`, `#/manage`, `#/share`. Unknown hashes are the start page. Screens that need a world send the device to the start page if it has none. The route `map` is the main screen; `home` is a place on the map, not a route yet.
+- **Routes** are hash routes (`src/ui/routes.ts`): `#/`, `#/create`, `#/join[/<worldId>[/<themeId>]]`, `#/install`, `#/profiles`, `#/map`, `#/board`, `#/checkin`, `#/vault`, `#/home`, `#/showcase`, `#/new-task`, `#/manage`, `#/share`. Unknown hashes are the start page. Screens that need a world send the device to the start page if it has none. The route `map` is the main screen, and each of its five places has its own route.
 - **Navigation** (`src/ui/navigation.ts`) is injected, so the app never touches `location` directly. The browser version uses the address bar; the in-memory version gives each device of a test its own, so several devices can run in one test.
 - **The theme is dynamic.** `ctx.theme` is whatever the theme currently is, and `ctx.setTheme()` changes it and redraws. It is set from a join link, from the choice when creating a world, from the launch address (`?theme=`) of an installed app, and from the world itself, which wins and is remembered by `WorldMemory` so the next launch has the right names from the first frame. `applyThemeToPage` swaps the page's manifest, iOS icon and name, and colours.
 - **Installing** (ADR 0005). `src/ui/install.ts` detects the platform and keeps the browser's install event from the moment the app starts; `src/ui/installOffer.ts` draws the offer (a button, or the iOS steps) only once the theme is known. One manifest per theme is built by `scripts/theme-manifests.ts`, with the paths in `src/theme/installPaths.ts` shared with the app.
