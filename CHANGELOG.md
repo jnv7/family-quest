@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.2] — 2026-10-20
+
+### Added
+
+- The `showcase` place: a grid of the latest collectibles that went to the reserve, from everyone, newest first, up to `showcaseSize`. A tap shows one larger, with its name and tier name. It shows no owner, no date and no count. An admin can rename any item there (moderation).
+- `DataStore`: `collectibles.observeShowcase` and `ShowcaseItem`, which has no owner field, in both adapters and the contract suite.
+
 ## [0.7.1] — 2026-10-20
 
 ### Added

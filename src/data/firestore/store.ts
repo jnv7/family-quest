@@ -11,6 +11,7 @@ import {
   doc,
   getDoc,
   getDocFromCache,
+  limit as limitTo,
   onSnapshot,
   orderBy,
   query,
@@ -54,6 +55,7 @@ import {
   type DataStore,
   type Observer,
   type ObserverError,
+  type ShowcaseItem,
   type Unsubscribe,
   type Write,
 } from '../DataStore';
@@ -541,6 +543,23 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
           await batch.commit();
         });
       },
+
+      // A single inequality on the field it orders by: the automatic single-field index serves it.
+      observeShowcase: (worldId, limit, onValue, onError) =>
+        onSnapshot(
+          query(collectiblesCollection(db, worldId), where('reserveAt', '!=', null), orderBy('reserveAt', 'desc'), limitTo(limit)),
+          (snapshot) =>
+            onValue(
+              decodeAll(snapshot.docs, decodeCollectible).map((c): ShowcaseItem => ({
+                id: c.id,
+                slot: c.slot,
+                tier: c.tier,
+                nickname: c.nickname,
+                reserveAt: c.reserveAt!,
+              })),
+            ),
+          (error) => onError?.(toDataStoreError(error)),
+        ),
 
       setNickname: (worldId, collectibleId, nickname) =>
         write(undefined, async () => {

@@ -1,5 +1,5 @@
-import { displayName } from '../core/collection';
-import type { Collectible, Profile, Ruleset, TaskId, WorldId } from '../core/model';
+import { displayName, nicknameTooLong, normaliseNickname } from '../core/collection';
+import { LIMITS, type Collectible, type Profile, type Ruleset, type TaskId, type WorldId } from '../core/model';
 import { collectibleState } from '../core/party';
 import type { CatalogSlot } from '../theme/types';
 import type { AppContext } from './context';
@@ -16,7 +16,7 @@ export interface PartyState {
 }
 
 /** The theme's entry for a collectible, or null (reported) if the theme does not have its slot. */
-export function entryOf(ctx: Pick<AppContext, 'theme'>, collectible: Collectible): CatalogSlot | null {
+export function entryOf(ctx: Pick<AppContext, 'theme'>, collectible: Pick<Collectible, 'slot'>): CatalogSlot | null {
   const entry = ctx.theme.catalog.slots.find((slot) => slot.slot === collectible.slot);
   if (!entry) console.warn(`The theme has no collectible "${collectible.slot}"`);
   return entry ?? null;
@@ -27,7 +27,7 @@ export function entryOf(ctx: Pick<AppContext, 'theme'>, collectible: Collectible
  * slot the theme lacks is a bug: it is reported and the tier name stands in, so the screen
  * does not crash.
  */
-export function nameOf(ctx: Pick<AppContext, 'theme'>, collectible: Collectible): string {
+export function nameOf(ctx: Pick<AppContext, 'theme'>, collectible: Pick<Collectible, 'slot' | 'nickname' | 'tier'>): string {
   try {
     return displayName(collectible, (slot) => {
       const entry = ctx.theme.catalog.slots.find((candidate) => candidate.slot === slot);
@@ -87,6 +87,55 @@ export function createPartyControls(ctx: Deps, worldId: WorldId, state: () => Pa
             }, artElement(ctx.theme, entry.art, 'swap-art'), ctx.text('party.swap', { name: nameOf(ctx, member) })),
           ];
         }),
+      );
+    },
+  };
+}
+
+/**
+ * Inline renaming of a collectible, shared by the `home` and the `showcase` (admin). It keeps
+ * what is being typed, so a redraw caused by incoming data does not lose it. Empty text clears
+ * the name; the text is limited to `LIMITS.nickname`.
+ */
+export function createRenamer(ctx: Deps, worldId: WorldId, redraw: () => void) {
+  let editing: TaskId | null = null;
+  let draft = '';
+  let tooLong = false;
+
+  return {
+    /** Forgets any rename in progress. */
+    reset(): void {
+      editing = null;
+      tooLong = false;
+    },
+
+    /** The "rename" button, or the form while this collectible is being renamed. */
+    control(id: TaskId, nickname: string | null): HTMLElement {
+      if (editing !== id) {
+        return h('button', { onClick: () => ((editing = id), (draft = nickname ?? ''), redraw()) }, ctx.text('collectible.rename'));
+      }
+      const input = h('input', { type: 'text', value: draft, maxLength: LIMITS.nickname });
+      input.addEventListener('input', () => (draft = input.value));
+      return h('form', {
+        class: 'rename',
+        onSubmit: (event: Event) => {
+          event.preventDefault();
+          const value = normaliseNickname(input.value);
+          if (nicknameTooLong(value)) {
+            tooLong = true;
+            redraw();
+            return;
+          }
+          editing = null;
+          tooLong = false;
+          ctx.settle(ctx.store.collectibles.setNickname(worldId, id, value).settled);
+          redraw();
+        },
+      },
+        h('label', {}, ctx.text('collectible.renameLabel'), input),
+        h('button', { class: 'primary', type: 'submit' }, ctx.text('collectible.renameSave')),
+        h('button', { type: 'button', onClick: () => ((editing = null), (tooLong = false), redraw()) }, ctx.text('collectible.renameCancel')),
+        tooLong ? h('p', { class: 'message', role: 'alert' }, ctx.text('collectible.renameTooLong')) : null,
       );
     },
   };

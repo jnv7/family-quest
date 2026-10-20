@@ -21,7 +21,7 @@ import {
   type TaskDef,
   type World,
 } from '../core/model';
-import { DataStoreError, type DataStore, type DataStoreErrorCode, type TaskDefInput, type Unsubscribe, type Write } from './DataStore';
+import { DataStoreError, type DataStore, type ShowcaseItem, type DataStoreErrorCode, type TaskDefInput, type Unsubscribe, type Write } from './DataStore';
 
 /** Signed-in devices that share one backend. */
 export interface ContractDevices {
@@ -731,6 +731,62 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
         await rejectsWith(newcomer.collectibles.setNickname(worldId, id, 'Mine now'), 'permission-denied');
         expect(nickname()).toBeNull();
         owned.close();
+      });
+    });
+
+    describe('showcase', () => {
+      /** Opens one collectible for the device's profile and moves it to the reserve at `at`. */
+      async function reserved(device: DataStore, adminDevice: DataStore, worldId: string, profileId: ProfileId, title: string, at: Millis) {
+        const task = adminDevice.tasks.createAdhocTask(worldId, adhoc(profileId, title));
+        await task.settled;
+        const id = task.result.taskId;
+        await device.tasks.completeTask(worldId, id, { answer: null, talkFlag: false, rewardTier: 'low' }).settled;
+        await device.rewards.openReward(worldId, id, { slot: `slot-${title}` }).settled;
+        now = at;
+        await device.collectibles.arrangeParty(worldId, profileId, { partyIds: [], toReserve: [id], fromReserve: [] }).settled;
+        return id;
+      }
+
+      it('lists the reserve of every profile, newest first, on every device, without the owner', async () => {
+        const { admin, child, newcomer, worldId, adminProfileId, childProfileId } = await setup();
+        const a = await reserved(child, admin, worldId, childProfileId, 'a', START + 1000);
+        const b = await reserved(admin, admin, worldId, adminProfileId, 'b', START + 2000);
+        const c = await reserved(child, admin, worldId, childProfileId, 'c', START + 3000);
+        for (const device of [admin, child, newcomer]) {
+          const showcase = new Watch<ShowcaseItem[]>((v, e) => device.collectibles.observeShowcase(worldId, 30, v, e));
+          await eventually(() => expect(showcase.value?.map((item) => item.id)).toEqual([c, b, a]));
+          for (const item of showcase.value!) {
+            expect(Object.keys(item).sort()).toEqual(['id', 'nickname', 'reserveAt', 'slot', 'tier']);
+            expect(item).not.toHaveProperty('profileId');
+          }
+          expect(showcase.value![0]).toMatchObject({ slot: 'slot-c', tier: 'low', nickname: null, reserveAt: START + 3000 });
+          showcase.close();
+        }
+      });
+
+      it('shows only the newest ones up to the limit, and keeps the others stored', async () => {
+        const { admin, child, worldId, childProfileId } = await setup();
+        const ids: string[] = [];
+        for (const [i, title] of ['a', 'b', 'c'].entries()) ids.push(await reserved(child, admin, worldId, childProfileId, title, START + 1000 * (i + 1)));
+        const showcase = new Watch<ShowcaseItem[]>((v, e) => admin.collectibles.observeShowcase(worldId, 2, v, e));
+        await eventually(() => expect(showcase.value?.map((item) => item.id)).toEqual([ids[2], ids[1]]));
+        const owned = new Watch<Collectible[]>((v, e) => child.collectibles.observeCollectibles(worldId, childProfileId, v, e));
+        await eventually(() => expect(owned.value).toHaveLength(3));
+        showcase.close();
+        owned.close();
+      });
+
+      it('drops a collectible that goes back to the party, and shows a new nickname', async () => {
+        const { admin, child, worldId, childProfileId } = await setup();
+        const a = await reserved(child, admin, worldId, childProfileId, 'a', START + 1000);
+        const b = await reserved(child, admin, worldId, childProfileId, 'b', START + 2000);
+        const showcase = new Watch<ShowcaseItem[]>((v, e) => admin.collectibles.observeShowcase(worldId, 30, v, e));
+        await eventually(() => expect(showcase.value).toHaveLength(2));
+        await admin.collectibles.setNickname(worldId, a, 'Moderated').settled;
+        await eventually(() => expect(showcase.value?.find((item) => item.id === a)?.nickname).toBe('Moderated'));
+        await child.collectibles.arrangeParty(worldId, childProfileId, { partyIds: [b], toReserve: [], fromReserve: [b] }).settled;
+        await eventually(() => expect(showcase.value?.map((item) => item.id)).toEqual([a]));
+        showcase.close();
       });
     });
 

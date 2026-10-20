@@ -2,7 +2,7 @@ import { LIMITS } from './model';
 import type { Collectible, Slot, TaskId } from './model';
 
 /** The name to show: the nickname, or else the catalogue slot's name in the active theme. */
-export function displayName(collectible: Collectible, slotName: (slot: Slot) => string): string {
+export function displayName(collectible: Pick<Collectible, 'slot' | 'nickname'>, slotName: (slot: Slot) => string): string {
   return collectible.nickname ?? slotName(collectible.slot);
 }
 

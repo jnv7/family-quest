@@ -17,6 +17,7 @@ const DESTINATIONS: Partial<Record<PlaceRole, Route>> = {
   checkin: { name: 'checkin' },
   vault: { name: 'vault' },
   home: { name: 'home' },
+  showcase: { name: 'showcase' },
 };
 
 /** The main screen: a map with five places, laid out by the theme (SPEC.md §7). */

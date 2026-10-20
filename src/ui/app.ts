@@ -23,6 +23,7 @@ import { renderProfiles } from './screens/profiles';
 import { renderShare } from './screens/share';
 import { renderStart } from './screens/start';
 import { renderHome } from './screens/home';
+import { renderShowcase } from './screens/showcase';
 import { renderVault } from './screens/vault';
 import type { WorldMemory } from './worldMemory';
 
@@ -139,6 +140,8 @@ export async function startApp(options: AppOptions): Promise<() => void> {
         return needsWorld(renderVault);
       case 'home':
         return needsWorld(renderHome);
+      case 'showcase':
+        return needsWorld(renderShowcase);
       case 'newTask':
         return needsWorld(renderNewTask);
       case 'manage':

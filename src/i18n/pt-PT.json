@@ -147,11 +147,14 @@
     "home.pending": "Recentes",
     "home.reserve": "{^@reserve}",
     "home.reserveEmpty": "Ainda não há nada {@reserve.in}.",
-    "home.rename": "Mudar o nome",
-    "home.renameLabel": "Nome",
-    "home.renameSave": "Guardar",
-    "home.renameCancel": "Cancelar",
-    "home.renameTooLong": "O nome é demasiado comprido.",
+    "showcase.title": "{^@showcase}",
+    "showcase.empty": "Ainda não há nada {@showcase.in}.",
+    "showcase.close": "Fechar",
+    "collectible.rename": "Mudar o nome",
+    "collectible.renameLabel": "Nome",
+    "collectible.renameSave": "Guardar",
+    "collectible.renameCancel": "Cancelar",
+    "collectible.renameTooLong": "O nome é demasiado comprido.",
     "home.toReserve": "Para {@reserve.the}"
   }
 }

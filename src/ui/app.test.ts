@@ -456,7 +456,7 @@ async function createTask(device: Awaited<ReturnType<typeof openDevice>>, title:
 }
 
 describe('the map', () => {
-  it('lays out the five places of the theme, and only the showcase does not lead anywhere yet', async () => {
+  it('lays out the five places of the theme, and every place leads somewhere', async () => {
     const { admin } = await createFamily();
     await admin.click('button', 'Continuar');
     await admin.see('Olá, Alex!');
@@ -469,7 +469,7 @@ describe('the map', () => {
       'Cofre',
       'Vitrina',
     ]);
-    expect(places.filter((p) => !p.disabled).map((p) => p.querySelector('.place-name')?.textContent)).toEqual(['Quadro', 'Registo', 'Casa', 'Cofre']);
+    expect(places.filter((p) => !p.disabled).map((p) => p.querySelector('.place-name')?.textContent)).toEqual(['Quadro', 'Registo', 'Casa', 'Cofre', 'Vitrina']);
     expect(places[0]!.style.left).toBe('8%'); // position comes from theme.json
 
     await admin.click('button.place', 'Quadro');
@@ -940,6 +940,65 @@ describe('the home', () => {
     await child.click('button.place', 'Casa');
     const tier = state(worldId).collectibles.get(first)!.tier;
     await vi.waitFor(() => expect(cards(child, 0)[0]!.querySelector('.reveal-name')?.textContent).toBe(theme.tiers[tier]));
+  });
+});
+
+describe('the showcase', () => {
+  /** A child with two collectibles in the reserve, one of them nicknamed, and the admin on the map. */
+  async function reserveOfTheChild() {
+    const { admin, child, worldId } = await childWithRewards(2);
+    await openAll(child, worldId, 2);
+    await vi.waitFor(() => expect(state(worldId).collectibles.size).toBe(2));
+    await child.click('button', 'Voltar');
+    // The first day after: the app opens, and the pending collectibles go to the reserve.
+    now = SUNDAY + 24 * 3_600_000;
+    const next = await openDevice('child-device', { savedWorld: worldId });
+    await next.see('Olá, Sam!');
+    await vi.waitFor(() => expect([...state(worldId).collectibles.values()].every((c) => c.reserveAt !== null)).toBe(true));
+    return { admin, child: next, worldId };
+  }
+  const items = (device: Awaited<ReturnType<typeof openDevice>>) => [...device.root.querySelectorAll('.showcase-item')];
+
+  it('shows the reserve of the family without owner, date or count, and shows an item larger on a tap', async () => {
+    const { admin, child, worldId } = await reserveOfTheChild();
+    await admin.click('button.place', 'Vitrina');
+    await vi.waitFor(() => expect(items(admin)).toHaveLength(2));
+    // The same view on the child's phone.
+    await child.click('button.place', 'Vitrina');
+    await vi.waitFor(() => expect(items(child)).toHaveLength(2));
+    expect(child.root.textContent).not.toMatch(/Sam|Alex/);
+    expect(admin.root.textContent).not.toMatch(/Sam/);
+    expect(child.root.textContent).not.toMatch(/\d/);
+
+    (items(child)[0] as HTMLElement).click();
+    const tier = [...state(worldId).collectibles.values()].sort((a, b) => b.reserveAt! - a.reserveAt! || (a.id < b.id ? 1 : -1))[0]!.tier;
+    await vi.waitFor(() => expect(child.root.querySelector('.reveal-tier')?.textContent).toBe(theme.tiers[tier]));
+    expect(child.root.querySelector('.rename, form')).toBeNull();
+    await child.click('button', 'Fechar');
+  });
+
+  it('lets an admin rename an item, and not a child', async () => {
+    const { admin, child, worldId } = await reserveOfTheChild();
+    await child.click('button.place', 'Vitrina');
+    await vi.waitFor(() => expect(items(child)).toHaveLength(2));
+    (items(child)[0] as HTMLElement).click();
+    await child.see('Fechar');
+    await child.notSee('Mudar o nome');
+
+    await admin.click('button.place', 'Vitrina');
+    await vi.waitFor(() => expect(items(admin)).toHaveLength(2));
+    (items(admin)[0] as HTMLElement).click();
+    await admin.click('button', 'Mudar o nome');
+    await admin.type('Nome', 'Moderado');
+    admin.submit();
+    await vi.waitFor(() => expect([...state(worldId).collectibles.values()].some((c) => c.nickname === 'Moderado')).toBe(true));
+    await vi.waitFor(() => expect(items(admin).some((el) => el.textContent?.includes('Moderado'))).toBe(true));
+  });
+
+  it('is empty at first, and says so without a count', async () => {
+    const { admin } = await familyWithChild();
+    await admin.click('button.place', 'Vitrina');
+    await admin.see('Ainda não há nada');
   });
 });
 

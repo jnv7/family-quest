@@ -47,6 +47,7 @@ import {
   type DataStore,
   type Observer,
   type ObserverError,
+  type ShowcaseItem,
   type Unsubscribe,
   type Write,
 } from '../DataStore';
@@ -606,6 +607,22 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
             },
           };
         }),
+
+      observeShowcase: (worldId, limit, onValue, onError) =>
+        observeAsMember(
+          worldId,
+          (access) => {
+            const items = [...access.ws.collectibles.values()]
+              .filter((c): c is Collectible & { reserveAt: number } => c.reserveAt !== null)
+              // Same order as the Firestore query: reserveAt descending, then document id descending.
+              .sort((a, b) => b.reserveAt - a.reserveAt || (a.id < b.id ? 1 : -1))
+              .slice(0, limit)
+              .map((c): ShowcaseItem => ({ id: c.id, slot: c.slot, tier: c.tier, nickname: c.nickname, reserveAt: c.reserveAt }));
+            return { value: items };
+          },
+          onValue,
+          onError,
+        ),
 
       observeCollectibles: (worldId, profileId, onValue, onError) =>
         observeAsMember(

@@ -1,11 +1,10 @@
-import { collectionOf, nicknameTooLong, normaliseNickname } from '../../core/collection';
-import type { Collectible, Profile, ProfileId, Ruleset, TaskId } from '../../core/model';
-import { LIMITS } from '../../core/model';
+import { collectionOf } from '../../core/collection';
+import type { Collectible, Profile, ProfileId, Ruleset } from '../../core/model';
 import type { WorldScreen } from '../context';
 import { artElement } from '../art';
 import { h } from '../dom';
 import { observeWithRetry } from '../observe';
-import { createPartyControls, entryOf, nameOf } from '../party';
+import { createPartyControls, createRenamer, entryOf, nameOf } from '../party';
 import { observeSelf } from '../self';
 
 /**
@@ -24,47 +23,12 @@ export const renderHome: WorldScreen = (ctx, root, { worldId }) => {
   let ruleset: Ruleset | null = null;
   let profile: Profile | null = null;
   let collectibles: Collectible[] | null = null;
-  /** The collectible being renamed, and the text typed so far (a redraw must not lose it). */
-  let editing: TaskId | null = null;
-  let draft = '';
-  let renameError = false;
-
   const controls = createPartyControls(ctx, worldId, () =>
     profile && ruleset && collectibles ? { profile, ruleset, owned: collectibles } : null,
   );
 
-  const rename = (collectible: Collectible, text: string) => {
-    const nickname = normaliseNickname(text);
-    if (nicknameTooLong(nickname)) {
-      renameError = true;
-      draw();
-      return;
-    }
-    editing = null;
-    renameError = false;
-    ctx.settle(ctx.store.collectibles.setNickname(worldId, collectible.id, nickname).settled);
-    draw();
-  };
-
-  const nameLine = (collectible: Collectible): HTMLElement => {
-    if (editing !== collectible.id) {
-      return h('button', { onClick: () => ((editing = collectible.id), (draft = collectible.nickname ?? ''), draw()) }, ctx.text('home.rename'));
-    }
-    const input = h('input', { type: 'text', value: draft, maxLength: LIMITS.nickname });
-    input.addEventListener('input', () => (draft = input.value));
-    return h('form', {
-      class: 'rename',
-      onSubmit: (event: Event) => {
-        event.preventDefault();
-        rename(collectible, input.value);
-      },
-    },
-      h('label', {}, ctx.text('home.renameLabel'), input),
-      h('button', { class: 'primary', type: 'submit' }, ctx.text('home.renameSave')),
-      h('button', { type: 'button', onClick: () => ((editing = null), (renameError = false), draw()) }, ctx.text('home.renameCancel')),
-      renameError ? h('p', { class: 'message', role: 'alert' }, ctx.text('home.renameTooLong')) : null,
-    );
-  };
+  const renamer = createRenamer(ctx, worldId, () => draw());
+  const nameLine = (collectible: Collectible): HTMLElement => renamer.control(collectible.id, collectible.nickname);
 
   const card = (collectible: Collectible, extras: Array<HTMLElement | null>): HTMLElement => {
     // A slot the theme lacks is a bug, reported by `entryOf` and `nameOf`; the card still shows, with the tier name.
@@ -135,7 +99,7 @@ export const renderHome: WorldScreen = (ctx, root, { worldId }) => {
     stopData();
     watched = active.id;
     collectibles = null;
-    editing = null;
+    renamer.reset();
     stopData = observeWithRetry(ctx, problem, (onError) =>
       ctx.store.collectibles.observeCollectibles(worldId, active.id, (value) => ((collectibles = value), draw()), onError),
     );
