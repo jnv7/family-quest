@@ -4,7 +4,7 @@ Each release is one minor version, developed on its own `release/0.x` branch (`G
 
 The behaviour each release implements is specified in `SPEC.md`.
 
-**Last closed release: 0.7 — `showcase`, `home` and art** (2026-10-21, tag `v0.7`; [release notes](docs/release-notes/0.7.md)). **Current release:** none; the next one is 0.8, described below.
+**Last closed release: 0.7 — `showcase`, `home` and art** (2026-10-21, tag `v0.7`; [release notes](docs/release-notes/0.7.md)). **Current release:** none; the next one is 0.8 — Usability ([plan](docs/plans/0.8.md)), then 0.9 — Rewards that last.
 
 ## Release plan
 
@@ -99,9 +99,48 @@ Exit criteria:
 - licences are checked and `CREDITS.md` is complete;
 - the map loads in under 3 seconds on Wi-Fi.
 
-### 0.8 — Avatar and hardening
+### 0.8 — Usability
+
+Decided by the product owner on 2026-10-21. Delivery plan: [docs/plans/0.8.md](docs/plans/0.8.md).
 
 Scope:
+
+- one form to create tasks (once or repeating, for one or more people);
+- one task card everywhere;
+- the character asks the question, and "undo" for 4 seconds after done;
+- a `board` alert for due, overdue-planned and new tasks;
+- the crew flows, with a tavern of 10 places;
+- names as labels;
+- the adults' view of tasks per child;
+- one look and feel.
+
+Exit criteria:
+
+- every delivery accepted by the tech lead;
+- the product owner reviews every screen on a phone and finds no friction they want fixed before 0.9;
+- still at most 2 taps from the map to a completed task.
+
+### 0.9 — Rewards that last
+
+Decided by the product owner on 2026-10-21. Specified in `SPEC.md` §6 ("Retiring a task", "Reward pieces"). The delivery plan is to be written by the tech lead before 0.8 closes.
+
+Scope:
+
+- reward pieces: 4 pieces make a reward, its tier drawn at opening, and nothing expires;
+- a pirate catalogue of at least 8 collectibles per tier;
+- retiring an open task from the `checkin` and the adults' view.
+
+Both changes need new Firestore rules, an ADR and a rules deploy by the product owner.
+
+Exit criteria:
+
+- rules tests for pieces and retiring;
+- two devices never build two rewards from the same piece;
+- a real family week and Sunday with pieces, without touching the code.
+
+### Later — Avatar and hardening (not yet planned)
+
+To be reviewed by the product owner after 0.9. Candidate scope:
 
 - layered avatar;
 - optional PIN per profile;

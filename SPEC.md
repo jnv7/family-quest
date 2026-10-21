@@ -23,6 +23,8 @@ A PWA for a family of adults and children. Each person has tasks (daily, weekly,
 - **No friction.** Completing a task takes at most 2 taps from the map. Alerts are visual (a speech bubble with dots appears on a place of the map, as if it wanted to say something), with no scolding text and no push notifications. **[decided]**
 - **No comparison.** No screen shows counts, rankings or who owns a collectible to other people. **[decided]**
 - **Nothing earned is lost.** Rewards and collectibles are never deleted. No document in the system is deletable. **[decided]**
+  - **One deliberate exception in reach, not in data** (product owner, 2026-10-21): a collectible that drops out of the `showcase` "leaves for another island". It stays stored, but it can no longer be seen or brought back (section 6). **[decided]**
+  - **Retiring a task** (from 0.9) hides an open task that earned nothing. It is a status change, not a deletion (section 6).
 - **Public repository data:** code and art only. No family data. **[decided]**
 - **Language.** Every repository artefact (code, docs, comments, commits) is in English. The user interface is in European Portuguese, and its text lives only in locale files (section 8). **[decided]**
 - **Collaboration between people** (family meter, paired tasks) is out of scope for v1. Do not build it. **[decided]**
@@ -63,7 +65,7 @@ All collections live under `worlds/{worldId}`. Every document has `schemaVersion
 `ruleset` (defaults):
 
 - `partySize`: 5. **[decided]**
-- `showcaseSize`: 30. **[decided]**
+- `showcaseSize`: 10. **[decided]** (product owner, 2026-10-21; it was 30.) An admin can change it in management (0.8), which is also how an existing world, created with 30, gets 10.
 - `childDailyTaskLimit`: 3 ad hoc tasks created by a child for themselves per day. **[decided]**
 - `timezone`: `Europe/Lisbon`; `weekStartsOn`: Monday.
 - `openingDay`: ISO weekday on which the current week's rewards can be opened; default 7 (Sunday). **[decided]**
@@ -114,7 +116,7 @@ A device in the world. `uid` comes from anonymous authentication.
 | `createdBy` | string | `profileId` of the creator |
 | `origin` | `app` or `api` | For future integrations |
 | `plan` | map or null | `{date, trigger}`; only `big` tasks (0.3) |
-| `status` | `open` or `done` | A `done` task never goes back to `open` |
+| `status` | `open`, `done` or (from 0.9) `retired` | A `done` or `retired` task never changes status again |
 | `doneAt` | timestamp or null | |
 | `answer` | `yes`, `no` or null | Answer to the `question` |
 | `talkFlag` | boolean | "I think I did better, I want to talk to my parents" |
@@ -180,16 +182,64 @@ There is therefore at most one open task per `taskDef` and profile. Completing a
 
 Known edge case: the "no open task" check runs on the local cache, so a device whose cache misses an open task (for example, a fresh install that has not synced yet) can still create a second open task for a new period. The `board` shows only the oldest open task per `taskDef` and profile; any extra task stays stored and appears once the first is completed. **[proposal]**
 
+**One way to create a task** (from 0.8). **[decided]** Adults use a single form, opened from the `board` and from management:
+
+- **For whom:** one or more profiles, or "everyone".
+- **Repeats:** once, daily, weekly or monthly.
+  - **once:** one ad hoc task per chosen profile ("everyone" means every non-archived profile at that moment);
+  - **any repetition:** one `taskDef` with those profiles in `assignedTo` ("everyone" means `assignedTo: []`, which includes future profiles).
+- **Other fields:** the difficulty and an optional question; "big" is offered only when the task repeats.
+
+A child's form keeps only the title. The details are in `docs/plans/0.8.md`, 0.8.1.
+
 **Ad hoc tasks.** An `admin` creates them for any profile. A child creates them only for themselves, within the daily limit. The limit counts the ad hoc tasks the child's profile created for itself whose `createdAt` falls on today's date in Lisbon; tasks created by an admin do not count. **[decided]** A child only gives the task a title: it is always for themselves, with `level` `mid` and no `question`. **[decided]** An adult may also set the `level`, a `question` and who it is for. An ad hoc task stays open until it is completed.
 
 **Completing.** Each person completes only their own tasks. **[decided]** In one atomic batch, the client:
 
 - moves the task to `done`, with `doneAt`, `answer`, `talkFlag` and the `weekKey` of the completion;
-- creates the `reward` with the same id, with a `tier` drawn from `tierOdds[level]` using `crypto.getRandomValues`.
+- creates the `reward` with the same id, with a `tier` drawn from `tierOdds[level]` using `crypto.getRandomValues` (until 0.9; see "Reward pieces").
 
-**Verification question.** If the task has a `question`, the `checkin` character asks it as yes or no, next to the task, so answering "yes" is the single tap that completes it (two taps from the map). Answering "yes" completes the task. **[open]** What happens on "no". Proposal: the task stays open, the character says a friendly themed line, and no failure is recorded.
+**Undo** (from 0.8). **[decided]** After "done" (or "yes"), the card offers "undo" for 4 seconds, and the batch is written only when they end. If the page is hidden first, it is written at once. Undo within the 4 seconds writes nothing, so a mis-tap never needs a task to be reopened. It adds no tap.
+
+**Verification question.** If the task has a `question`, the `checkin` character asks it: the task's card shows the character's small portrait with the question in a speech bubble, and "yes" and "no" inside the bubble (from 0.8). **[decided]** Answering "yes" completes the task; it is still two taps from the map. On "no", the task stays open, the character says a friendly themed line, and no failure is recorded. **[decided]**
 
 **"I think I did better".** **[decided]** (product owner, 2026-10-21) This is no longer a button. The `checkin` shows a static line before the list of tasks ("if you think you did a task better than expected, talk to your parents"), so the conversation happens out loud. The `talkFlag` field and its store operation remain in the data, but the interface does not set it, so it stays `false`. There are no points, states or multipliers.
+
+**Retiring a task** (from 0.9). **[decided]** (product owner, 2026-10-21: a "delete task" button in the `checkin`) An open task can be retired:
+
+- it moves to `retired`, never comes back, gives no reward, and is hidden from every list;
+- nothing is deleted from the data, and nothing earned is lost, because an open task has earned nothing.
+
+**[proposal]** Who can retire:
+
+- an adult, any open task, from the `checkin` (their own) or from the adults' view (anyone's);
+- a child, only an ad hoc task the child created for themselves, never one given by an adult and never a recurring one, so retiring is not a way to skip chores.
+
+**How it looks:** retiring is a secondary action on the card (behind a "⋯"), never next to "done".
+
+**Recurring tasks:** retiring a recurring task skips only that period. Its id stays taken, so it is not generated again in that period. To stop a recurring task, deactivate its definition.
+
+This needs a rules change (`open → retired`), so it comes with an ADR, rules tests and a rules deploy by the product owner.
+
+**Board alert** (from 0.8, replacing the 0.3 alert). **[decided]** The `board` place lights up, with no text or number, for the active profile's open tasks. From strongest to weakest:
+
+1. **due:** planned for today, or the planned day has passed;
+2. **new:** not yet seen;
+3. **soon:** planned for tomorrow.
+
+What counts as **new**: an ad hoc task created by someone else, or the first task of a recurring definition created since the profile last opened the `board` or the `checkin` on this device. Daily repeats of a known definition are not new. The "last seen" time is kept on the device only.
+
+**Reward pieces** (from 0.9). **[decided]** (product owner, 2026-10-21, "until we see how it goes") A completed task no longer gives a whole reward, but a piece:
+
+- **Pieces per task:** 1, or 2 for a `high` task.
+- **Rewards:** every 4 pieces make one reward. Its `tier` is drawn when it is opened, from the odds of the difficulty that most of its pieces had (a tie goes to the higher difficulty).
+- **Nothing expires:** pieces carry over from week to week.
+- **In the `vault`:** the reward being assembled shows as a picture of filled segments, not a number.
+- **Opening** is one batch that marks 4 unopened pieces as used and creates the collectible. A piece can be used only once, so two devices can never build two rewards from the same piece.
+- **No migration:** unopened rewards from before 0.9 stay whole rewards.
+- **Catalogue size:** at least 8 collectibles per tier in the pirate theme. **[decided]**
+
+This needs a rules change, so it comes with an ADR, rules tests and a rules deploy by the product owner.
 
 **Opening rewards.** On or after `ruleset.openingDay` (Sunday by default), a person can open the current week's rewards. Rewards from closed weeks can be opened at any time, so if the family skips a Sunday, everything opens on Monday or later. Each person opens their own. Everyone can open at the same time on the same screen, but each person sees only their own result. Opening is one atomic batch that:
 
@@ -207,7 +257,7 @@ Known edge case: the "no open task" check runs on the local cache, so a device w
 
 A newly obtained collectible is pending. It stays in its owner's list, where the owner can put it into the `party` (choosing who leaves if the party is full). After `ruleset.pendingDays` days from `obtainedAt`, the owner's client moves pending collectibles to the reserve the next time it opens, by setting `reserveAt`. A collectible that leaves the `party` goes to the reserve, with `reserveAt` set. The reserve is not a list on the profile: the collectibles in it have been sent away, and everyone sees them in the `showcase` (**[decided]**, product owner, 2026-10-20). The way back is the `showcase`: a person who taps one of their own collectibles there can put it back into the `party` (choosing who leaves if it is full), which clears its `reserveAt`. The item tells nobody else that it is theirs. Nothing is deleted.
 
-**Showcase.** A computed view: the collectibles with `reserveAt` set, ordered by `reserveAt` descending, limited to `showcaseSize`. It shows the name (`nickname`, or the theme's name for the `slot`) and never the owner. Collectibles outside the `showcase` remain stored.
+**Showcase.** A computed view: the collectibles with `reserveAt` set, ordered by `reserveAt` descending, limited to `showcaseSize` (10). It shows the name (`nickname`, or the theme's name for the `slot`) and never the owner. A collectible that drops out of the `showcase` has **left for another island**. It stays stored and is never deleted, but it is no longer shown, and nobody can bring it back (product owner, 2026-10-21). This is part of the game: the tavern only has room for the latest arrivals. **[decided]**
 
 ## 7. Screens and flows
 
@@ -225,12 +275,18 @@ The pirate theme declares moorings for children only, at the pier. Adults keep t
 
 1. **First launch.** Create a world (choosing its theme, when there is more than one), which shows the join link and QR code, or join with a link or code. Then pick a profile. Once the theme is known, the app offers to install itself (never from the bare address).
 2. **Profile picker.** Netflix-style list of the world's non-archived profiles. Reachable later to switch profile.
-3. **`board`.** All open tasks of the active profile, including those from past periods, and, highlighted, planned `big` tasks for tomorrow and today (the visual alert, 0.3). Entry point for creating a task: adults for any profile, children for themselves.
-4. **`checkin`.** Pick an open task, tap done. Each task is a card with its button in front of it (for a task with a question, "yes" and "no" in front of it). A static line before the list says to talk to the parents about a task done better than expected; it is not a button. The `board` lists its tasks as cards too.
+3. **`board`.** All open tasks of the active profile, including those from past periods, as task cards (from 0.8 the same card and order as the `checkin`). The order is:
+   1. due;
+   2. soon;
+   3. new (with a "new" marker);
+   4. the rest, oldest first.
+
+   A card's action leads to the `checkin` with that task in focus. This is the entry point for creating a task, with the single task form (adults for any profiles, children for themselves).
+4. **`checkin`.** Pick an open task, tap done (with 4 seconds to undo, from 0.8). A task with a question is asked by the character in a bubble on its card (from 0.8). From 0.9, "⋯" on a card offers to retire it, within the limits in section 6. Each task is a card with its button in front of it (for a task with a question, "yes" and "no" in front of it). A static line before the list says to talk to the parents about a task done better than expected; it is not a button. The `board` lists its tasks as cards too.
 5. **`home`.** The active profile with the theme's look for its kind (`homeVariants`), with the profile's symbol on its sail (the symbol is the avatar for now), a button under it to choose the symbol, its `party` and its pending collectibles; there is no reserve list. Each collectible in the `party` can be renamed (the nickname is trimmed, empty clears it, at most 30 characters). A `party` member is sent away, to the `showcase`, in one tap with no confirmation, because nothing is lost; a pending collectible joins the `party`, and with a full `party` the screen asks who leaves. No counts and no comparisons. The `party` list has a short line saying what it is. The owner chooses or changes the profile's symbol with the button under the boat, which opens a panel with the theme's suggestions first and then the animals and plants, with large squares, and a way to clear it; the chosen emoji goes onto the sail at once. An adult's symbol also shows on the big ship at the pier of the map, where the theme gives a place for it (`symbolAt` on the place). Where the theme does not place the symbol over its art, it is shown next to the name. The layered avatar (0.8) is not started.
 6. **`vault`.** The active profile's unopened `rewards`, grouped by week, each shown with the theme's art for its `tier` (the tier is visible before opening **[decided]**). Only that profile's own rewards. A reward is opened here from the opening day on; the collectible that comes out is shown and can join the `party` at once, or stay pending. The vault also lists the pending collectibles in a "recent" section, with the same choices as the `home`.
-7. **`showcase`.** The latest 30 from the reserve, from everyone, as a grid of art and name. Tapping one shows it larger, with its name and tier name. It never shows the owner, a date or a count. An admin can also rename any of them (moderation). A person who taps one of their own can bring it back into the `party`. **[decided]**
-8. **Management (`admin` only).** Create and archive profiles (optionally choosing the new profile's symbol), create and edit `taskDefs`, edit the reward odds (`tierOdds`), view tasks per profile (including `talkFlag`), show the join link and QR code again. Profiles and worlds are always created through the app, with generated ids, never by editing data by hand. **[decided]**
+7. **`showcase`.** The latest `showcaseSize` (10) from the reserve, from everyone, as a grid of art and name. Tapping one shows it larger, with its name and tier name. It never shows the owner, a date or a count. An admin can also rename any of them (moderation). A person who taps one of their own can bring it back into the `party`. **[decided]**
+8. **Management (`admin` only).** Create and archive profiles (optionally choosing the new profile's symbol), list, edit and deactivate `taskDefs` (creating goes through the single task form), edit the reward odds (`tierOdds`) and `showcaseSize`, **view tasks per profile** (open tasks, and those done in the last 7 days, as lists with the day, never counts or totals; built in 0.8), show the join link and QR code again. Profiles and worlds are always created through the app, with generated ids, never by editing data by hand. **[decided]**
 
 Adults play like everyone else. The theme can give an adult's `home` a different look (in the pirate theme, a luxury ship).
 
@@ -334,7 +390,8 @@ See `ROADMAP.md`. Each release is a minor version developed on its own `release/
 | Topic | Status |
 | --- | --- |
 | Weekly guaranteed minimum | Off by default |
-| What happens when the answer to the question is "no" | Proposal in section 6 |
+| The `showcase` limit (10): shared by the whole world, or the latest 10 of each person kept within reach | Asked of the product owner, 2026-10-21 |
+| Who can retire a task | Proposal in section 6 |
 | Firestore read quota with real-time listeners | Measure in 0.2 against the free limits |
 
 ## 14. Out of scope (v1)
