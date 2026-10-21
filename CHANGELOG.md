@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.7] — 2026-10-21
+
+### Added
+
+- The adults' view of the family: management has "Tarefas por perfil". An admin picks a profile and sees its open tasks as the same read-only cards the profile sees, and what it finished in the last 7 days as a list with the day (`doneRecently` in `src/core/tasks.ts`). No counts, rankings or totals. It uses `observeTasks`, which adults may already read under the current rules, and is also where a task made by mistake is found. A child device is sent away from management as before.
+
 ## [0.8.6] — 2026-10-21
 
 ### Changed

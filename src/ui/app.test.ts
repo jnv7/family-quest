@@ -732,6 +732,45 @@ describe('the board alert for new tasks', () => {
   });
 });
 
+describe('the adults’ view of the family', () => {
+  it('lists the open and recently done tasks of a chosen profile, with no counts, and nothing of the others', async () => {
+    const { admin, child } = await familyWithChild();
+    await admin.click('button', 'Gerir');
+    await admin.type('Nome', 'Kim');
+    admin.submit();
+    await vi.waitFor(() => expect(admin.root.querySelectorAll('ul.rows li').length).toBeGreaterThanOrEqual(3));
+    await admin.click('button', 'Voltar');
+    await createTask(admin, 'Arrumar o quarto', 'Sam');
+    await admin.click('button', 'Voltar');
+    await createTask(admin, 'Pôr a mesa', 'Sam');
+    await admin.click('button', 'Voltar');
+    await createTask(admin, 'Regar as plantas', 'Kim');
+    await admin.click('button', 'Voltar');
+
+    await child.click('button.place', 'Registo');
+    await child.click('button', 'Feito');
+    runTimers();
+    await child.see('Nada para concluir').catch(() => {});
+    await vi.waitFor(() => expect([...backend.state.get(admin.world.get()!)!.tasks.values()].some((t) => t.status === 'done')).toBe(true));
+
+    await admin.click('button', 'Gerir');
+    await admin.see('Tarefas por perfil');
+    expect(admin.root.textContent).not.toContain('Arrumar o quarto'); // nobody chosen yet
+    await admin.click('button.chip', 'Sam');
+    await admin.see('Feitas nos últimos dias');
+    await vi.waitFor(() => expect(admin.root.querySelectorAll('li.task-card')).toHaveLength(1)); // one still open
+    expect(admin.root.querySelector('li.task-card button')).toBeNull(); // read-only
+    expect(admin.root.textContent).not.toContain('Regar as plantas');
+    const doneItems = [...admin.root.querySelectorAll('ul.rows li:not(.task-card)')].filter((li) => li.querySelector('small'));
+    expect(doneItems.some((li) => li.textContent?.includes('20 de outubro'))).toBe(true);
+
+    await admin.click('button.chip', 'Kim');
+    await admin.see('Regar as plantas');
+    expect(admin.root.textContent).not.toContain('Pôr a mesa');
+    expect(admin.root.textContent).not.toMatch(/\b\d+ (tarefas|feitas)/i); // no counts
+  });
+});
+
 describe('when data cannot be loaded', () => {
   /** A store whose first read of the open tasks fails, as when the server lacks an index. */
   const failingOnce =

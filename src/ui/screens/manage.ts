@@ -3,6 +3,7 @@ import type { WorldScreen } from '../context';
 import { h } from '../dom';
 import { observeSelf } from '../self';
 import { createOddsSection } from './odds';
+import { createProfileTasksSection } from './profileTasks';
 import { createShowcaseSizeSection } from './showcaseSize';
 import { createTaskDefsSection } from './taskDefs';
 
@@ -34,6 +35,7 @@ export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
   });
 
   const recurring = createTaskDefsSection(ctx, worldId);
+  const profileTasks = createProfileTasksSection(ctx, worldId);
   const odds = createOddsSection(ctx, worldId);
   const reserveSize = createShowcaseSizeSection(ctx, worldId);
 
@@ -43,6 +45,7 @@ export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
     list,
     h('h2', {}, ctx.text('manage.newProfile')),
     form,
+    profileTasks.element,
     recurring.element,
     odds.element,
     reserveSize.element,
@@ -57,6 +60,7 @@ export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
       ctx.go({ name: 'map' }, { replace: true });
       return;
     }
+    profileTasks.setProfiles(profiles);
     list.replaceChildren(
       ...profiles.map((profile) =>
         h('li', {},
@@ -74,6 +78,7 @@ export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
     stopSelf();
     recurring.dispose();
     odds.dispose();
+    profileTasks.dispose();
     reserveSize.dispose();
   };
 };

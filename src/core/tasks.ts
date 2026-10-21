@@ -93,3 +93,14 @@ export function sortForBoard(
   const visible = visibleOpenTasks(tasks); // already oldest first, and the sort is stable
   return visible.map((task, index) => ({ task, index, group: group(task) })).sort((a, b) => a.group - b.group || a.index - b.index).map(({ task }) => task);
 }
+
+/**
+ * The tasks a profile finished in the last `days` days, newest first (the adults' view, SPEC.md §7.8).
+ * A list to look at, never a count or a total (SPEC.md §2).
+ */
+export function doneRecently(tasks: readonly Task[], now: Millis, days: number): Task[] {
+  const since = now - days * 86_400_000;
+  return tasks
+    .filter((task) => task.status === 'done' && task.doneAt !== null && task.doneAt >= since && task.doneAt <= now)
+    .sort((a, b) => b.doneAt! - a.doneAt! || (a.id < b.id ? 1 : -1));
+}

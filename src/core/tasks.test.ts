@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Profile, Task } from './model';
-import { adhocCreatedForSelfToday, adhocPermission, sortForBoard, visibleOpenTasks } from './tasks';
+import { adhocCreatedForSelfToday, adhocPermission, doneRecently, sortForBoard, visibleOpenTasks } from './tasks';
 
 const TZ = 'Europe/Lisbon';
 const ruleset = { timezone: TZ, childDailyTaskLimit: 3 } as const;
@@ -168,5 +168,21 @@ describe('sortForBoard', () => {
     const lateEvening = Date.parse('2026-10-20T23:30:00Z'); // 2026-10-21 00:30 in Lisbon (UTC+1)
     const tasks = [task({ title: 'later', createdAt: 1 }), task({ title: 'today', createdAt: 2, plan: planned('2026-10-21') })];
     expect(ids(sortForBoard(tasks, lateEvening, TZ))).toEqual(['today', 'later']);
+  });
+});
+
+describe('doneRecently', () => {
+  const DAY = 86_400_000;
+  const done = (title: string, doneAt: number) => task({ title, status: 'done', doneAt, weekKey: '2026-W43' });
+
+  it('lists what was finished in the last days, newest first, and nothing else', () => {
+    const tasks = [
+      done('old', NOW - 8 * DAY),
+      done('week', NOW - 6 * DAY),
+      done('today', NOW - 1000),
+      task({ title: 'open' }),
+      done('future', NOW + DAY),
+    ];
+    expect(doneRecently(tasks, NOW, 7).map((t) => t.title)).toEqual(['today', 'week']);
   });
 });
