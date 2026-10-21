@@ -483,15 +483,16 @@ async function createTask(device: Awaited<ReturnType<typeof openDevice>>, title:
 }
 
 describe('the profile picker', () => {
-  it('shows each profile with the art of its kind and its symbol', async () => {
+  it('shows each profile with its emoji where the picture would be, or its initial, and the name alone', async () => {
     const { admin, worldId } = await familyWithChild();
-    const profiles = [...backend.state.get(worldId)!.profiles.values()];
-    const sam = profiles.find((p) => p.displayName === 'Sam')!;
+    const sam = [...backend.state.get(worldId)!.profiles.values()].find((p) => p.displayName === 'Sam')!;
     sam.avatar.symbol = '🐬';
     await admin.click('button', 'Trocar de perfil');
     await vi.waitFor(() => expect(admin.root.querySelectorAll('button.profile')).toHaveLength(2));
-    expect(admin.root.querySelectorAll('button.profile .profile-art')).toHaveLength(2);
-    expect(admin.find('button.profile', 'Sam')?.querySelector('.name')?.textContent).toBe('🐬 Sam');
+    expect(admin.find('button.profile', 'Sam')?.querySelector('.avatar')?.textContent).toBe('🐬');
+    expect(admin.find('button.profile', 'Sam')?.querySelector('.name')?.textContent).toBe('Sam');
+    expect(admin.find('button.profile', 'Alex')?.querySelector('.avatar')?.textContent).toBe('A');
+    expect(admin.root.querySelector('button.profile img')).toBeNull(); // no boat
   });
 });
 
@@ -678,7 +679,7 @@ describe('the one task card', () => {
       tags: [...li.querySelectorAll('.tag')].map((tag) => tag.textContent),
     }));
 
-  it('shows the same cards in the same order on the board and in the check-in, and the board sends to the check-in', async () => {
+  it('shows the same cards in the same order on the board and in the check-in, and the board cannot complete anything', async () => {
     const { admin, worldId } = await familyWithChild();
     await admin.click('button.place', 'Quadro');
     await admin.click('button', 'Nova tarefa');
@@ -696,14 +697,15 @@ describe('the one task card', () => {
     await child.click('button.place', 'Quadro');
     await child.see('Segundo');
     const expected = [
-      { title: 'Primeiro', tags: ['?'] },
-      { title: 'Segundo', tags: ['↻ Todos os dias'] },
+      { title: 'Primeiro', tags: [] },
+      { title: 'Segundo', tags: ['↻ Todos os dias'] }, // no "?" chip for a question
     ];
     expect(cards(child)).toEqual(expected);
-    expect(child.root.querySelectorAll('li.task-card .task-actions > button')).toHaveLength(2);
+    expect(child.root.querySelectorAll('li.task-card button')).toHaveLength(0); // a task is completed only at the check-in
 
-    await child.click('li.task-card:nth-child(2) button', 'Concluir');
-    await vi.waitFor(() => expect(child.find('li.task-card.focus .task-title')?.textContent).toBe('Segundo'));
+    await child.click('button', 'Voltar');
+    await child.click('button.place', 'Registo');
+    await child.see('Segundo');
     expect(cards(child)).toEqual(expected);
   });
 });
@@ -781,6 +783,10 @@ describe('the adults’ view of the family', () => {
     await admin.see('Regar as plantas');
     expect(admin.root.textContent).not.toContain('Pôr a mesa');
     expect(admin.root.textContent).not.toMatch(/\b\d+ (tarefas|feitas)/i); // no counts
+
+    await admin.click('button.chip', 'Kim'); // tapping the chosen one again lets go of it
+    await admin.notSee('Regar as plantas');
+    expect(admin.find('button.chip[aria-pressed=true]')).toBeUndefined();
   });
 });
 
@@ -870,16 +876,22 @@ describe('the check-in', () => {
     await admin.see('As tuas tarefas');
 
     await child.click('button.place', 'Registo');
+    await child.see('Lavar os dentes');
+    expect(child.root.textContent).not.toContain('Lavaste mesmo?'); // "done" comes first; the question after it
+    expect(child.find('button', 'Sim')).toBeUndefined();
+
+    await child.click('button', 'Feito');
     await child.see('Lavaste mesmo?');
-    expect(child.find('button', 'Feito')).toBeUndefined(); // a question needs an answer
+    expect(child.find('button', 'Feito')).toBeUndefined(); // now it is the character's turn
 
     await child.click('button', 'Não');
     expect(lines.doubt).toContain(bubble(child));
     expect(storedTask(worldId)).toMatchObject({ status: 'open', answer: null }); // nothing is recorded
-    expect(child.root.textContent).toContain('Lavaste mesmo?');
+    expect(child.root.textContent).not.toContain('Lavaste mesmo?'); // back to "done"
+    expect(child.find('button', 'Feito')).toBeDefined();
 
+    await child.click('button', 'Feito');
     await child.click('button', 'Sim');
-
     runTimers();
     await child.notSee('Lavaste mesmo?');
     expect(storedTask(worldId)).toMatchObject({ status: 'done', answer: 'yes' });

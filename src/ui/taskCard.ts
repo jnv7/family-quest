@@ -17,8 +17,6 @@ export interface TaskCardOptions {
   action?: Child;
   /** Anything that belongs under the title, such as the plan form of a big task. */
   below?: Child[];
-  /** Marks the card the person was sent to. */
-  focus?: boolean;
   /** A task the person has not seen yet: it carries a "novo" marker (never a number). */
   isNew?: boolean;
   className?: string;
@@ -29,15 +27,14 @@ export interface TaskCardOptions {
  * the title, large, then chips for how it repeats, its plan and whether it has a question, with
  * the action first. The order of the cards comes from `sortForBoard`, never from the screen.
  */
-export function taskCard(ctx: AppContext, { task, def, timeZone, action, below = [], focus = false, isNew = false, className = '' }: TaskCardOptions): HTMLLIElement {
+export function taskCard(ctx: AppContext, { task, def, timeZone, action, below = [], isNew = false, className = '' }: TaskCardOptions): HTMLLIElement {
   const due = timeZone === null ? null : taskPlanAlert(task, ctx.clock(), timeZone);
   const chips = [
     isNew && h('span', { class: 'tag new' }, ctx.text('card.new')),
     def && h('span', { class: 'tag' }, `↻ ${ctx.text(`cadence.${def.cadence}`)}`),
     task.plan && h('span', { class: 'tag plan' }, `${dayLabel(task.plan.date)} · ${task.plan.trigger}`),
-    task.question && h('span', { class: 'tag', 'aria-label': ctx.text('card.hasQuestion') }, '?'),
   ].filter(Boolean) as HTMLElement[];
-  return h('li', { class: `task-card ${due ? `planned-${due} ` : ''}${focus ? 'focus ' : ''}${className}`.trim(), 'data-task-id': task.id },
+  return h('li', { class: `task-card ${due ? `planned-${due} ` : ''}${className}`.trim(), 'data-task-id': task.id },
     action && h('div', { class: 'task-actions' }, action),
     h('div', { class: 'task-body' },
       h('span', { class: 'task-title' }, task.title),

@@ -1,5 +1,4 @@
 import type { WorldScreen } from '../context';
-import { artElement } from '../art';
 import { h } from '../dom';
 import { observeSelf } from '../self';
 
@@ -20,8 +19,9 @@ export const renderProfiles: WorldScreen = (ctx, root, { worldId }) => {
               ctx.go({ name: 'map' });
             },
           },
-            h('span', { class: 'avatar pictured', 'aria-hidden': 'true' }, artElement(ctx.theme, ctx.theme.homeVariants[profile.kind], 'profile-art')),
-            h('span', { class: 'name' }, profile.avatar.symbol ? `${profile.avatar.symbol} ${profile.displayName}` : profile.displayName),
+            // The profile's emoji stands where the picture would be; with none, the initial.
+            h('span', { class: 'avatar', 'aria-hidden': 'true' }, profile.avatar.symbol ?? ([...profile.displayName][0]?.toUpperCase() ?? '')),
+            h('span', { class: 'name' }, profile.displayName),
           ),
         ),
     );

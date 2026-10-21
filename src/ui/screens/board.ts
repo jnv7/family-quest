@@ -90,7 +90,6 @@ export const renderBoard: WorldScreen = (ctx, root, { worldId }) => {
           def,
           timeZone,
           isNew: isNew(task),
-          action: h('button', { class: 'primary', onClick: () => ctx.go({ name: 'checkin', taskId: task.id }) }, ctx.text('board.complete')),
           below: [
             canPlan && planning !== task.id &&
               h('button', { class: 'link', onClick: () => ((planning = task.id), draw()) }, ctx.text(task.plan ? 'plan.change' : 'plan.open')),

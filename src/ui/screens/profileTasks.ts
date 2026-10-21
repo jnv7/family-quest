@@ -59,12 +59,16 @@ export function createProfileTasksSection(ctx: AppContext, worldId: WorldId): Pr
           type: 'button',
           class: 'chip',
           'aria-pressed': String(p.id === chosen),
-          onClick: () => ((chosen = p.id), watch(), draw()),
+          onClick: () => ((chosen = chosen === p.id ? null : p.id), watch(), draw()),
         }, p.avatar.symbol ? `${p.avatar.symbol} ${p.displayName}` : p.displayName),
       ),
     );
     body.hidden = chosen === null || world === null;
-    if (chosen === null || world === null) return;
+    if (chosen === null || world === null) {
+      openList.replaceChildren();
+      doneList.replaceChildren();
+      return;
+    }
     const timeZone = world.ruleset.timezone;
     const open = sortForBoard(tasks, ctx.clock(), timeZone);
     openList.replaceChildren(

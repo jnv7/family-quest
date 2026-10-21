@@ -836,10 +836,6 @@ button.link {
   font-size: 0.9rem;
 }
 
-.task-card.focus {
-  outline: 3px solid var(--accent);
-  outline-offset: 2px;
-}
 
 /* The character asks the question: a small portrait and a speech bubble holding "yes" and "no". */
 .ask {
@@ -954,21 +950,4 @@ button.name-tag.unnamed {
     transition: none !important;
     scroll-behavior: auto !important;
   }
-}
-
-/* Profile picker: the art of the profile's kind, with its symbol. */
-.avatar img.profile-art,
-.avatar span.profile-art {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  font-size: 2.5rem;
-}
-
-.avatar.pictured {
-  background: color-mix(in srgb, var(--accent) 14%, Canvas);
-  width: 5.5rem;
-  height: 5.5rem;
-  border-radius: 1rem;
-  overflow: hidden;
 }

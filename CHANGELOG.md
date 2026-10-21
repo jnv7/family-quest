@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.9] — 2026-10-21
+
+### Changed (product owner's review of 0.8, 2026-10-21)
+
+- The `board` cannot complete anything: its "Concluir" button is gone (a task is completed only in the `checkin`), and with it the highlighted-task route (`#/checkin/<taskId>`).
+- No "?" chip on task cards.
+- The question comes after "done": a task with a question first shows "Feito", and then the character asks it in the bubble, with "Sim" (completes, with the 4 seconds to undo) and "Não" (the character answers kindly and the card goes back to "Feito"). A task with a question therefore takes three taps from the map; `SPEC.md` and `CLAUDE.md` now say so.
+- The profile picker shows the profile's emoji in place of the picture (the initial when there is none), with the name alone and no boat.
+- "Tarefas por perfil": tapping the chosen profile again deselects it.
+
 ## [0.8.8] — 2026-10-21
 
 ### Changed

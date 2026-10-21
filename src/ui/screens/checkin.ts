@@ -20,7 +20,7 @@ const UNDO_MS = 4000;
  * failure recorded (the proposal in SPEC.md §6). Completing also draws the reward's tier
  * (SPEC.md §6) and says that it went to the vault, which adds no tap.
  */
-export const renderCheckin = (focusId: string | null): WorldScreen => (ctx, root, { worldId }) => {
+export const renderCheckin: WorldScreen = (ctx, root, { worldId }) => {
   const { character } = ctx.theme;
   const bubble = h('p', { class: 'bubble', role: 'status' });
   const note = h('p', { class: 'reward-note', role: 'status' });
@@ -30,7 +30,8 @@ export const renderCheckin = (focusId: string | null): WorldScreen => (ctx, root
   const empty = h('div');
   const problem = h('div');
   let spoken = false;
-  let scrolled = false;
+  /** Tasks with a question whose "done" was tapped: the character now asks. */
+  const asking = new Set<string>();
   // The odds belong to the world, so a task can be completed once the world has arrived (at once, from the cache).
   let world: World | null = null;
   let tasks: Task[] | null = null;
@@ -80,35 +81,53 @@ export const renderCheckin = (focusId: string | null): WorldScreen => (ctx, root
   document.addEventListener('visibilitychange', onHidden);
   window.addEventListener('pagehide', flush);
 
-  /** The button that completes the task comes first, then the task (SPEC.md §7.4). */
+  /**
+   * The button that completes the task comes first, then the task (SPEC.md §7.4). For a task with a
+   * question, "done" comes first, and only then does the character ask it, in a bubble with "yes" and
+   * "no": "yes" completes the task, "no" takes it back to "done" and the character answers kindly.
+   */
   const row = (task: Task, timeZone: string) => {
-    const asking = task.question !== null && !pending.has(task.id);
-    const action = pending.has(task.id)
+    const waiting = pending.has(task.id);
+    const asked = task.question !== null && asking.has(task.id) && !waiting;
+    const action = waiting
       ? h('button', { onClick: () => undo(task) }, ctx.text('checkin.undo'))
-      : task.question
+      : asked
         ? undefined
-        : h('button', { class: 'primary', onClick: () => complete(task, null) }, ctx.text('checkin.done'));
+        : h('button', {
+            class: 'primary',
+            onClick: () => {
+              if (task.question === null) complete(task, null);
+              else {
+                asking.add(task.id);
+                show();
+              }
+            },
+          }, ctx.text('checkin.done'));
     return taskCard(ctx, {
       task,
       def: task.defId === null ? undefined : defs.get(task.defId),
       timeZone,
       action,
       below: [
-        pending.has(task.id) && h('p', { class: 'message', role: 'status' }, ctx.text('checkin.doneNow')),
-        // The character asks the question, so the answer is a reply to them (SPEC.md §7.4).
-        asking &&
+        waiting && h('p', { class: 'message', role: 'status' }, ctx.text('checkin.doneNow')),
+        asked &&
           h('div', { class: 'ask' },
             artElement(ctx.theme, character.art, 'character-art ask-art'),
             h('div', { class: 'ask-bubble' },
               h('p', { class: 'question' }, task.question),
               h('div', { class: 'task-actions' },
                 h('button', { class: 'primary', onClick: () => complete(task, 'yes') }, ctx.text('checkin.yes')),
-                h('button', { onClick: () => say('doubt') }, ctx.text('checkin.no')),
+                h('button', {
+                  onClick: () => {
+                    asking.delete(task.id);
+                    say('doubt');
+                    show();
+                  },
+                }, ctx.text('checkin.no')),
               ),
             ),
           ),
       ],
-      focus: task.id === focusId,
       isNew: isNew(task),
       className: 'checkin-task',
     });
@@ -123,11 +142,6 @@ export const renderCheckin = (focusId: string | null): WorldScreen => (ctx, root
     }
     list.replaceChildren(...shown.map((task) => row(task, world!.ruleset.timezone)));
     betterNote.hidden = shown.length === 0;
-    // The task the person was sent to from the board is brought into view, once.
-    if (focusId !== null && !scrolled && shown.some((task) => task.id === focusId)) {
-      scrolled = true;
-      list.querySelector('.focus')?.scrollIntoView?.({ block: 'center' });
-    }
     empty.replaceChildren(...(shown.length === 0 ? [h('p', { class: 'message' }, ctx.text('checkin.empty'))] : []));
   };
 

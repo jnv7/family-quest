@@ -18,7 +18,7 @@ const PLACES: readonly PlaceRole[] = ['board', 'checkin', 'home', 'vault', 'show
 /** Places that already lead somewhere; the others appear on the map but wait for their release. */
 const DESTINATIONS: Partial<Record<PlaceRole, Route>> = {
   board: { name: 'board' },
-  checkin: { name: 'checkin', taskId: null },
+  checkin: { name: 'checkin' },
   vault: { name: 'vault' },
   home: { name: 'home' },
   showcase: { name: 'showcase' },
