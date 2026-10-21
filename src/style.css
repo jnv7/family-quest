@@ -880,3 +880,44 @@ span.ask-art {
   color: var(--on-accent, #fff);
   font-weight: 700;
 }
+
+/* A name as a tag attached to the creature (SPEC.md §4). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.name-tag {
+  display: inline-grid;
+  gap: 0.1rem;
+  justify-items: center;
+  min-height: 3rem;
+  padding: 0.3rem 0.9rem;
+  border: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border-radius: 0.6rem;
+  background: color-mix(in srgb, var(--accent) 10%, Canvas);
+  color: inherit;
+  font: inherit;
+}
+
+button.name-tag.unnamed {
+  border-style: dashed;
+  background: transparent;
+}
+
+.name-tag .tag-name {
+  font-weight: 700;
+}
+
+.name-tag small {
+  opacity: 0.75;
+}
+
+.name-tag input {
+  min-height: 2.5rem;
+  text-align: center;
+}

@@ -167,10 +167,9 @@
     "showcase.title": "{^@showcase}",
     "showcase.empty": "Ainda não há nada {@showcase.in}.",
     "showcase.close": "Fechar",
-    "collectible.rename": "Mudar o nome",
+    "collectible.giveName": "dar um nome",
+    "vault.giveName": "dá-lhe um nome",
     "collectible.renameLabel": "Nome",
-    "collectible.renameSave": "Guardar",
-    "collectible.renameCancel": "Cancelar",
     "collectible.renameTooLong": "O nome é demasiado comprido.",
     "home.toReserve": "Enviar para {@reserve.the}"
   }

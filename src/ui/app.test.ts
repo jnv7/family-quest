@@ -977,6 +977,8 @@ describe('opening rewards', () => {
     await child.see(entry.name);
     await child.see(theme.tiers[reward.tier]);
     expect(child.root.querySelectorAll('li.reward')).toHaveLength(0);
+    // The moment to name a new creature: the tag is offered at once.
+    expect(child.find('.reveal button.name-tag', 'dá-lhe um nome')).toBeDefined();
 
     // The new collectible is pending: "later" closes the reveal, and it waits among the recent ones.
     await child.click('button', 'Mais tarde');
@@ -1135,20 +1137,52 @@ describe('the home', () => {
 
   it('renames a collectible, then shows the catalogue name again when the name is cleared', async () => {
     const { child, worldId, first } = await childAtHome();
-    const catalogueName = () => cards(child, 0)[0]?.querySelector('.reveal-name')?.textContent;
+    const catalogueName = () => cards(child, 0)[0]?.querySelector('.name-tag .tag-name')?.textContent;
     await vi.waitFor(() => expect(cards(child, 0)).toHaveLength(1));
     const original = catalogueName();
-    await child.click('button', 'Mudar o nome');
+    await child.click('button.name-tag', 'dar um nome');
     await child.type('Nome', 'Bolinhas');
     child.submit();
     await vi.waitFor(() => expect(state(worldId).collectibles.get(first)!.nickname).toBe('Bolinhas'));
     await vi.waitFor(() => expect(catalogueName()).toBe('Bolinhas'));
 
-    await child.click('button', 'Mudar o nome');
+    await child.click('button.name-tag', 'Bolinhas');
     await child.type('Nome', '   ');
     child.submit();
     await vi.waitFor(() => expect(state(worldId).collectibles.get(first)!.nickname).toBeNull());
     await vi.waitFor(() => expect(catalogueName()).toBe(original));
+  });
+
+  it('edits the name tag in place: Escape cancels, leaving the field saves, a long name is refused, and the catalogue name stays under a nickname', async () => {
+    const { child, worldId, first } = await childAtHome();
+    await vi.waitFor(() => expect(cards(child, 0)).toHaveLength(1));
+    const field = () => cards(child, 0)[0]!.querySelector('input') as HTMLInputElement | null;
+    const original = cards(child, 0)[0]!.querySelector('.tag-name')!.textContent;
+
+    await child.click('button.name-tag', 'dar um nome');
+    await vi.waitFor(() => expect(field()).not.toBeNull());
+    field()!.value = 'Nunca guardado';
+    field()!.dispatchEvent(new Event('input'));
+    field()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await vi.waitFor(() => expect(field()).toBeNull());
+    expect(state(worldId).collectibles.get(first)!.nickname).toBeNull();
+
+    await child.click('button.name-tag', 'dar um nome');
+    await vi.waitFor(() => expect(field()).not.toBeNull());
+    field()!.value = 'Salvo ao sair';
+    field()!.dispatchEvent(new Event('input'));
+    field()!.dispatchEvent(new Event('blur'));
+    await vi.waitFor(() => expect(state(worldId).collectibles.get(first)!.nickname).toBe('Salvo ao sair'));
+    await vi.waitFor(() => expect(cards(child, 0)[0]!.querySelector('.tag-catalogue')?.textContent).toBe(original));
+
+    await child.click('button.name-tag', 'Salvo ao sair');
+    await vi.waitFor(() => expect(field()).not.toBeNull());
+    field()!.maxLength = 500; // a pasted text can exceed what the field allows
+    field()!.value = 'x'.repeat(31);
+    field()!.dispatchEvent(new Event('input'));
+    child.submit();
+    await child.see('O nome é demasiado comprido');
+    expect(state(worldId).collectibles.get(first)!.nickname).toBe('Salvo ao sair');
   });
 
   it('sends a party member away: it leaves the profile and shows in the showcase, and is not deleted', async () => {
@@ -1173,7 +1207,7 @@ describe('the home', () => {
     await child.click('button', 'Voltar');
     await child.click('button.place', 'Casa');
     const tier = state(worldId).collectibles.get(first)!.tier;
-    await vi.waitFor(() => expect(cards(child, 0)[0]!.querySelector('.reveal-name')?.textContent).toBe(theme.tiers[tier]));
+    await vi.waitFor(() => expect(cards(child, 0)[0]!.querySelector('.tag-name')?.textContent).toBe(theme.tiers[tier]));
   });
 });
 
@@ -1236,12 +1270,12 @@ describe('the showcase', () => {
     await vi.waitFor(() => expect(items(child)).toHaveLength(2));
     (items(child)[0] as HTMLElement).click();
     await child.see('Fechar');
-    await child.notSee('Mudar o nome');
+    expect(child.find('button.name-tag')).toBeUndefined(); // a child cannot rename someone else's
 
     await admin.click('button.place', 'Vitrina');
     await vi.waitFor(() => expect(items(admin)).toHaveLength(2));
     (items(admin)[0] as HTMLElement).click();
-    await admin.click('button', 'Mudar o nome');
+    await admin.click('button.name-tag', 'dar um nome');
     await admin.type('Nome', 'Moderado');
     admin.submit();
     await vi.waitFor(() => expect([...state(worldId).collectibles.values()].some((c) => c.nickname === 'Moderado')).toBe(true));

@@ -7,7 +7,7 @@ import { artElement } from '../art';
 import { h } from '../dom';
 import { observeWithRetry } from '../observe';
 import { moveOldPendingToReserve } from '../reserve';
-import { createPartyControls, entryOf as entryOfTheme } from '../party';
+import { createPartyControls, createRenamer, entryOf as entryOfTheme } from '../party';
 import { observeSelf } from '../self';
 
 const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const;
@@ -56,6 +56,7 @@ export const renderVault: WorldScreen = (ctx, root, { worldId }) => {
     profile && ruleset && collectibles ? { profile, ruleset, owned: collectibles } : null,
   );
   const choices = (collectible: Collectible) => controls.choices(collectible);
+  const renamer = createRenamer(ctx, worldId, () => draw());
   const entryOf = (collectible: Collectible) => entryOfTheme(ctx, collectible);
 
   const revealCard = (collectible: Collectible) => {
@@ -65,7 +66,7 @@ export const renderVault: WorldScreen = (ctx, root, { worldId }) => {
     return h('div', { class: 'reveal', role: 'status' },
       artElement(ctx.theme, entry.art, 'reveal-art'),
       h('p', {}, ctx.text('vault.revealed')),
-      h('p', { class: 'reveal-name' }, entry.name),
+      renamer.tag(collectible, true, ctx.text('vault.giveName')),
       h('p', { class: 'reveal-tier' }, ctx.theme.tiers[collectible.tier]),
       choices(collectible),
       h('button', { onClick: () => ((revealed = revealed.filter((id) => id !== collectible.id)), draw()) }, ctx.text(pending ? 'party.later' : 'vault.close')),
@@ -77,7 +78,7 @@ export const renderVault: WorldScreen = (ctx, root, { worldId }) => {
     if (!entry) return null;
     return h('div', { class: 'recent-card' },
       artElement(ctx.theme, entry.art, 'recent-art'),
-      h('p', { class: 'reveal-name' }, entry.name),
+      renamer.tag(collectible, true),
       h('small', {}, ctx.theme.tiers[collectible.tier]),
       choices(collectible),
     );

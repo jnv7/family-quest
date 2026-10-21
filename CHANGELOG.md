@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.6] — 2026-10-21
+
+### Changed
+
+- Names as labels: every collectible card (`home`, vault reveal and recent list, `showcase` detail) shows its name as a tag attached to the art: the nickname with the catalogue name small under it, or the catalogue name with a dashed "dar um nome" tag for whoever may name it. Tapping the tag edits it in place (Enter or leaving the field saves, Escape cancels, empty text clears it, `LIMITS.nickname` applies). At the reveal in the vault the tag reads "dá-lhe um nome". The separate "Mudar o nome" button is gone; an admin still renames from the showcase detail, and a child cannot rename another person's.
+
 ## [0.8.5] — 2026-10-21
 
 ### Changed

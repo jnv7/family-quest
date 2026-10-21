@@ -49,9 +49,8 @@ export const renderShowcase: WorldScreen = (ctx, root, { worldId }) => {
       const entry = entryOf(ctx, shown);
       const parts = [
         entry ? artElement(ctx.theme, entry.art, 'reveal-art') : null,
-        h('p', { class: 'reveal-name' }, nameOf(ctx, shown)),
+        renamer.tag(shown, isAdmin),
         h('p', { class: 'reveal-tier' }, ctx.theme.tiers[shown.tier]),
-        isAdmin ? renamer.control(shown.id, shown.nickname) : null,
         ownOf(shown.id),
         h('button', { onClick: close }, ctx.text('showcase.close')),
       ];
