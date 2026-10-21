@@ -522,7 +522,7 @@ describe('the board and ad hoc tasks', () => {
     await admin.enabled('Criar tarefa');
     admin.submit();
     await admin.see('Segunda');
-    expect([...admin.root.querySelectorAll('.tasks li')].map((li) => li.textContent)).toEqual(['Primeira', 'Segunda']);
+    expect([...admin.root.querySelectorAll('.tasks li .task-title')].map((el) => el.textContent)).toEqual(['Primeira', 'Segunda']);
   });
 
   it('lets a child create tasks only for themselves, and only name them', async () => {
@@ -638,6 +638,43 @@ describe('the one task form', () => {
     admin.submit();
     await admin.see('Lavar a loiça · Todos os dias');
     expect(defsOf(worldId)[0]!.assignedTo).toEqual([]);
+  });
+});
+
+describe('the one task card', () => {
+  const cards = (device: Awaited<ReturnType<typeof openDevice>>) =>
+    [...device.root.querySelectorAll('li.task-card')].map((li) => ({
+      title: li.querySelector('.task-title')?.textContent,
+      tags: [...li.querySelectorAll('.tag')].map((tag) => tag.textContent),
+    }));
+
+  it('shows the same cards in the same order on the board and in the check-in, and the board sends to the check-in', async () => {
+    const { admin, worldId } = await familyWithChild();
+    await admin.click('button.place', 'Quadro');
+    await admin.click('button', 'Nova tarefa');
+    await admin.type('O que é para fazer?', 'Primeiro');
+    await admin.click('button', '+ Juntar uma pergunta');
+    await admin.type('Pergunta de verificação', 'Já está?');
+    await pickPeople(admin, 'Sam');
+    admin.submit();
+    await admin.see('As tuas tarefas');
+    now += 60_000;
+    await admin.click('button', 'Voltar');
+    await addRecurring(admin, 'Segundo');
+
+    const child = await openDevice('child-device', { savedWorld: worldId }); // generates today’s task
+    await child.click('button.place', 'Quadro');
+    await child.see('Segundo');
+    const expected = [
+      { title: 'Primeiro', tags: ['?'] },
+      { title: 'Segundo', tags: ['↻ Todos os dias'] },
+    ];
+    expect(cards(child)).toEqual(expected);
+    expect(child.root.querySelectorAll('li.task-card .task-actions > button')).toHaveLength(2);
+
+    await child.click('li.task-card:nth-child(2) button', 'Concluir');
+    await vi.waitFor(() => expect(child.find('li.task-card.focus .task-title')?.textContent).toBe('Segundo'));
+    expect(cards(child)).toEqual(expected);
   });
 });
 

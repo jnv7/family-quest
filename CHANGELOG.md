@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.2] — 2026-10-21
+
+### Changed
+
+- One task card (`src/ui/taskCard.ts`) on the `board` and in the `checkin`: the title, large, then chips ("↻" and how it repeats, the plan, "?" when there is a question), with the one action first, in front of the title as the product owner asked in 0.7. The `board` action is now "Concluir", which opens the `checkin` (`#/checkin/<taskId>`) with that task highlighted; the plan control of a big task is a secondary link.
+- One order everywhere: `sortForBoard` (`src/core/tasks.ts`) puts tasks planned for today or for a past day first, then tomorrow's, then new ones, then the rest, oldest first. The "new" group is filled in 0.8.4.
+
 ## [0.8.1] — 2026-10-21
 
 ### Changed

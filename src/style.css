@@ -390,8 +390,7 @@ img.character-art {
   gap: 0.75rem;
 }
 
-.rows.tasks li,
-.rows.checkin-tasks li {
+.task-card {
   padding: 0.85rem 1rem;
   border: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
   border-radius: 1rem;
@@ -399,14 +398,13 @@ img.character-art {
   box-shadow: 0 0.2rem 0 color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
-.rows.tasks li > span,
 .task-title {
   font-size: 1.15rem;
   font-weight: 700;
   overflow-wrap: anywhere;
 }
 
-.rows li.checkin-task {
+.rows li.task-card {
   display: grid;
   grid-template-columns: auto 1fr;
   justify-content: stretch;
@@ -811,4 +809,23 @@ button.link {
   background: none;
   text-decoration: underline;
   min-height: 3rem;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.3rem;
+}
+
+.tag {
+  padding: 0.1rem 0.6rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 16%, Canvas);
+  font-size: 0.9rem;
+}
+
+.task-card.focus {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
 }

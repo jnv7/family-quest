@@ -1,18 +1,14 @@
-import { taskPlanAlert } from '../../core/alerts';
 import { dateKey, lastDayOfPeriod } from '../../core/calendar';
 import { LIMITS, type ProfileId, type Task, type TaskDef, type TaskId, type World } from '../../core/model';
 import { validatePlan } from '../../core/plan';
-import { visibleOpenTasks } from '../../core/tasks';
+import { sortForBoard } from '../../core/tasks';
 import type { WorldScreen } from '../context';
 import { h } from '../dom';
 import { observeWithRetry } from '../observe';
 import { observeSelf } from '../self';
+import { taskCard } from '../taskCard';
 
 const TRIGGER_SUGGESTIONS = ['plan.suggestion1', 'plan.suggestion2', 'plan.suggestion3'] as const;
-
-/** `2026-10-25` as "25 de outubro", in the interface language. */
-const dayLabel = (date: string) =>
-  new Intl.DateTimeFormat('pt-PT', { day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`));
 
 /**
  * All open tasks of the active profile, oldest first, including those from past periods
@@ -77,20 +73,24 @@ export const renderBoard: WorldScreen = (ctx, root, { worldId }) => {
   };
 
   function draw(): void {
-    const shown = visibleOpenTasks(tasks);
-    const timeZone = world?.ruleset.timezone ?? null;
+    if (!world) return;
+    const timeZone = world.ruleset.timezone;
+    const shown = sortForBoard(tasks, ctx.clock(), timeZone);
     list.replaceChildren(
       ...shown.map((task) => {
         const def = task.defId === null ? undefined : defs.get(task.defId);
-        const canPlan = def?.big === true && timeZone !== null;
-        const due = world ? taskPlanAlert(task, ctx.clock(), world.ruleset.timezone) : null;
-        return h('li', { class: `board-task${due ? ` planned-${due}` : ''}` },
-          h('span', {}, task.title),
-          task.plan && h('small', { class: 'plan' }, `${dayLabel(task.plan.date)} · ${task.plan.trigger}`),
-          canPlan && planning !== task.id &&
-            h('button', { onClick: () => ((planning = task.id), draw()) }, ctx.text(task.plan ? 'plan.change' : 'plan.open')),
-          canPlan && planning === task.id && planForm(task, def, timeZone),
-        );
+        const canPlan = def?.big === true;
+        return taskCard(ctx, {
+          task,
+          def,
+          timeZone,
+          action: h('button', { class: 'primary', onClick: () => ctx.go({ name: 'checkin', taskId: task.id }) }, ctx.text('board.complete')),
+          below: [
+            canPlan && planning !== task.id &&
+              h('button', { class: 'link', onClick: () => ((planning = task.id), draw()) }, ctx.text(task.plan ? 'plan.change' : 'plan.open')),
+            canPlan && planning === task.id && planForm(task, def, timeZone),
+          ],
+        });
       }),
     );
     empty.replaceChildren(...(shown.length === 0 ? [h('p', { class: 'message' }, ctx.text('board.empty'))] : []));

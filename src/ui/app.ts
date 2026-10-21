@@ -135,7 +135,7 @@ export async function startApp(options: AppOptions): Promise<() => void> {
       case 'board':
         return needsWorld(renderBoard);
       case 'checkin':
-        return needsWorld(renderCheckin);
+        return needsWorld(renderCheckin(route.taskId));
       case 'vault':
         return needsWorld(renderVault);
       case 'home':

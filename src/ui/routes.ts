@@ -9,7 +9,8 @@ export type Route =
   | { name: 'profiles' }
   | { name: 'map' }
   | { name: 'board' }
-  | { name: 'checkin' }
+  /** `taskId` is the task the person was sent to from the board, or null. */
+  | { name: 'checkin'; taskId: string | null }
   | { name: 'vault' }
   | { name: 'home' }
   | { name: 'showcase' }
@@ -25,7 +26,6 @@ const SEGMENTS = {
   profiles: 'profiles',
   map: 'map',
   board: 'board',
-  checkin: 'checkin',
   vault: 'vault',
   home: 'home',
   showcase: 'showcase',
@@ -41,6 +41,7 @@ export function parseHash(hash: string): Route {
   if (first === 'join') {
     return { name: 'join', worldId: second ? decodeURIComponent(second) : null, themeId: third ? decodeURIComponent(third) : null };
   }
+  if (first === 'checkin') return { name: 'checkin', taskId: second ? decodeURIComponent(second) : null };
   if (first === 'new-task') return { name: 'newTask', defId: second ? decodeURIComponent(second) : null };
   const simple = (Object.keys(SEGMENTS) as Array<keyof typeof SEGMENTS>).find((name) => SEGMENTS[name] === first);
   return simple ? { name: simple } : { name: 'start' };
@@ -53,6 +54,7 @@ export function hashFor(route: Route): string {
     const world = `#/join/${encodeURIComponent(route.worldId)}`;
     return route.themeId ? `${world}/${encodeURIComponent(route.themeId)}` : world;
   }
+  if (route.name === 'checkin') return route.taskId ? `#/checkin/${encodeURIComponent(route.taskId)}` : '#/checkin';
   if (route.name === 'newTask') return route.defId ? `#/new-task/${encodeURIComponent(route.defId)}` : '#/new-task';
   return `#/${SEGMENTS[route.name]}`;
 }

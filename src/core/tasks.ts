@@ -64,3 +64,32 @@ export function visibleOpenTasks(tasks: readonly Task[]): Task[] {
     return true;
   });
 }
+
+/** The calendar day after `date`, on the calendar so a daylight saving change cannot skew it. */
+function dayAfter(date: string): string {
+  const [year, month, day] = date.split('-').map(Number) as [number, number, number];
+  return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
+}
+
+/**
+ * The order of the open tasks of a profile on every screen that lists them (SPEC.md §7): first
+ * the tasks planned for today or for a day that has passed, then those planned for tomorrow, then
+ * the new ones (`isNew`), then the rest; oldest first inside each group. Only the tasks
+ * `visibleOpenTasks` keeps are listed. There is no "late" group with a name of its own (SPEC.md §2).
+ */
+export function sortForBoard(
+  tasks: readonly Task[],
+  now: Millis,
+  timeZone: string,
+  isNew: (task: Task) => boolean = () => false,
+): Task[] {
+  const today = dateKey(now, timeZone);
+  const tomorrow = dayAfter(today);
+  const group = (task: Task): number => {
+    if (task.plan !== null && task.plan.date <= today) return 0;
+    if (task.plan !== null && task.plan.date === tomorrow) return 1;
+    return isNew(task) ? 2 : 3;
+  };
+  const visible = visibleOpenTasks(tasks); // already oldest first, and the sort is stable
+  return visible.map((task, index) => ({ task, index, group: group(task) })).sort((a, b) => a.group - b.group || a.index - b.index).map(({ task }) => task);
+}

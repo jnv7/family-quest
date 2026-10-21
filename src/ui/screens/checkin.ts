@@ -1,12 +1,13 @@
 import { drawTier, tierOddsFor } from '../../core/draw';
-import type { ProfileId, Task, World } from '../../core/model';
-import { visibleOpenTasks } from '../../core/tasks';
+import type { ProfileId, Task, TaskDef, World } from '../../core/model';
+import { sortForBoard } from '../../core/tasks';
 import type { WorldScreen } from '../context';
 import { artElement } from '../art';
 import { h } from '../dom';
 import { pickLine } from '../lines';
 import { observeWithRetry } from '../observe';
 import { observeSelf } from '../self';
+import { taskCard } from '../taskCard';
 
 /**
  * Where a task is completed, in one tap on the task itself (SPEC.md §7.4), so
@@ -15,7 +16,7 @@ import { observeSelf } from '../self';
  * failure recorded (the proposal in SPEC.md §6). Completing also draws the reward's tier
  * (SPEC.md §6) and says that it went to the vault, which adds no tap.
  */
-export const renderCheckin: WorldScreen = (ctx, root, { worldId }) => {
+export const renderCheckin = (focusId: string | null): WorldScreen => (ctx, root, { worldId }) => {
   const { character } = ctx.theme;
   const bubble = h('p', { class: 'bubble', role: 'status' });
   const note = h('p', { class: 'reward-note', role: 'status' });
@@ -25,9 +26,11 @@ export const renderCheckin: WorldScreen = (ctx, root, { worldId }) => {
   const empty = h('div');
   const problem = h('div');
   let spoken = false;
+  let scrolled = false;
   // The odds belong to the world, so a task can be completed once the world has arrived (at once, from the cache).
   let world: World | null = null;
   let tasks: Task[] | null = null;
+  let defs = new Map<string, TaskDef>();
 
   const say = (kind: keyof typeof character.lines) => {
     bubble.textContent = pickLine(character.lines[kind], ctx.randomInt);
@@ -42,31 +45,39 @@ export const renderCheckin: WorldScreen = (ctx, root, { worldId }) => {
   };
 
   /** The button that completes the task comes first, then the task (SPEC.md §7.4). */
-  const row = (task: Task) => {
-    const actions = task.question
+  const row = (task: Task, timeZone: string) => {
+    const action = task.question
       ? h('div', { class: 'task-actions' },
           h('button', { class: 'primary', onClick: () => complete(task, 'yes') }, ctx.text('checkin.yes')),
           h('button', { onClick: () => say('doubt') }, ctx.text('checkin.no')),
         )
-      : h('div', { class: 'task-actions' }, h('button', { class: 'primary', onClick: () => complete(task, null) }, ctx.text('checkin.done')));
-    return h('li', { class: 'checkin-task' },
-      actions,
-      h('div', { class: 'task-body' },
-        h('span', { class: 'task-title' }, task.title),
-        task.question && h('p', { class: 'question' }, task.question),
-      ),
-    );
+      : h('button', { class: 'primary', onClick: () => complete(task, null) }, ctx.text('checkin.done'));
+    return taskCard(ctx, {
+      task,
+      def: task.defId === null ? undefined : defs.get(task.defId),
+      timeZone,
+      action,
+      below: [task.question && h('p', { class: 'question' }, task.question)],
+      focus: task.id === focusId,
+      className: 'checkin-task',
+    });
   };
 
   const show = () => {
     if (tasks === null || world === null) return;
+    const shown = sortForBoard(tasks, ctx.clock(), world.ruleset.timezone);
     if (!spoken) {
-      say(tasks.length > 0 ? 'greeting' : 'farewell');
+      say(shown.length > 0 ? 'greeting' : 'farewell');
       spoken = true;
     }
-    list.replaceChildren(...tasks.map(row));
-    betterNote.hidden = tasks.length === 0;
-    empty.replaceChildren(...(tasks.length === 0 ? [h('p', { class: 'message' }, ctx.text('checkin.empty'))] : []));
+    list.replaceChildren(...shown.map((task) => row(task, world!.ruleset.timezone)));
+    betterNote.hidden = shown.length === 0;
+    // The task the person was sent to from the board is brought into view, once.
+    if (focusId !== null && !scrolled && shown.some((task) => task.id === focusId)) {
+      scrolled = true;
+      list.querySelector('.focus')?.scrollIntoView?.({ block: 'center' });
+    }
+    empty.replaceChildren(...(shown.length === 0 ? [h('p', { class: 'message' }, ctx.text('checkin.empty'))] : []));
   };
 
   // A failure to read the world is shown like any other: the screen cannot complete anything without it.
@@ -87,6 +98,9 @@ export const renderCheckin: WorldScreen = (ctx, root, { worldId }) => {
 
   let watchedProfile: ProfileId | null = null;
   let stopTasks = () => {};
+  const stopDefs = observeWithRetry(ctx, problem, (onError) =>
+    ctx.store.taskDefs.observeTaskDefs(worldId, (value) => ((defs = new Map(value.map((d) => [d.id, d]))), show()), onError),
+  );
   const stopSelf = observeSelf(ctx, worldId, ({ profile }) => {
     if (!profile) {
       ctx.go({ name: 'profiles' }, { replace: true });
@@ -96,12 +110,13 @@ export const renderCheckin: WorldScreen = (ctx, root, { worldId }) => {
     stopTasks();
     watchedProfile = profile.id;
     stopTasks = observeWithRetry(ctx, problem, (onError) =>
-      ctx.store.tasks.observeOpenTasks(worldId, profile.id, (value) => ((tasks = visibleOpenTasks(value)), show()), onError),
+      ctx.store.tasks.observeOpenTasks(worldId, profile.id, (value) => ((tasks = value), show()), onError),
     );
   });
   return () => {
     stopTasks();
     stopWorld();
+    stopDefs();
     stopSelf();
   };
 };
