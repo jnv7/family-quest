@@ -81,7 +81,12 @@ export const LIMITS = {
   slot: 60,
   /** World ids are random and act as the access code (SPEC.md §5). */
   worldIdMinLength: 24,
+  /** `showcaseSize` is a whole number from 1 to this (SPEC.md §4). */
+  showcaseSizeMax: 30,
 } as const;
+
+/** Whether `size` is a valid `showcaseSize`: a whole number from 1 to `LIMITS.showcaseSizeMax`. */
+export const isShowcaseSize = (size: number): boolean => Number.isInteger(size) && size >= 1 && size <= LIMITS.showcaseSizeMax;
 
 // ---------------------------------------------------------------------------
 // Documents. Every stored document carries these two fields.
@@ -109,7 +114,7 @@ export interface Ruleset {
 
 export const DEFAULT_RULESET: Ruleset = {
   partySize: 5,
-  showcaseSize: 30,
+  showcaseSize: 10,
   childDailyTaskLimit: 3,
   timezone: 'Europe/Lisbon',
   weekStartsOn: 1,

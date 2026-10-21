@@ -172,6 +172,13 @@ export interface WorldStore {
    */
   setTierOdds(worldId: WorldId, tierOdds: Ruleset['tierOdds']): Write;
 
+  /**
+   * Admin only. Sets how many collectibles the showcase shows (`ruleset.showcaseSize`): a whole number from
+   * 1 to `LIMITS.showcaseSizeMax`, otherwise `invalid-argument` before any write. Nothing is deleted:
+   * the ones beyond the limit stay stored, out of reach (SPEC.md §6).
+   */
+  setShowcaseSize(worldId: WorldId, size: number): Write;
+
   /** Admin only. */
   createProfile(worldId: WorldId, input: CreateProfileInput): Write<{ profileId: ProfileId }>;
   /** Admin only, and only child profiles. Profiles are never deleted. */

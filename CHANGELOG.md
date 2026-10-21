@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.5] — 2026-10-21
+
+### Changed
+
+- The crew, end to end. `showcaseSize` is now 10 for new worlds, and management has a "Lugares {@reserve.in}" control (a whole number from 1 to 30) that writes the world's `ruleset`, so an existing world created with 30 can be set to 10. `DataStore`: `worlds.setShowcaseSize`, with both adapters and the contract suite (admin only, `invalid-argument` outside 1–30 before any write). No rules change: an admin may already update `ruleset`.
+- A collectible beyond the newest `showcaseSize` of the reserve goes to "another island": it is no longer shown or offered anywhere, stays stored, and no screen says it is about to leave or shows a count.
+- Words: moving a collectible to the reserve now says `{@reserve...}` (not `{@showcase...}`), and the pirate theme's `roles.reserve` is the tavern, so children read the same place for both (data only, ADR 0006).
+
 ## [0.8.4] — 2026-10-21
 
 ### Changed

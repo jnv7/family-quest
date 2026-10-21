@@ -3,6 +3,7 @@ import type { WorldScreen } from '../context';
 import { h } from '../dom';
 import { observeSelf } from '../self';
 import { createOddsSection } from './odds';
+import { createShowcaseSizeSection } from './showcaseSize';
 import { createTaskDefsSection } from './taskDefs';
 
 /** Management, for admins only (SPEC.md §7.8): profiles, recurring task definitions and the reward odds. */
@@ -34,6 +35,7 @@ export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
 
   const recurring = createTaskDefsSection(ctx, worldId);
   const odds = createOddsSection(ctx, worldId);
+  const reserveSize = createShowcaseSizeSection(ctx, worldId);
 
   root.append(
     h('h1', {}, ctx.text('manage.title')),
@@ -43,6 +45,7 @@ export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
     form,
     recurring.element,
     odds.element,
+    reserveSize.element,
     h('div', { class: 'stack' },
       h('button', { onClick: () => ctx.go({ name: 'share' }) }, ctx.text('manage.invite')),
       h('button', { onClick: () => ctx.go({ name: 'map' }) }, ctx.text('app.back')),
@@ -71,5 +74,6 @@ export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
     stopSelf();
     recurring.dispose();
     odds.dispose();
+    reserveSize.dispose();
   };
 };

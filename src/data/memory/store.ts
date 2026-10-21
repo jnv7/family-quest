@@ -36,6 +36,7 @@ import {
   type Uid,
   type World,
   type WorldId,
+  isShowcaseSize,
 } from '../../core/model';
 import { randomId, randomWorldId } from '../../core/random';
 import {
@@ -329,6 +330,17 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
           return {
             ops: [{ worldId, collection: 'world', id: worldId, patch: { ruleset } }],
             check: (state) => (accessOf(state, worldId, uid)?.isAdmin ? null : denied('Only an admin changes the reward odds')),
+          };
+        }),
+
+      setShowcaseSize: (worldId, size) =>
+        submit(undefined, (view, uid) => {
+          const ws = requireWorld(view, worldId);
+          if (!isShowcaseSize(size)) throw invalid(`The showcase size must be a whole number from 1 to ${LIMITS.showcaseSizeMax}`);
+          const ruleset = { ...ws.world.ruleset, showcaseSize: size };
+          return {
+            ops: [{ worldId, collection: 'world', id: worldId, patch: { ruleset } }],
+            check: (state) => (accessOf(state, worldId, uid)?.isAdmin ? null : denied('Only an admin changes the showcase size')),
           };
         }),
 

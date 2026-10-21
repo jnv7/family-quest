@@ -845,6 +845,23 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
       });
     });
 
+    describe('showcase size', () => {
+      it('is changed by an admin, and every device sees it', async () => {
+        const { admin, child, worldId } = await setup();
+        await admin.worlds.setShowcaseSize(worldId, 12).settled;
+        const world = new Watch<World>((v, e) => child.worlds.observeWorld(worldId, v, e));
+        await eventually(() => expect(world.value?.ruleset.showcaseSize).toBe(12));
+        expect(world.value?.ruleset.partySize).toBe(DEFAULT_RULESET.partySize);
+        world.close();
+      });
+
+      it('is refused to a child, and must be a whole number from 1 to 30, before any write', async () => {
+        const { admin, child, worldId } = await setup();
+        await rejectsWith(child.worlds.setShowcaseSize(worldId, 12), 'permission-denied');
+        for (const size of [0, 31, 2.5, Number.NaN]) await rejectsWith(admin.worlds.setShowcaseSize(worldId, size), 'invalid-argument');
+      });
+    });
+
     describe('reward odds', () => {
       const odds = { ...DEFAULT_RULESET.tierOdds, low: { low: 70, mid: 25, high: 5 } };
 

@@ -69,7 +69,7 @@ export const renderShowcase: WorldScreen = (ctx, root, { worldId }) => {
         ...items.map((item) => {
           const entry = entryOf(ctx, item);
           return h('li', {},
-            h('button', { class: 'showcase-item', onClick: () => ((selected = item.id), draw()) },
+            h('button', { class: 'showcase-item', 'data-id': item.id, onClick: () => ((selected = item.id), draw()) },
               entry ? artElement(ctx.theme, entry.art, 'recent-art') : null,
               h('span', {}, nameOf(ctx, item)),
             ),

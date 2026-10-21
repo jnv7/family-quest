@@ -50,6 +50,7 @@ import {
   type Uid,
   type World,
   type WorldId,
+  isShowcaseSize,
 } from '../../core/model';
 import { randomWorldId } from '../../core/random';
 import {
@@ -264,6 +265,12 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
             if (problem) throw invalid(`The reward odds of level ${level} are not valid (${problem})`);
           }
           await updateDoc(worldDoc(db, worldId), { 'ruleset.tierOdds': tierOdds });
+        }),
+
+      setShowcaseSize: (worldId, size) =>
+        write(undefined, async () => {
+          if (!isShowcaseSize(size)) throw invalid(`The showcase size must be a whole number from 1 to ${LIMITS.showcaseSizeMax}`);
+          await updateDoc(worldDoc(db, worldId), { 'ruleset.showcaseSize': size });
         }),
 
       createProfile(worldId, input) {

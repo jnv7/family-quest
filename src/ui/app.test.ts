@@ -1153,7 +1153,7 @@ describe('the home', () => {
 
   it('sends a party member away: it leaves the profile and shows in the showcase, and is not deleted', async () => {
     const { child, worldId, first } = await childAtHome();
-    await child.click('button', 'Enviar para a vitrina');
+    await child.click('button', 'Enviar para a reserva');
     await vi.waitFor(() => expect(profileSam(worldId).partyIds).toEqual([]));
     expect(state(worldId).collectibles.get(first)!.reserveAt).toBe(now);
     await vi.waitFor(() => expect(cards(child, 0)).toHaveLength(0));
@@ -1246,6 +1246,33 @@ describe('the showcase', () => {
     admin.submit();
     await vi.waitFor(() => expect([...state(worldId).collectibles.values()].some((c) => c.nickname === 'Moderado')).toBe(true));
     await vi.waitFor(() => expect(items(admin).some((el) => el.textContent?.includes('Moderado'))).toBe(true));
+  });
+
+  it('shows the newest ten of the world; the others stay stored, out of reach, until an admin makes room', async () => {
+    const { admin, child, worldId } = await reserveOfTheChild();
+    const mine = [...state(worldId).collectibles.values()];
+    const template = mine[0]!;
+    // Ten newer ones, so the two original items are the oldest of twelve.
+    for (let i = 0; i < 10; i++) {
+      const id = `extra-${i}`;
+      state(worldId).collectibles.set(id, { ...template, id, reserveAt: template.reserveAt! + 1000 + i });
+    }
+    await child.click('button.place', 'Vitrina');
+    await vi.waitFor(() => expect(items(child)).toHaveLength(10));
+    const shownIds = items(child).map((el) => el.getAttribute('data-id'));
+    expect(shownIds.every((id) => id?.startsWith('extra-'))).toBe(true); // the two oldest are not offered
+    expect(child.find('button', 'Pôr na equipa')).toBeUndefined();
+    expect(child.root.textContent).not.toMatch(/\d/); // and nothing says that something left
+    expect(state(worldId).collectibles.size).toBe(12); // nothing deleted
+
+    // An admin changes the size in management, and the showcase of the other device follows.
+    await admin.click('button', 'Gerir');
+    await admin.type('Lugares', '3');
+    const field = [...admin.root.querySelectorAll('label')].find((l) => l.textContent?.includes('Lugares'))!;
+    field.closest('form')!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    await vi.waitFor(() => expect(state(worldId).world.ruleset.showcaseSize).toBe(3));
+    await vi.waitFor(() => expect(items(child)).toHaveLength(3));
+    expect(state(worldId).collectibles.size).toBe(12);
   });
 
   it('is empty at first, and says so without a count', async () => {

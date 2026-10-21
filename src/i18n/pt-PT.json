@@ -43,6 +43,10 @@
     "manage.archive": "Arquivar",
     "manage.unarchive": "Reativar",
     "manage.archivedTag": "arquivado",
+    "manage.reserveSize": "Lugares {@reserve.in}",
+    "manage.reserveSizeHint": "Quantos {@collectible.plural} ficam à vista de todos (de 1 a 30).",
+    "manage.reserveSizeSave": "Guardar",
+    "manage.reserveSizeInvalid": "Escolhe um número de 1 a 30.",
     "manage.invite": "Mostrar link e QR code",
     "recurring.title": "Tarefas recorrentes",
     "recurring.empty": "Ainda não há tarefas recorrentes.",
@@ -168,6 +172,6 @@
     "collectible.renameSave": "Guardar",
     "collectible.renameCancel": "Cancelar",
     "collectible.renameTooLong": "O nome é demasiado comprido.",
-    "home.toReserve": "Enviar para {@showcase.the}"
+    "home.toReserve": "Enviar para {@reserve.the}"
   }
 }
