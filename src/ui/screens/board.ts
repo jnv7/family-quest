@@ -8,6 +8,7 @@ import { h } from '../dom';
 import { observeWithRetry } from '../observe';
 import { observeSelf } from '../self';
 import { taskCard } from '../taskCard';
+import { screenBar } from '../bar';
 
 const TRIGGER_SUGGESTIONS = ['plan.suggestion1', 'plan.suggestion2', 'plan.suggestion3'] as const;
 
@@ -22,14 +23,14 @@ export const renderBoard: WorldScreen = (ctx, root, { worldId }) => {
   const problem = h('div');
 
   root.append(
-    h('h1', {}, ctx.text('board.title')),
+    screenBar(ctx, {
+      title: ctx.text('board.title'),
+      back: { name: 'map' },
+      action: h('button', { onClick: () => ctx.go({ name: 'newTask', defId: null }) }, ctx.text('board.new')),
+    }),
     problem,
     list,
     empty,
-    h('div', { class: 'stack' },
-      h('button', { class: 'primary', onClick: () => ctx.go({ name: 'newTask', defId: null }) }, ctx.text('board.new')),
-      h('button', { onClick: () => ctx.go({ name: 'map' }) }, ctx.text('app.back')),
-    ),
   );
 
   let tasks: Task[] = [];

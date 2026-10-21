@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.8] — 2026-10-21
+
+### Changed
+
+- One look and feel. Every screen has the same top bar (`src/ui/bar.ts`): back on the left, the title, and at most one action on the right (the `board` has "Nova tarefa", management has the invite link); the "Voltar" buttons at the bottom are gone. The map keeps its own bar.
+- The vault names weeks "Esta semana", "Semana passada", or the days ("19–25 out.", month names from the locale file), never an ISO week number (`weekRange` and `weekRelation` in `src/core/calendar.ts`), and offers "Abrir todos" when two or more can be opened; the reveals then stand one after the other.
+- The profile picker shows each profile with the art of its kind and its symbol.
+- Touch targets of at least 48 px in the lists, labels and group text at 16 px, a little more contrast on small text, and `prefers-reduced-motion` turns every animation and transition off.
+- Words: "Trazer de volta" for bringing a collectible back from the reserve, "Fechar" for closing a reveal; the same verb for the same act (Concluir on the `board`, Feito in the `checkin`, Abrir, Enviar).
+
 ## [0.8.7] — 2026-10-21
 
 ### Added

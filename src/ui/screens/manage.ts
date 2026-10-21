@@ -6,6 +6,7 @@ import { createOddsSection } from './odds';
 import { createProfileTasksSection } from './profileTasks';
 import { createShowcaseSizeSection } from './showcaseSize';
 import { createTaskDefsSection } from './taskDefs';
+import { screenBar } from '../bar';
 
 /** Management, for admins only (SPEC.md §7.8): profiles, recurring task definitions and the reward odds. */
 export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
@@ -40,7 +41,11 @@ export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
   const reserveSize = createShowcaseSizeSection(ctx, worldId);
 
   root.append(
-    h('h1', {}, ctx.text('manage.title')),
+    screenBar(ctx, {
+      title: ctx.text('manage.title'),
+      back: { name: 'map' },
+      action: h('button', { onClick: () => ctx.go({ name: 'share' }) }, ctx.text('manage.invite')),
+    }),
     h('h2', {}, ctx.text('manage.profiles')),
     list,
     h('h2', {}, ctx.text('manage.newProfile')),
@@ -49,10 +54,6 @@ export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
     recurring.element,
     odds.element,
     reserveSize.element,
-    h('div', { class: 'stack' },
-      h('button', { onClick: () => ctx.go({ name: 'share' }) }, ctx.text('manage.invite')),
-      h('button', { onClick: () => ctx.go({ name: 'map' }) }, ctx.text('app.back')),
-    ),
   );
 
   const stopSelf = observeSelf(ctx, worldId, ({ profiles, isAdmin }) => {

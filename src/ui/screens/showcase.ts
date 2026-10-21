@@ -6,6 +6,7 @@ import { h } from '../dom';
 import { observeWithRetry } from '../observe';
 import { createPartyControls, createRenamer, entryOf, nameOf } from '../party';
 import { observeSelf } from '../self';
+import { screenBar } from '../bar';
 
 /**
  * The showcase: the latest collectibles that went to the reserve, from everyone (SPEC.md §6).
@@ -79,11 +80,10 @@ export const renderShowcase: WorldScreen = (ctx, root, { worldId }) => {
   }
 
   root.append(
-    h('h1', {}, ctx.text('showcase.title')),
+    screenBar(ctx, { title: ctx.text('showcase.title'), back: { name: 'map' } }),
     problem,
     detail,
     content,
-    h('div', { class: 'stack' }, h('button', { onClick: () => ctx.go({ name: 'map' }) }, ctx.text('app.back'))),
   );
 
   let stopItems = () => {};

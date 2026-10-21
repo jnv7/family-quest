@@ -7,6 +7,7 @@ import { observeWithRetry } from '../observe';
 import { createPartyControls, createRenamer, entryOf } from '../party';
 import { observeSelf } from '../self';
 import emojiGroups from '../emoji.json';
+import { screenBar } from '../bar';
 
 /**
  * The home: the active profile's own place (SPEC.md §7.5). It shows the profile with the
@@ -116,13 +117,12 @@ export const renderHome: WorldScreen = (ctx, root, { worldId }) => {
   }
 
   root.append(
-    h('h1', {}, ctx.text('home.title')),
+    screenBar(ctx, { title: ctx.text('home.title'), back: { name: 'map' } }),
     problem,
     header,
     symbolPanel,
     partySection,
     pendingSection,
-    h('div', { class: 'stack' }, h('button', { onClick: () => ctx.go({ name: 'map' }) }, ctx.text('app.back'))),
   );
 
   const stopWorld = observeWithRetry(ctx, problem, (onError) =>

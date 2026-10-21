@@ -482,6 +482,19 @@ async function createTask(device: Awaited<ReturnType<typeof openDevice>>, title:
   await device.see('As tuas tarefas');
 }
 
+describe('the profile picker', () => {
+  it('shows each profile with the art of its kind and its symbol', async () => {
+    const { admin, worldId } = await familyWithChild();
+    const profiles = [...backend.state.get(worldId)!.profiles.values()];
+    const sam = profiles.find((p) => p.displayName === 'Sam')!;
+    sam.avatar.symbol = '🐬';
+    await admin.click('button', 'Trocar de perfil');
+    await vi.waitFor(() => expect(admin.root.querySelectorAll('button.profile')).toHaveLength(2));
+    expect(admin.root.querySelectorAll('button.profile .profile-art')).toHaveLength(2);
+    expect(admin.find('button.profile', 'Sam')?.querySelector('.name')?.textContent).toBe('🐬 Sam');
+  });
+});
+
 describe('the map', () => {
   it('lays out the five places of the theme, and every place leads somewhere', async () => {
     const { admin } = await createFamily();
@@ -967,7 +980,7 @@ describe('the vault', () => {
     await child.click('button', 'Voltar');
     await child.click('button.place', 'Cofre');
     await vi.waitFor(() => expect(child.root.querySelectorAll('li.reward')).toHaveLength(2));
-    expect([...child.root.querySelectorAll('.vault-week h2')].map((el) => el.textContent)).toEqual(['Semana 43', 'Semana 44']);
+    expect([...child.root.querySelectorAll('.vault-week h2')].map((el) => el.textContent)).toEqual(['Semana passada', 'Esta semana']);
     for (const item of child.root.querySelectorAll<HTMLElement>('li.reward')) {
       const art = theme.rewardArt[item.dataset.tier as Tier];
       expect(item.querySelector('.reward-art')?.textContent).toBe('emoji' in art ? art.emoji : '');
@@ -1025,6 +1038,26 @@ describe('opening rewards', () => {
     await child.see(entry.name);
   });
 
+  it('offers "Abrir todos" only with two or more to open, and shows the reveals one after the other', async () => {
+    const { child, worldId } = await childWithRewards(2);
+    await vi.waitFor(() => expect(child.root.querySelectorAll('li.reward')).toHaveLength(2));
+    await child.click('button.primary', 'Abrir todos');
+    await vi.waitFor(() => expect(state(worldId).collectibles.size).toBe(2));
+    await vi.waitFor(() => expect(child.root.querySelectorAll('.reveal')).toHaveLength(2));
+    expect(child.find('button', 'Abrir todos')).toBeUndefined();
+  });
+
+  it('labels weeks as this week, last week, or the days, never as a week number', async () => {
+    const { child, worldId } = await childWithRewards(1);
+    await child.click('button', 'Voltar');
+    now = Date.parse('2026-11-18T10:00:00Z'); // three weeks later
+    await child.click('button.place', 'Cofre');
+    await child.see('19–25 out.');
+    expect(child.root.textContent).not.toMatch(/Semana \d|W\d/);
+    expect(child.find('button', 'Abrir todos')).toBeUndefined();
+    expect(worldId).toBeTruthy();
+  });
+
   it('opens a reward from a closed week at any time', async () => {
     const { child, worldId } = await childWithReward();
     now = Date.parse('2026-10-26T08:00:00Z'); // Monday of the next week
@@ -1079,7 +1112,7 @@ async function childWithRewards(count: number) {
 
 const openAll = async (child: Awaited<ReturnType<typeof openDevice>>, worldId: string, count: number) => {
   for (let i = 0; i < count; i++) {
-    await child.click('button', 'Abrir');
+    await child.click('li.reward button', 'Abrir');
     await vi.waitFor(() => expect(state(worldId).collectibles.size).toBe(i + 1));
     await child.click('button', 'Mais tarde');
   }
@@ -1290,12 +1323,12 @@ describe('the showcase', () => {
     await vi.waitFor(() => expect(items(admin)).toHaveLength(2));
     (items(admin)[0] as HTMLElement).click();
     await admin.see('Fechar');
-    expect(admin.find('button', 'Pôr na equipa')).toBeUndefined(); // not Alex's
+    expect(admin.find('button', 'Trazer de volta')).toBeUndefined(); // not Alex's
 
     await child.click('button.place', 'Vitrina');
     await vi.waitFor(() => expect(items(child)).toHaveLength(2));
     (items(child)[0] as HTMLElement).click();
-    await child.click('button.primary', 'Pôr na equipa');
+    await child.click('button.primary', 'Trazer de volta');
     await vi.waitFor(() => expect(profileSam(worldId).partyIds).toHaveLength(1));
     const id = profileSam(worldId).partyIds[0]!;
     expect(state(worldId).collectibles.get(id)!.reserveAt).toBeNull();
@@ -1334,7 +1367,7 @@ describe('the showcase', () => {
     await vi.waitFor(() => expect(items(child)).toHaveLength(10));
     const shownIds = items(child).map((el) => el.getAttribute('data-id'));
     expect(shownIds.every((id) => id?.startsWith('extra-'))).toBe(true); // the two oldest are not offered
-    expect(child.find('button', 'Pôr na equipa')).toBeUndefined();
+    expect(child.find('button', 'Trazer de volta')).toBeUndefined();
     expect(child.root.textContent).not.toMatch(/\d/); // and nothing says that something left
     expect(state(worldId).collectibles.size).toBe(12); // nothing deleted
 
@@ -1567,10 +1600,13 @@ describe('moorings and symbols', () => {
 
 describe('the reward odds', () => {
   const worldOdds = (worldId: string) => backend.state.get(worldId)!.world.ruleset.tierOdds;
+  /** The odds form is the one with a fieldset per task level. */
+  const oddsForm = (device: Awaited<ReturnType<typeof openDevice>>) =>
+    [...device.root.querySelectorAll('form')].find((form) => form.querySelector('fieldset'))!;
   const oddsInputs = (device: Awaited<ReturnType<typeof openDevice>>) =>
-    [...[...device.root.querySelectorAll('form')].at(-1)!.querySelectorAll<HTMLInputElement>('input')];
+    [...oddsForm(device).querySelectorAll<HTMLInputElement>('input')];
   const submitLast = (device: Awaited<ReturnType<typeof openDevice>>) =>
-    [...device.root.querySelectorAll('form')].at(-1)!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    oddsForm(device).dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
 
   it('shows the odds of the world, saves new ones, and refuses a row that does not sum to 100', async () => {
     const { admin, worldId } = await familyWithChild();

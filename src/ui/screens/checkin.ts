@@ -9,6 +9,7 @@ import { pickLine } from '../lines';
 import { observeWithRetry } from '../observe';
 import { observeSelf } from '../self';
 import { taskCard } from '../taskCard';
+import { screenBar } from '../bar';
 
 const UNDO_MS = 4000;
 
@@ -136,14 +137,13 @@ export const renderCheckin = (focusId: string | null): WorldScreen => (ctx, root
   );
 
   root.append(
-    h('h1', {}, ctx.text('checkin.title')),
+    screenBar(ctx, { title: ctx.text('checkin.title'), back: { name: 'map' } }),
     h('div', { class: 'character' }, artElement(ctx.theme, character.art, 'character-art'), bubble),
     note,
     problem,
     betterNote,
     list,
     empty,
-    h('div', { class: 'stack' }, h('button', { onClick: () => ctx.go({ name: 'map' }) }, ctx.text('app.back'))),
   );
 
   let watchedProfile: ProfileId | null = null;

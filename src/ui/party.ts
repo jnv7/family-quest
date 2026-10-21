@@ -70,7 +70,7 @@ export function createPartyControls(ctx: Deps, worldId: WorldId, state: () => Pa
       const fromReserve = collectible.reserveAt === null ? [] : [collectible.id];
       if (party.length < ruleset.partySize) {
         return h('div', { class: 'choices' },
-          h('button', { class: 'primary', onClick: () => arrange(profile, [...party, collectible.id], [], fromReserve) }, ctx.text('party.join')),
+          h('button', { class: 'primary', onClick: () => arrange(profile, [...party, collectible.id], [], fromReserve) }, ctx.text(collectible.reserveAt === null ? 'party.join' : 'party.bringBack')),
         );
       }
       const byId = new Map(owned.map((c) => [c.id, c]));

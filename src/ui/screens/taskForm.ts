@@ -4,6 +4,7 @@ import type { WorldScreen } from '../context';
 import { h } from '../dom';
 import { observeWithRetry } from '../observe';
 import { observeSelf } from '../self';
+import { screenBar } from '../bar';
 
 /** What a task repeats as. `once` makes ad hoc tasks; the others make a recurring definition. */
 type Repeat = 'once' | Cadence;
@@ -90,7 +91,7 @@ export const renderTaskForm = (defId: string | null): WorldScreen => (ctx, root,
     bigField,
   ];
 
-  const heading = h('h1', {}, ctx.text(editing ? 'recurring.edit' : 'newTask.heading'));
+  const heading = screenBar(ctx, { title: ctx.text(editing ? 'recurring.edit' : 'newTask.heading'), back: { name: editing ? 'manage' : 'board' } });
   const extra = h('div', { class: 'stack' });
   const submit = h('button', { class: 'primary', type: 'submit', disabled: true }, ctx.text(editing ? 'recurring.save' : 'newTask.submit'));
   const limitMessage = h('div');
@@ -103,7 +104,6 @@ export const renderTaskForm = (defId: string | null): WorldScreen => (ctx, root,
     tasksProblem,
     form,
     limitMessage,
-    h('div', { class: 'stack' }, h('button', { onClick: () => ctx.go({ name: editing ? 'manage' : 'board' }) }, ctx.text('app.back'))),
   );
 
   let self: { profile: Profile; profiles: Profile[] } | null = null;
