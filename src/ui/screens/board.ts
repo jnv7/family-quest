@@ -1,6 +1,7 @@
 import { dateKey, lastDayOfPeriod } from '../../core/calendar';
 import { LIMITS, type ProfileId, type Task, type TaskDef, type TaskId, type World } from '../../core/model';
 import { validatePlan } from '../../core/plan';
+import { isNewTask } from '../../core/alerts';
 import { sortForBoard } from '../../core/tasks';
 import type { WorldScreen } from '../context';
 import { h } from '../dom';
@@ -34,6 +35,8 @@ export const renderBoard: WorldScreen = (ctx, root, { worldId }) => {
   let tasks: Task[] = [];
   let defs = new Map<string, TaskDef>();
   let world: World | null = null;
+  /** When this profile last opened its list on this device, read before it is renewed below. */
+  let seenBefore: number | null = null;
   /** The task whose plan is being edited. */
   let planning: TaskId | null = null;
 
@@ -75,7 +78,8 @@ export const renderBoard: WorldScreen = (ctx, root, { worldId }) => {
   function draw(): void {
     if (!world) return;
     const timeZone = world.ruleset.timezone;
-    const shown = sortForBoard(tasks, ctx.clock(), timeZone);
+    const isNew = (task: Task) => isNewTask(task, defs, seenBefore);
+    const shown = sortForBoard(tasks, ctx.clock(), timeZone, isNew);
     list.replaceChildren(
       ...shown.map((task) => {
         const def = task.defId === null ? undefined : defs.get(task.defId);
@@ -84,6 +88,7 @@ export const renderBoard: WorldScreen = (ctx, root, { worldId }) => {
           task,
           def,
           timeZone,
+          isNew: isNew(task),
           action: h('button', { class: 'primary', onClick: () => ctx.go({ name: 'checkin', taskId: task.id }) }, ctx.text('board.complete')),
           below: [
             canPlan && planning !== task.id &&
@@ -112,6 +117,8 @@ export const renderBoard: WorldScreen = (ctx, root, { worldId }) => {
     if (profile.id === watchedProfile) return;
     stopTasks();
     watchedProfile = profile.id;
+    seenBefore = ctx.world.getLastSeen(worldId, profile.id);
+    ctx.world.setLastSeen(worldId, profile.id, ctx.clock());
     stopTasks = observeWithRetry(ctx, problem, (onError) =>
       ctx.store.tasks.observeOpenTasks(worldId, profile.id, (value) => ((tasks = value), draw()), onError),
     );

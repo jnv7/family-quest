@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.4] — 2026-10-21
+
+### Changed
+
+- The board alert on the map (`boardAlert` in `src/core/alerts.ts`, replacing `planAlert`) has three neutral states, strongest first: `due` (a task planned for today, or for a day that has passed and is still open), `new` (an open task the profile has not seen: an ad hoc task made by someone else, or the first task of a recurring definition made since; daily repeats of a known definition are not new) and `soon` (planned for tomorrow). Never a number. New cards carry a "novo" marker on the `board` and in the `checkin`, and the `new` bubble shows a dot.
+- "Last seen" is a per-device, per-profile time kept in `localStorage` (`fq.lastSeen.{worldId}.{profileId}`, through `WorldMemory`), set when the `board` or the `checkin` shows the list; with no value, nothing is new. No data or rules change.
+- Task cards for a plan that is today or past use `planned-due`, and tomorrow's `planned-soon`.
+
 ## [0.8.3] — 2026-10-21
 
 ### Changed

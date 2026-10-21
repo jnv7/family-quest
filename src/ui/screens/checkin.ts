@@ -1,5 +1,6 @@
 import { drawTier, tierOddsFor } from '../../core/draw';
 import type { ProfileId, Task, TaskDef, World } from '../../core/model';
+import { isNewTask } from '../../core/alerts';
 import { sortForBoard } from '../../core/tasks';
 import type { WorldScreen } from '../context';
 import { artElement } from '../art';
@@ -33,6 +34,8 @@ export const renderCheckin = (focusId: string | null): WorldScreen => (ctx, root
   let world: World | null = null;
   let tasks: Task[] | null = null;
   let defs = new Map<string, TaskDef>();
+  let seenBefore: number | null = null;
+  const isNew = (task: Task) => isNewTask(task, defs, seenBefore);
 
   const say = (kind: keyof typeof character.lines) => {
     bubble.textContent = pickLine(character.lines[kind], ctx.randomInt);
@@ -105,13 +108,14 @@ export const renderCheckin = (focusId: string | null): WorldScreen => (ctx, root
           ),
       ],
       focus: task.id === focusId,
+      isNew: isNew(task),
       className: 'checkin-task',
     });
   };
 
   const show = () => {
     if (tasks === null || world === null) return;
-    const shown = sortForBoard(tasks, ctx.clock(), world.ruleset.timezone);
+    const shown = sortForBoard(tasks, ctx.clock(), world.ruleset.timezone, isNew);
     if (!spoken) {
       say(shown.length > 0 ? 'greeting' : 'farewell');
       spoken = true;
@@ -155,6 +159,8 @@ export const renderCheckin = (focusId: string | null): WorldScreen => (ctx, root
     if (profile.id === watchedProfile) return;
     stopTasks();
     watchedProfile = profile.id;
+    seenBefore = ctx.world.getLastSeen(worldId, profile.id);
+    ctx.world.setLastSeen(worldId, profile.id, ctx.clock());
     stopTasks = observeWithRetry(ctx, problem, (onError) =>
       ctx.store.tasks.observeOpenTasks(worldId, profile.id, (value) => ((tasks = value), show()), onError),
     );

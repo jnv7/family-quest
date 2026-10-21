@@ -397,18 +397,18 @@ describe('planning a big task', () => {
     submitPlan(child);
     await child.see('21 de outubro');
     await child.notSee('Planeada'); // no scolding text, only the light
-    expect(child.find('li.planned-tomorrow')).toBeDefined();
+    expect(child.find('li.planned-soon')).toBeDefined();
     await child.click('button', 'Voltar');
-    await vi.waitFor(() => expect(alert()).toBe('tomorrow'));
+    await vi.waitFor(() => expect(alert()).toBe('soon'));
 
     await child.click('button.place', 'Quadro');
     await child.click('button', 'Mudar o plano');
     fill(child, 'Que dia?', '2026-10-20');
     submitPlan(child);
     await child.see('20 de outubro');
-    expect(child.find('li.planned-today')).toBeDefined();
+    expect(child.find('li.planned-due')).toBeDefined();
     await child.click('button', 'Voltar');
-    await vi.waitFor(() => expect(alert()).toBe('today'));
+    await vi.waitFor(() => expect(alert()).toBe('due'));
 
     await child.click('button.place', 'Registo');
     await child.click('button', 'Feito');
@@ -692,6 +692,43 @@ describe('the one task card', () => {
     await child.click('li.task-card:nth-child(2) button', 'Concluir');
     await vi.waitFor(() => expect(child.find('li.task-card.focus .task-title')?.textContent).toBe('Segundo'));
     expect(cards(child)).toEqual(expected);
+  });
+});
+
+describe('the board alert for new tasks', () => {
+  const alert = (device: Awaited<ReturnType<typeof openDevice>>) => device.find('button.place', 'Quadro')?.getAttribute('data-alert') ?? null;
+
+  it('lights when an adult gives the child a task, marks it "novo", and goes out once the child opens the board', async () => {
+    const { admin, child } = await familyWithChild();
+    await child.click('button.place', 'Quadro'); // the first visit only records the time
+    await child.see('Nada por fazer');
+    await child.click('button', 'Voltar');
+    expect(alert(child)).toBeNull();
+
+    now += 60_000;
+    await createTask(admin, 'Arrumar o quarto', 'Sam');
+    await vi.waitFor(() => expect(alert(child)).toBe('new'));
+    expect(child.find('button.place', 'Quadro')?.textContent).not.toMatch(/\d/); // a dot, never a number
+
+    await child.click('button.place', 'Quadro');
+    await child.see('Arrumar o quarto');
+    expect(child.find('li.task-card .tag.new')?.textContent).toBe('novo');
+    await child.click('button', 'Voltar');
+    await vi.waitFor(() => expect(alert(child)).toBeNull());
+  });
+
+  it('does not light for a task the child made, nor for the daily repeat of a known definition', async () => {
+    const { admin, child } = await familyWithChild();
+    await child.click('button.place', 'Quadro');
+    await child.click('button', 'Nova tarefa');
+    await child.type('O que é para fazer?', 'Ler um livro');
+    await child.enabled('Criar tarefa');
+    child.submit();
+    await child.see('Ler um livro');
+    await child.click('button', 'Voltar');
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(alert(child)).toBeNull();
+    expect(admin.root).toBeDefined();
   });
 });
 

@@ -471,25 +471,36 @@ button.place[data-alert]::before {
   pointer-events: none;
 }
 
-button.place[data-alert='today']::after {
+button.place[data-alert='due']::after {
   top: -1.6rem;
   font-size: 1.6rem;
   border-color: var(--accent);
   animation: alert-bob 1.6s ease-in-out infinite;
 }
 
-button.place[data-alert='today']::before {
+button.place[data-alert='due']::before {
   top: 0.6rem;
   border-color: var(--accent);
 }
 
-button.place[data-alert='tomorrow']::after {
+button.place[data-alert='new']::after {
+  content: '•';
+  top: -1.2rem;
+  font-size: 1.3rem;
+  border-color: var(--accent);
+}
+
+button.place[data-alert='new']::before {
+  border-color: var(--accent);
+}
+
+button.place[data-alert='soon']::after {
   top: -0.85rem;
   font-size: 1rem;
   min-width: 1.3rem;
 }
 
-button.place[data-alert='tomorrow']::before {
+button.place[data-alert='soon']::before {
   top: 0.62rem;
   right: 0.75rem;
   width: 0.45rem;
@@ -507,18 +518,18 @@ button.place[data-alert='tomorrow']::before {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  button.place[data-alert='today']::after {
+  button.place[data-alert='due']::after {
     animation: none;
   }
 }
 
-.rows li.planned-today {
+.rows li.planned-due {
   border-color: var(--accent);
   border-left-width: 0.5rem;
   background: color-mix(in srgb, var(--accent) 18%, Canvas);
 }
 
-.rows li.planned-tomorrow {
+.rows li.planned-soon {
   border-left-width: 0.5rem;
 }
 
@@ -862,4 +873,10 @@ span.ask-art {
 .ask-bubble .task-actions {
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
+}
+
+.tag.new {
+  background: var(--accent);
+  color: var(--on-accent, #fff);
+  font-weight: 700;
 }

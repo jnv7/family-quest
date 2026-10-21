@@ -83,6 +83,7 @@
     "board.empty": "Nada por fazer por agora.",
     "board.new": "Nova tarefa",
     "board.complete": "Concluir",
+    "card.new": "novo",
     "card.hasQuestion": "Tem uma pergunta",
     "newTask.heading": "Nova tarefa",
     "newTask.title": "O que é para fazer?",
