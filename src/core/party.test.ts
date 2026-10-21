@@ -23,7 +23,7 @@ const profile = (partyIds: string[]): Profile => ({
   id: 'p1',
   displayName: 'Sam',
   kind: 'child',
-  avatar: { body: 0, hair: 0, outfit: 0, accessory: 0 },
+  avatar: { body: 0, hair: 0, outfit: 0, accessory: 0, symbol: null },
   partyIds,
   archived: false,
 });

@@ -7,7 +7,7 @@
  *
  * "Admin only" means: the device's active profile is an adult profile.
  *
- * Scope: operations needed up to release 0.6 (rewards, collectibles and the party).
+ * Scope: operations needed up to release 0.7 (rewards, collectibles, the party, the showcase and profile symbols).
  */
 import type { NewRecurringTask } from '../core/generation';
 import type { PartyChange } from '../core/party';
@@ -16,6 +16,7 @@ import type {
   Cadence,
   Collectible,
   Member,
+  Millis,
   Plan,
   Profile,
   ProfileId,
@@ -103,6 +104,8 @@ export interface CreateWorldInput {
 export interface CreateProfileInput {
   displayName: string;
   kind: ProfileKind;
+  /** One of the theme's `profileSymbols`; otherwise `invalid-argument` before any write. */
+  symbol?: string | null;
 }
 
 export interface CreateAdhocTaskInput {
@@ -173,6 +176,12 @@ export interface WorldStore {
   createProfile(worldId: WorldId, input: CreateProfileInput): Write<{ profileId: ProfileId }>;
   /** Admin only, and only child profiles. Profiles are never deleted. */
   setProfileArchived(worldId: WorldId, profileId: ProfileId, archived: boolean): Write;
+
+  /**
+   * Owner or admin. `symbol` must be one of the theme's `profileSymbols`, or null; otherwise
+   * `invalid-argument` before any write. Only `avatar.symbol` changes.
+   */
+  setProfileSymbol(worldId: WorldId, profileId: ProfileId, symbol: string | null): Write;
 
   /**
    * Sets this device's active profile (Netflix-style picker). Choosing an
@@ -252,6 +261,15 @@ export interface RewardStore {
   openReward(worldId: WorldId, rewardId: TaskId, input: { slot: Slot }): Write;
 }
 
+/** What the showcase may show about a collectible: never the owner (SPEC.md §2, §6). */
+export interface ShowcaseItem {
+  id: TaskId;
+  slot: Slot;
+  tier: Tier;
+  nickname: string | null;
+  reserveAt: Millis;
+}
+
 export interface CollectibleStore {
   /** The profile's collectibles, newest first. Every member can read them (the showcase needs other people's); the interface never shows the owner. */
   observeCollectibles(worldId: WorldId, profileId: ProfileId, onValue: Observer<Collectible[]>, onError?: ObserverError): Unsubscribe;
@@ -264,6 +282,21 @@ export interface CollectibleStore {
    * pending collectibles to the reserve never overwrites a party another device just edited.
    */
   arrangeParty(worldId: WorldId, profileId: ProfileId, change: PartyChange): Write;
+
+  /**
+   * Sets or clears a collectible's nickname (SPEC.md §4). The text is trimmed; empty means null;
+   * longer than `LIMITS.nickname` is `invalid-argument` before any write. Owner, or an admin
+   * (moderation: the showcase shows nicknames to everyone).
+   */
+  /**
+   * The world's collectibles in the reserve (`reserveAt` set), newest first, at most `limit`
+   * (`ruleset.showcaseSize`). Any member. The adapter maps each document to a `ShowcaseItem`, so
+   * the owner never reaches the interface; the data itself stays readable by members (SPEC.md §5).
+   * The others stay stored.
+   */
+  observeShowcase(worldId: WorldId, limit: number, onValue: Observer<ShowcaseItem[]>, onError?: ObserverError): Unsubscribe;
+
+  setNickname(worldId: WorldId, collectibleId: TaskId, nickname: string | null): Write;
 }
 
 export interface DataStore {

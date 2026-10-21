@@ -13,6 +13,8 @@ import { taskDefProblem } from '../../core/taskDefs';
 import { assertPlanAllowed } from '../plan';
 import { newRecurringTaskProblem, settleRecurringWrites } from '../recurring';
 import type { NewRecurringTask } from '../../core/generation';
+import { nicknameTooLong, normaliseNickname } from '../../core/collection';
+import { assertSymbolAllowed } from '../symbols';
 import {
   DEFAULT_AVATAR,
   DEFAULT_RULESET,
@@ -46,6 +48,7 @@ import {
   type DataStore,
   type Observer,
   type ObserverError,
+  type ShowcaseItem,
   type Unsubscribe,
   type Write,
 } from '../DataStore';
@@ -335,12 +338,13 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
           checkText('Display name', input.displayName, LIMITS.displayName);
           if (input.kind !== 'adult' && input.kind !== 'child') throw invalid(`Unknown profile kind: ${String(input.kind)}`);
           requireWorld(view, worldId);
+          assertSymbolAllowed(input.symbol);
           const profile: Profile = {
             ...newDoc(),
             id: profileId,
             displayName: input.displayName,
             kind: input.kind,
-            avatar: { ...DEFAULT_AVATAR },
+            avatar: { ...DEFAULT_AVATAR, symbol: input.symbol ?? null },
             partyIds: [],
             archived: false,
           };
@@ -353,6 +357,21 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
           };
         });
       },
+
+      setProfileSymbol: (worldId, profileId, symbol) =>
+        submit(undefined, (view, uid) => {
+          assertSymbolAllowed(symbol);
+          const profile = requireWorld(view, worldId).profiles.get(profileId);
+          if (!profile) throw notFound(`Profile ${profileId} does not exist`);
+          return {
+            ops: [{ worldId, collection: 'profiles', id: profileId, patch: { avatar: { ...profile.avatar, symbol } } }],
+            check: (state) => {
+              const access = accessOf(state, worldId, uid);
+              if (!access) return denied('Not a member of this world');
+              return access.member.profileId === profileId || access.isAdmin ? null : denied('Only the owner or an admin chooses a symbol');
+            },
+          };
+        }),
 
       setProfileArchived: (worldId, profileId, archived) =>
         submit(undefined, (view, uid) => {
@@ -588,6 +607,39 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
             },
           };
         }),
+
+      setNickname: (worldId, collectibleId, nickname) =>
+        submit(undefined, (view, uid) => {
+          const value = nickname === null ? null : normaliseNickname(nickname);
+          if (nicknameTooLong(value)) throw invalid(`A nickname has at most ${LIMITS.nickname} characters`);
+          const ws = requireWorld(view, worldId);
+          if (!ws.collectibles.has(collectibleId)) throw notFound(`Collectible ${collectibleId} does not exist`);
+          return {
+            ops: [{ worldId, collection: 'collectibles', id: collectibleId, patch: { nickname: value } }],
+            check: (state) => {
+              const access = accessOf(state, worldId, uid);
+              if (!access) return denied('Not a member of this world');
+              const owner = access.ws.collectibles.get(collectibleId)?.profileId;
+              return access.member.profileId === owner || access.isAdmin ? null : denied('Only the owner or an admin renames a collectible');
+            },
+          };
+        }),
+
+      observeShowcase: (worldId, limit, onValue, onError) =>
+        observeAsMember(
+          worldId,
+          (access) => {
+            const items = [...access.ws.collectibles.values()]
+              .filter((c): c is Collectible & { reserveAt: number } => c.reserveAt !== null)
+              // Same order as the Firestore query: reserveAt descending, then document id descending.
+              .sort((a, b) => b.reserveAt - a.reserveAt || (a.id < b.id ? 1 : -1))
+              .slice(0, limit)
+              .map((c): ShowcaseItem => ({ id: c.id, slot: c.slot, tier: c.tier, nickname: c.nickname, reserveAt: c.reserveAt }));
+            return { value: items };
+          },
+          onValue,
+          onError,
+        ),
 
       observeCollectibles: (worldId, profileId, onValue, onError) =>
         observeAsMember(

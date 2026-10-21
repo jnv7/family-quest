@@ -35,9 +35,9 @@
       "gender": "f"
     },
     "showcase": {
-      "singular": "bar",
-      "plural": "bares",
-      "gender": "m"
+      "singular": "taberna",
+      "plural": "tabernas",
+      "gender": "f"
     },
     "reward": {
       "singular": "baú",
@@ -67,29 +67,106 @@
   },
   "rewardArt": {
     "low": {
-      "emoji": "📦"
+      "image": "assets/rewards/low.svg"
     },
     "mid": {
-      "emoji": "🧰"
+      "image": "assets/rewards/mid.svg"
     },
     "high": {
-      "emoji": "💰"
+      "image": "assets/rewards/high.svg"
     }
   },
+  "profileSymbols": [
+    "⚓",
+    "🏴‍☠️",
+    "🦜",
+    "🐙",
+    "🦀",
+    "🐚",
+    "🌴",
+    "🗺️",
+    "🧭",
+    "💎",
+    "🐬",
+    "🦈",
+    "🐳",
+    "⭐",
+    "🔱",
+    "🥥"
+  ],
   "map": {
     "background": {
-      "emoji": "🌊"
+      "image": "assets/map.webp"
     },
-    "aspectRatio": 0.5625
+    "aspectRatio": 0.5625,
+    "moorings": {
+      "child": {
+        "spots": [
+          {
+            "x": 55.19,
+            "y": 77.86,
+            "width": 10.19,
+            "height": 7.81
+          },
+          {
+            "x": 66.3,
+            "y": 77.86,
+            "width": 10.19,
+            "height": 7.81
+          },
+          {
+            "x": 77.41,
+            "y": 77.86,
+            "width": 10.19,
+            "height": 7.81
+          },
+          {
+            "x": 88.52,
+            "y": 77.86,
+            "width": 10.19,
+            "height": 7.81
+          },
+          {
+            "x": 55.19,
+            "y": 89.48,
+            "width": 10.19,
+            "height": 7.81
+          },
+          {
+            "x": 66.3,
+            "y": 89.48,
+            "width": 10.19,
+            "height": 7.81
+          },
+          {
+            "x": 77.41,
+            "y": 89.48,
+            "width": 10.19,
+            "height": 7.81
+          },
+          {
+            "x": 88.52,
+            "y": 89.48,
+            "width": 10.19,
+            "height": 7.81
+          }
+        ],
+        "symbolAt": {
+          "x": 50,
+          "y": 42,
+          "size": 50
+        }
+      }
+    }
   },
   "places": {
     "board": {
-      "x": 8,
-      "y": 8,
-      "width": 38,
-      "height": 20,
+      "x": 13.5,
+      "y": 62.3,
+      "width": 34,
+      "height": 18,
       "art": {
-        "emoji": "🦜"
+        "image": "assets/places/board.svg"
       },
       "transition": {
         "kind": "move",
@@ -97,12 +174,12 @@
       }
     },
     "checkin": {
-      "x": 54,
-      "y": 8,
-      "width": 38,
-      "height": 20,
+      "x": 30.0,
+      "y": 6.5,
+      "width": 40,
+      "height": 22,
       "art": {
-        "emoji": "🗼"
+        "image": "assets/places/checkin.svg"
       },
       "transition": {
         "kind": "move",
@@ -110,25 +187,30 @@
       }
     },
     "home": {
-      "x": 31,
-      "y": 38,
-      "width": 38,
-      "height": 22,
+      "x": 24.0,
+      "y": 85.0,
+      "width": 28,
+      "height": 15,
       "art": {
-        "emoji": "⛵"
+        "image": "assets/home/adult.webp"
       },
       "transition": {
         "kind": "fade",
         "durationMs": 300
+      },
+      "symbolAt": {
+        "x": 50,
+        "y": 37,
+        "size": 27
       }
     },
     "vault": {
-      "x": 8,
-      "y": 70,
-      "width": 38,
-      "height": 20,
+      "x": 12.4,
+      "y": 39.6,
+      "width": 28,
+      "height": 15,
       "art": {
-        "emoji": "🪙"
+        "image": "assets/places/vault.svg"
       },
       "transition": {
         "kind": "move",
@@ -136,12 +218,12 @@
       }
     },
     "showcase": {
-      "x": 54,
-      "y": 70,
-      "width": 38,
-      "height": 20,
+      "x": 59.1,
+      "y": 45.1,
+      "width": 28,
+      "height": 15,
       "art": {
-        "emoji": "🍺"
+        "image": "assets/places/showcase.svg"
       },
       "transition": {
         "kind": "move",
@@ -151,10 +233,22 @@
   },
   "homeVariants": {
     "adult": {
-      "emoji": "🚢"
+      "image": "assets/home/adult.webp"
     },
     "child": {
-      "emoji": "⛵"
+      "image": "assets/home/child.webp"
+    }
+  },
+  "homeSymbolAt": {
+    "adult": {
+      "x": 50,
+      "y": 38,
+      "size": 42
+    },
+    "child": {
+      "x": 50,
+      "y": 42,
+      "size": 50
     }
   },
   "install": {
@@ -178,7 +272,7 @@
   },
   "character": {
     "art": {
-      "emoji": "🧓"
+      "image": "assets/character/old-pirate.svg"
     },
     "lines": {
       "greeting": [

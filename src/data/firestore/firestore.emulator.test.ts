@@ -80,4 +80,27 @@ describe('documents with an unknown schemaVersion', () => {
     expect(errors).toHaveBeenCalledWith(expect.stringContaining('profiles/from-the-future'));
     errors.mockRestore();
   });
+
+  it('reads a profile written before symbols existed with a null symbol', async () => {
+    const { store } = await connect(() => Date.now());
+    const created = store.worlds.createWorld({ name: 'Home', themeId: 'minimal', creatorDisplayName: 'Alex' });
+    await created.settled;
+    const { worldId } = created.result;
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore() as unknown as Firestore;
+      await setDoc(doc(db, 'worlds', worldId, 'profiles', 'legacy'), {
+        displayName: 'Old',
+        kind: 'child',
+        avatar: { body: 0, hair: 0, outfit: 0, accessory: 0 },
+        partyIds: [],
+        archived: false,
+        schemaVersion: 1,
+        createdAt: Timestamp.now(),
+      });
+    });
+    const seen: Array<string | null | undefined> = [];
+    const stop = store.worlds.observeProfiles(worldId, (profiles) => seen.push(profiles.find((p) => p.id === 'legacy')?.avatar.symbol));
+    await vi.waitFor(() => expect(seen.at(-1)).toBeNull());
+    stop();
+  });
 });

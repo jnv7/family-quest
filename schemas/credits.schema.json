@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://family-quest.invalid/schemas/credits.schema.json",
+  "title": "Credits of a theme's image files",
+  "description": "Lists every file in the theme's assets/ folder with its author, source and licence. Only CC0-1.0 and MIT (art made for this repository) are allowed; any other licence is a decision for the product owner.",
+  "type": "object",
+  "required": ["$schema", "assets"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["file", "author", "source", "licence"],
+        "additionalProperties": false,
+        "properties": {
+          "file": { "type": "string", "pattern": "^assets/[A-Za-z0-9._/-]+$", "description": "Path relative to the theme's folder." },
+          "author": { "type": "string", "minLength": 1, "maxLength": 100, "description": "A public author or project; never a family member's name." },
+          "source": { "type": "string", "pattern": "^https://", "description": "Where the file comes from." },
+          "licence": { "type": "string", "description": "An SPDX identifier from the allowed list (checked by validate-theme)." }
+        }
+      }
+    }
+  }
+}

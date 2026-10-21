@@ -11,6 +11,7 @@ import {
   doc,
   getDoc,
   getDocFromCache,
+  limit as limitTo,
   onSnapshot,
   orderBy,
   query,
@@ -24,6 +25,8 @@ import {
 } from 'firebase/firestore';
 import { signInAnonymously, type Auth } from 'firebase/auth';
 import { weekKey } from '../../core/calendar';
+import { nicknameTooLong, normaliseNickname } from '../../core/collection';
+import { assertSymbolAllowed } from '../symbols';
 import { oddsProblem } from '../../core/draw';
 import { checkPartyChange } from '../../core/party';
 import { taskDefProblem } from '../../core/taskDefs';
@@ -46,6 +49,7 @@ import {
   type TaskDef,
   type Uid,
   type World,
+  type WorldId,
 } from '../../core/model';
 import { randomWorldId } from '../../core/random';
 import {
@@ -53,6 +57,7 @@ import {
   type DataStore,
   type Observer,
   type ObserverError,
+  type ShowcaseItem,
   type Unsubscribe,
   type Write,
 } from '../DataStore';
@@ -266,18 +271,25 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
         return write({ profileId }, async () => {
           checkText('Display name', input.displayName, LIMITS.displayName);
           if (input.kind !== 'adult' && input.kind !== 'child') throw invalid(`Unknown profile kind: ${String(input.kind)}`);
+          assertSymbolAllowed(input.symbol);
           const profile: Profile = {
             ...newDoc(),
             id: profileId,
             displayName: input.displayName,
             kind: input.kind,
-            avatar: { ...DEFAULT_AVATAR },
+            avatar: { ...DEFAULT_AVATAR, symbol: input.symbol ?? null },
             partyIds: [],
             archived: false,
           };
           await setDoc(profileDoc(db, worldId, profileId), encodeProfile(profile));
         });
       },
+
+      setProfileSymbol: (worldId, profileId, symbol) =>
+        write(undefined, async () => {
+          assertSymbolAllowed(symbol);
+          await updateDoc(profileDoc(db, worldId, profileId), { 'avatar.symbol': symbol });
+        }),
 
       setProfileArchived: (worldId, profileId, archived) =>
         write(undefined, () => updateDoc(profileDoc(db, worldId, profileId), { archived })),
@@ -540,6 +552,30 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
           await batch.commit();
         });
       },
+
+      // A single inequality on the field it orders by: the automatic single-field index serves it.
+      observeShowcase: (worldId, limit, onValue, onError) =>
+        onSnapshot(
+          query(collectiblesCollection(db, worldId), where('reserveAt', '!=', null), orderBy('reserveAt', 'desc'), limitTo(limit)),
+          (snapshot) =>
+            onValue(
+              decodeAll(snapshot.docs, decodeCollectible).map((c): ShowcaseItem => ({
+                id: c.id,
+                slot: c.slot,
+                tier: c.tier,
+                nickname: c.nickname,
+                reserveAt: c.reserveAt!,
+              })),
+            ),
+          (error) => onError?.(toDataStoreError(error)),
+        ),
+
+      setNickname: (worldId, collectibleId, nickname) =>
+        write(undefined, async () => {
+          const value = nickname === null ? null : normaliseNickname(nickname);
+          if (nicknameTooLong(value)) throw invalid(`A nickname has at most ${LIMITS.nickname} characters`);
+          await updateDoc(collectibleDoc(db, worldId, collectibleId), { nickname: value });
+        }),
 
       // One equality filter, so no composite index is needed; the order is applied here.
       observeCollectibles: (worldId, profileId, onValue, onError) =>

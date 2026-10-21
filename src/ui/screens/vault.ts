@@ -7,6 +7,7 @@ import { artElement } from '../art';
 import { h } from '../dom';
 import { observeWithRetry } from '../observe';
 import { moveOldPendingToReserve } from '../reserve';
+import { createPartyControls, entryOf as entryOfTheme } from '../party';
 import { observeSelf } from '../self';
 
 const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const;
@@ -51,42 +52,11 @@ export const renderVault: WorldScreen = (ctx, root, { worldId }) => {
     draw();
   };
 
-  const arrange = (partyIds: TaskId[], toReserve: TaskId[]) => {
-    if (!profile) return;
-    ctx.settle(ctx.store.collectibles.arrangeParty(worldId, profile.id, { partyIds, toReserve, fromReserve: [] }).settled);
-  };
-
-  const entryOf = (collectible: Collectible) => {
-    const entry = ctx.theme.catalog.slots.find((slot) => slot.slot === collectible.slot);
-    if (!entry) console.warn(`The theme has no collectible "${collectible.slot}"`);
-    return entry ?? null;
-  };
-
-  /** What can be done with a pending collectible: join the party, or choose who leaves it. */
-  const choices = (collectible: Collectible): HTMLElement | null => {
-    if (!profile || !ruleset || collectibleState(collectible, profile.partyIds) !== 'pending') return null;
-    const party = profile.partyIds;
-    if (party.length < ruleset.partySize) {
-      return h('div', { class: 'choices' },
-        h('button', { class: 'primary', onClick: () => arrange([...party, collectible.id], []) }, ctx.text('party.join')),
-      );
-    }
-    const owned = byId();
-    return h('div', { class: 'choices' },
-      h('p', {}, ctx.text('party.full')),
-      ...party.flatMap((memberId) => {
-        const member = owned.get(memberId);
-        const entry = member ? entryOf(member) : null;
-        if (!member || !entry) return [];
-        return [
-          h('button', {
-            class: 'swap',
-            onClick: () => arrange(party.map((id) => (id === memberId ? collectible.id : id)), [memberId]),
-          }, artElement(ctx.theme, entry.art, 'swap-art'), ctx.text('party.swap', { name: entry.name })),
-        ];
-      }),
-    );
-  };
+  const controls = createPartyControls(ctx, worldId, () =>
+    profile && ruleset && collectibles ? { profile, ruleset, owned: collectibles } : null,
+  );
+  const choices = (collectible: Collectible) => controls.choices(collectible);
+  const entryOf = (collectible: Collectible) => entryOfTheme(ctx, collectible);
 
   const revealCard = (collectible: Collectible) => {
     const entry = entryOf(collectible);

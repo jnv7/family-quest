@@ -11,7 +11,7 @@ const profile = (id: string, kind: Profile['kind']): Profile => ({
   id,
   displayName: id,
   kind,
-  avatar: { body: 0, hair: 0, outfit: 0, accessory: 0 },
+  avatar: { body: 0, hair: 0, outfit: 0, accessory: 0, symbol: null },
   partyIds: [],
   archived: false,
 });

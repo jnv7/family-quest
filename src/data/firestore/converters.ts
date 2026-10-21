@@ -54,7 +54,16 @@ export function encodeProfile(profile: Profile): DocumentData {
 
 export function decodeProfile(snapshot: Snapshot): Profile | null {
   const data = readKnown(snapshot);
-  return data && ({ ...data, id: snapshot.id, createdAt: toMillis(data.createdAt) } as Profile);
+  // A profile written before symbols existed has no `symbol`: it reads as null (schemaVersion stays 1).
+  return (
+    data &&
+    ({
+      ...data,
+      id: snapshot.id,
+      avatar: { ...data.avatar, symbol: data.avatar?.symbol ?? null },
+      createdAt: toMillis(data.createdAt),
+    } as Profile)
+  );
 }
 
 export function encodeTask(task: Task): DocumentData {

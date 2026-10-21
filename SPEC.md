@@ -20,7 +20,7 @@ A PWA for a family of adults and children. Each person has tasks (daily, weekly,
 - **Theme independence.** See section 8 and rule 1 in `CLAUDE.md`. **[decided]**
 - **Local-first.** Works offline; syncs on its own. **[decided]**
 - **No cost:** Spark plan; no Cloud Functions, no Cloud Storage. **[decided]**
-- **No friction.** Completing a task takes at most 2 taps from the map. Alerts are visual (a place on the map lights up), with no scolding text and no push notifications. **[decided]**
+- **No friction.** Completing a task takes at most 2 taps from the map. Alerts are visual (a speech bubble with dots appears on a place of the map, as if it wanted to say something), with no scolding text and no push notifications. **[decided]**
 - **No comparison.** No screen shows counts, rankings or who owns a collectible to other people. **[decided]**
 - **Nothing earned is lost.** Rewards and collectibles are never deleted. No document in the system is deletable. **[decided]**
 - **Public repository data:** code and art only. No family data. **[decided]**
@@ -94,7 +94,7 @@ A device in the world. `uid` comes from anonymous authentication.
 | --- | --- | --- |
 | `displayName` | string | |
 | `kind` | `adult` or `child` | Immutable. Adult profiles carry admin rights (section 5); otherwise `kind` affects only appearance and limits, and the mechanics are the same |
-| `avatar` | map | Layers as indices (`body`, `hair`, `outfit`, `accessory`). Never an image |
+| `avatar` | map | Layers as indices (`body`, `hair`, `outfit`, `accessory`), plus `symbol`: one emoji, any single emoji (the theme only suggests some), or null until chosen. Never an image. A profile read without `symbol` has `symbol: null`. The rules only require `avatar` to be a map, so `symbol` needs no rules change **[decided]** |
 | `partyIds` | list of ids | Up to `partySize`; the source of truth for the `party` |
 | `archived` | boolean | Profiles are never deleted. Only child profiles can be archived, so a world always keeps at least one adult profile, and therefore an admin |
 
@@ -159,7 +159,7 @@ A completed task produces a `reward` with the task's id. Opening the reward prod
 | `taskDefs` | members | `admin` |
 | `tasks` | `admin` or the owner | create ad hoc: `admin` for any profile, or the owner for itself with `origin: app`; create recurring: the owner only, with an id equal to `{defId}_{periodKey}_{profileId}`, for an active `taskDef` assigned to that profile; every new task has `status: open`; update: only the owner completes (`status` from `open` to `done`, together with `doneAt`, `answer`, `talkFlag`, `weekKey`), and the owner may change `talkFlag` and `plan` on an open task; an `admin` may change `title`, `level` and `question` on an open task; nobody changes `status` of a `done` task, nor `profileId`, `source`, `defId`, `periodKey`, `createdBy` or `createdAt` |
 | `rewards` | `admin` or the owner | create: the owner only, never replacing an existing one, and only in the same batch that moves the task with the same id from `open` to `done` (checked with `get` and `getAfter`), with the same `profileId` and `weekKey`; update: the owner, only `openedAt`, once |
-| `collectibles` | members (the `showcase` needs to read other people's; the interface hides the owner) | create: the owner only, never replacing, and only in the same batch that sets `openedAt` on the reward with the same id, with that reward's `tier` and `profileId`; update: the owner, only `nickname` and `reserveAt`; `admin`, only `nickname` **[proposal]** |
+| `collectibles` | members (the `showcase` needs to read other people's; the interface hides the owner) | create: the owner only, never replacing, and only in the same batch that sets `openedAt` on the reward with the same id, with that reward's `tier` and `profileId`; update: the owner, only `nickname` and `reserveAt`; `admin`, only `nickname` (moderation, since the `showcase` shows nicknames to everyone) **[decided]** |
 
 The rule "a `done` task never changes `status`", together with the immutable `createdAt`, is essential. Without it, generating recurring tasks again could overwrite completed tasks (section 6).
 
@@ -189,7 +189,7 @@ Known edge case: the "no open task" check runs on the local cache, so a device w
 
 **Verification question.** If the task has a `question`, the `checkin` character asks it as yes or no, next to the task, so answering "yes" is the single tap that completes it (two taps from the map). Answering "yes" completes the task. **[open]** What happens on "no". Proposal: the task stays open, the character says a friendly themed line, and no failure is recorded.
 
-**"I think I did better".** A button on each task in the `checkin` toggles `talkFlag` while the task is open, and the completion keeps its value. Adults see the flagged tasks. There are no points, states or multipliers.
+**"I think I did better".** **[decided]** (product owner, 2026-10-21) This is no longer a button. The `checkin` shows a static line before the list of tasks ("if you think you did a task better than expected, talk to your parents"), so the conversation happens out loud. The `talkFlag` field and its store operation remain in the data, but the interface does not set it, so it stays `false`. There are no points, states or multipliers.
 
 **Opening rewards.** On or after `ruleset.openingDay` (Sunday by default), a person can open the current week's rewards. Rewards from closed weeks can be opened at any time, so if the family skips a Sunday, everything opens on Monday or later. Each person opens their own. Everyone can open at the same time on the same screen, but each person sees only their own result. Opening is one atomic batch that:
 
@@ -205,7 +205,7 @@ Known edge case: the "no open task" check runs on the local cache, so a device w
 | Pending | Not in `partyIds`; `reserveAt` is null |
 | In the `reserve` | `reserveAt` is set |
 
-A newly obtained collectible is pending. It stays in its owner's list, where the owner can put it into the `party` (choosing who leaves if the party is full). After `ruleset.pendingDays` days from `obtainedAt`, the owner's client moves pending collectibles to the reserve the next time it opens, by setting `reserveAt`. A collectible that leaves the `party` goes to the reserve, with `reserveAt` set. Moving between `party` and `reserve` is free at any time, in one batch that updates `partyIds` and `reserveAt`. Nothing is deleted.
+A newly obtained collectible is pending. It stays in its owner's list, where the owner can put it into the `party` (choosing who leaves if the party is full). After `ruleset.pendingDays` days from `obtainedAt`, the owner's client moves pending collectibles to the reserve the next time it opens, by setting `reserveAt`. A collectible that leaves the `party` goes to the reserve, with `reserveAt` set. The reserve is not a list on the profile: the collectibles in it have been sent away, and everyone sees them in the `showcase` (**[decided]**, product owner, 2026-10-20). The way back is the `showcase`: a person who taps one of their own collectibles there can put it back into the `party` (choosing who leaves if it is full), which clears its `reserveAt`. The item tells nobody else that it is theirs. Nothing is deleted.
 
 **Showcase.** A computed view: the collectibles with `reserveAt` set, ordered by `reserveAt` descending, limited to `showcaseSize`. It shows the name (`nickname`, or the theme's name for the `slot`) and never the owner. Collectibles outside the `showcase` remain stored.
 
@@ -213,14 +213,24 @@ A newly obtained collectible is pending. It stays in its owner's list, where the
 
 The main screen is a **map** with five tappable places. Each tap starts a short animation to that place. The position, drawing and animation of each place belong to the theme. The avatar cannot be moved freely. **[decided]**
 
+**Moorings: the family on the map.** **[decided]** (product owner, 2026-10-20) A theme may declare moorings: fixed spots on the map, per profile `kind`. The engine draws one boat (`homeVariants[kind]`) at each mooring, one per non-archived profile of that kind.
+
+- **Order:** profiles fill the moorings in creation order (`createdAt`, then `id`), so every device draws the same layout.
+- **Symbol on the sail:** each boat shows its profile's `avatar.symbol` at the theme's symbol spot (on the sail, in the pirate theme), so each person's boat can be told apart. A profile with no symbol shows its boat without one.
+- **Only your own boat opens:** tapping the active profile's own boat opens their `home`, like the `home` place does. The other boats are decoration and do nothing when tapped. They only show that each person is on the island, and never open another person's `home` or `party` (product owner, 2026-10-20). No boat shows a name, count, collectible or party, so `SPEC.md` §2 still holds. The `home` place stays on the map as well.
+- **More profiles than moorings:** the extra profiles are not drawn. This is a limit of the theme, not an error. A theme should declare enough moorings (the pirate theme: at least 6 for children).
+- **Themes without moorings:** a theme that declares none shows the map exactly as before.
+
+The pirate theme declares moorings for children only, at the pier. Adults keep the large ship, which is the `home` place art. The symbols of the non-archived adults (up to three, in creation order, smaller as they grow in number) are drawn on its sail for everyone, so a child also sees whose ship it is.
+
 1. **First launch.** Create a world (choosing its theme, when there is more than one), which shows the join link and QR code, or join with a link or code. Then pick a profile. Once the theme is known, the app offers to install itself (never from the bare address).
 2. **Profile picker.** Netflix-style list of the world's non-archived profiles. Reachable later to switch profile.
 3. **`board`.** All open tasks of the active profile, including those from past periods, and, highlighted, planned `big` tasks for tomorrow and today (the visual alert, 0.3). Entry point for creating a task: adults for any profile, children for themselves.
-4. **`checkin`.** Pick an open task, tap done. Shows the question when there is one. "I think I did better" button.
-5. **`home`.** Avatar and `party` of the active profile, plus its pending collectibles. Edit the `party` (remove, add). Name a collectible. Edit the avatar (0.8).
-6. **`vault`.** The active profile's unopened `rewards`, grouped by week, each shown with the theme's art for its `tier` (the tier is visible before opening **[decided]**). Only that profile's own rewards. A reward is opened here from the opening day on; the collectible that comes out is shown and can join the `party` at once, or stay pending. Until the full `home` place arrives (0.7), the vault also lists the pending collectibles in a "recent" section, with the same choices.
-7. **`showcase`.** The latest 30 from the reserve.
-8. **Management (`admin` only).** Create and archive profiles, create and edit `taskDefs`, edit the reward odds (`tierOdds`), view tasks per profile (including `talkFlag`), show the join link and QR code again. Profiles and worlds are always created through the app, with generated ids, never by editing data by hand. **[decided]**
+4. **`checkin`.** Pick an open task, tap done. Each task is a card with its button in front of it (for a task with a question, "yes" and "no" in front of it). A static line before the list says to talk to the parents about a task done better than expected; it is not a button. The `board` lists its tasks as cards too.
+5. **`home`.** The active profile with the theme's look for its kind (`homeVariants`), with the profile's symbol on its sail (the symbol is the avatar for now), a button under it to choose the symbol, its `party` and its pending collectibles; there is no reserve list. Each collectible in the `party` can be renamed (the nickname is trimmed, empty clears it, at most 30 characters). A `party` member is sent away, to the `showcase`, in one tap with no confirmation, because nothing is lost; a pending collectible joins the `party`, and with a full `party` the screen asks who leaves. No counts and no comparisons. The `party` list has a short line saying what it is. The owner chooses or changes the profile's symbol with the button under the boat, which opens a panel with the theme's suggestions first and then the animals and plants, with large squares, and a way to clear it; the chosen emoji goes onto the sail at once. An adult's symbol also shows on the big ship at the pier of the map, where the theme gives a place for it (`symbolAt` on the place). Where the theme does not place the symbol over its art, it is shown next to the name. The layered avatar (0.8) is not started.
+6. **`vault`.** The active profile's unopened `rewards`, grouped by week, each shown with the theme's art for its `tier` (the tier is visible before opening **[decided]**). Only that profile's own rewards. A reward is opened here from the opening day on; the collectible that comes out is shown and can join the `party` at once, or stay pending. The vault also lists the pending collectibles in a "recent" section, with the same choices as the `home`.
+7. **`showcase`.** The latest 30 from the reserve, from everyone, as a grid of art and name. Tapping one shows it larger, with its name and tier name. It never shows the owner, a date or a count. An admin can also rename any of them (moderation). A person who taps one of their own can bring it back into the `party`. **[decided]**
+8. **Management (`admin` only).** Create and archive profiles (optionally choosing the new profile's symbol), create and edit `taskDefs`, edit the reward odds (`tierOdds`), view tasks per profile (including `talkFlag`), show the join link and QR code again. Profiles and worlds are always created through the app, with generated ids, never by editing data by hand. **[decided]**
 
 Adults play like everyone else. The theme can give an adult's `home` a different look (in the pirate theme, a luxury ship).
 
@@ -255,6 +265,9 @@ Folder `src/themes/{themeId}/` with:
   - `id`, `name` and `locale` (`pt-PT`);
   - for each glossary role, the singular and plural visible name;
   - for each map place, its position, size and animation;
+  - optionally, `map.moorings` per `kind`: a list of spots (`x`, `y`, `width`, `height` in percent of the map, like places), plus where on the boat the profile symbol goes (`symbolAt`: `x`, `y` and `size`, in percent of the spot) (section 7);
+  - `profileSymbols`: the emoji suggested first when a profile chooses its symbol, neutral or themed, at least 12, without duplicates (the picker offers every emoji, so this is not a limit);
+  - optionally, `homeSymbolAt` per `kind`: where the symbol goes over the `homeVariants` art on the `home` (`x`, `y` and `size`, in percent of the art);
   - `rewardArt`: the art of an unopened reward, per tier;
   - `homeVariants` per `kind`;
   - `install`: the name and colours of the installed app and its icons, from which one manifest per theme is built (ADR 0005);
@@ -266,7 +279,7 @@ Interface text that does not belong to a theme lives in locale files under `src/
 
 The engine reads the theme only through a typed `theme` module. A validator (`npm run validate-theme`) checks that the theme has enough slots in each `tier`, that no text is missing, and that every placeholder used in `src/i18n/` has a name in the theme. A collectible stores `slot` and `tier`, never the theme's name, so a new theme changes the look of everything already obtained without migrating data.
 
-Theme art is CC0 (Kenney) or made for this repository, plus emoji; the children choose it from a short list. **[decided]** If children's drawings are added later (radar), they belong to the theme they were made for, and before they are committed to the public repository they are checked for names, signatures or anything else that identifies the family. **[decided]** **[proposal]** The default theme for tests is a minimal theme (emoji and text), included in the repository.
+Theme art is CC0 (Kenney) or made for this repository, plus emoji; the children choose it from a short list. **[decided]** Every image file is listed with its author, source and licence in the theme's `credits.json` (only `CC0-1.0`, and `MIT` for art made for this repository), and `CREDITS.md` is generated from those files. Art is `webp` (`png` only for install icons), has no EXIF or XMP metadata, and stays within size budgets (map 1080 × 1920 and 400 KB; other art 512 × 512 and 80 KB, collectibles 60 KB; 2.5 MB per theme), all checked by `validate-theme`. **[decided]** If children's drawings are added later (radar), they belong to the theme they were made for, and before they are committed to the public repository they are checked for names, signatures or anything else that identifies the family. **[decided]** **[proposal]** The default theme for tests is a minimal theme (emoji and text), included in the repository.
 
 ## 9. Code architecture
 

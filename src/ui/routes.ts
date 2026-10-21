@@ -11,6 +11,8 @@ export type Route =
   | { name: 'board' }
   | { name: 'checkin' }
   | { name: 'vault' }
+  | { name: 'home' }
+  | { name: 'showcase' }
   | { name: 'newTask' }
   | { name: 'manage' }
   | { name: 'share' }
@@ -24,6 +26,8 @@ const SEGMENTS = {
   board: 'board',
   checkin: 'checkin',
   vault: 'vault',
+  home: 'home',
+  showcase: 'showcase',
   newTask: 'new-task',
   manage: 'manage',
   share: 'share',

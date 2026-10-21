@@ -231,6 +231,13 @@ fieldset {
   background: color-mix(in srgb, var(--accent) 12%, Canvas);
 }
 
+/* A theme's picture of the map is shown in full; an emoji stays a faint backdrop. */
+img.map-art {
+  width: 100%;
+  height: 100%;
+  opacity: 1;
+}
+
 .map-art {
   position: absolute;
   inset: 0;
@@ -242,15 +249,53 @@ fieldset {
   pointer-events: none;
 }
 
+/* The family's boats at the theme's moorings (SPEC.md §7). */
+.boats {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.boat {
+  position: absolute;
+  container-type: inline-size;
+  pointer-events: none;
+}
+
+button.boat.own {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: auto;
+}
+
+.boat-art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  font-size: 100cqw;
+}
+
+.boat-symbol {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: calc(var(--symbol-size) * 1cqw);
+  line-height: 1;
+}
+
 button.place {
   position: absolute;
   display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
   align-content: center;
   justify-items: center;
-  gap: 0.25rem;
-  padding: 0.25rem;
+  gap: 0.1rem;
+  padding: 0.1rem;
+  border: 0;
   border-radius: 1rem;
-  background: color-mix(in srgb, Canvas 88%, transparent);
+  /* No panel behind the art: a themed map is painted, so the name carries the contrast instead. */
+  background: transparent;
 }
 
 button.place:disabled {
@@ -265,11 +310,31 @@ button.place:disabled {
 
 img.place-art {
   max-width: 100%;
-  max-height: 70%;
+  max-height: 100%;
+  min-height: 0;
+  object-fit: contain;
+}
+
+.place-slot {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  container-type: inline-size;
+}
+
+.place-slot .place-art {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .place-name {
-  font-size: 0.8rem;
+  font-size: 0.7rem;
+  padding: 0 0.4rem;
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, Canvas 70%, transparent);
 }
 
 /* Board and forms */
@@ -316,80 +381,147 @@ img.character-art {
   min-height: 2.5rem;
 }
 
-.rows li.checkin-task {
-  display: grid;
-  justify-content: stretch;
-  justify-items: stretch;
-  gap: 0.5rem;
-  padding: 0.75rem 0;
+/*
+ * Task cards: the tasks are what a person came for, so each one stands out from the page, with its
+ * button in front of it and the title in bold.
+ */
+.rows.tasks,
+.rows.checkin-tasks {
+  gap: 0.75rem;
 }
 
+.rows.tasks li,
+.rows.checkin-tasks li {
+  padding: 0.85rem 1rem;
+  border: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--accent) 9%, Canvas);
+  box-shadow: 0 0.2rem 0 color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.rows.tasks li > span,
 .task-title {
-  font-weight: 600;
+  font-size: 1.15rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.rows li.checkin-task {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  justify-content: stretch;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.task-actions {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.task-actions button {
+  min-width: 4.5rem;
+  min-height: 3rem;
+  font-weight: 700;
+}
+
+.task-body {
+  display: grid;
+  gap: 0.25rem;
 }
 
 .question {
   margin: 0;
 }
 
-.answers {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.5rem;
+/*
+ * The plan alert (SPEC.md §7): neutral, the same in every theme, two intensities and no words.
+ * The place seems to want to say something: a speech bubble with dots, bigger and bouncing when
+ * the planned task is due today, small and still when it is due tomorrow.
+ */
+button.place[data-alert]::after {
+  content: '…';
+  position: absolute;
+  top: -1.1rem;
+  right: -0.3rem;
+  min-width: 1.6rem;
+  padding: 0 0.45rem 0.35rem;
+  border: 2px solid var(--line);
+  border-radius: 1rem;
+  background: Canvas;
+  color: CanvasText;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.3;
+  text-align: center;
+  pointer-events: none;
 }
 
-button.better {
-  min-height: 2.25rem;
-  font-size: 0.85rem;
-  opacity: 0.75;
+/* The tail of the bubble, pointing down at the place, so the bubble sits above its art. */
+button.place[data-alert]::before {
+  content: '';
+  position: absolute;
+  top: 0.35rem;
+  right: 0.9rem;
+  z-index: 1;
+  width: 0.55rem;
+  height: 0.55rem;
+  border: solid var(--line);
+  border-width: 0 2px 2px 0;
+  background: Canvas;
+  transform: rotate(45deg);
+  pointer-events: none;
 }
 
-button.better[aria-pressed='true'] {
-  opacity: 1;
+button.place[data-alert='today']::after {
+  top: -1.6rem;
+  font-size: 1.6rem;
   border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 18%, Canvas);
+  animation: alert-bob 1.6s ease-in-out infinite;
 }
 
-/* The plan alert (SPEC.md §7): neutral, the same in every theme, two intensities. */
-button.place[data-alert] {
-  animation: alert-glow 2.4s ease-in-out infinite;
+button.place[data-alert='today']::before {
+  top: 0.6rem;
+  border-color: var(--accent);
 }
 
-button.place[data-alert='today'] {
-  --alert-color: var(--accent);
-  --alert-size: 0.9rem;
+button.place[data-alert='tomorrow']::after {
+  top: -0.85rem;
+  font-size: 1rem;
+  min-width: 1.3rem;
 }
 
-button.place[data-alert='tomorrow'] {
-  --alert-color: var(--accent);
-  --alert-size: 0.4rem;
+button.place[data-alert='tomorrow']::before {
+  top: 0.62rem;
+  right: 0.75rem;
+  width: 0.45rem;
+  height: 0.45rem;
 }
 
-@keyframes alert-glow {
+@keyframes alert-bob {
   0%,
   100% {
-    box-shadow: 0 0 0 0 transparent;
+    transform: translateY(0);
   }
   50% {
-    box-shadow: 0 0 var(--alert-size) calc(var(--alert-size) / 2) var(--alert-color);
+    transform: translateY(-0.25rem);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  button.place[data-alert] {
+  button.place[data-alert='today']::after {
     animation: none;
-    box-shadow: 0 0 var(--alert-size) calc(var(--alert-size) / 2) var(--alert-color);
   }
 }
 
 .rows li.planned-today {
-  border-left: 0.3rem solid var(--accent);
-  padding-left: 0.5rem;
+  border-color: var(--accent);
+  border-left-width: 0.5rem;
+  background: color-mix(in srgb, var(--accent) 18%, Canvas);
 }
 
 .rows li.planned-tomorrow {
-  border-left: 0.3rem solid var(--line);
-  padding-left: 0.5rem;
+  border-left-width: 0.5rem;
 }
 
 /* The vault: unopened rewards, shown by the art of their tier. */
@@ -508,4 +640,134 @@ button.place[data-alert='tomorrow'] {
 
 .recent-card p {
   margin: 0;
+}
+
+.home-header {
+  display: grid;
+  justify-items: center;
+  gap: 0.25rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+}
+
+.home-art {
+  font-size: 4rem;
+  max-width: 8rem;
+}
+
+.home-header p {
+  margin: 0;
+}
+
+.collectible-list {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.collectible-card {
+  display: grid;
+  justify-items: center;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+}
+
+.collectible-card p {
+  margin: 0;
+}
+
+.symbol-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.symbol-grid button {
+  min-width: 3.5rem;
+  min-height: 3.5rem;
+}
+
+.symbol-grid .symbol {
+  font-size: 2.25rem;
+  line-height: 1;
+}
+
+.rename {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: center;
+}
+
+.showcase-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr));
+  gap: 0.75rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.showcase-item {
+  display: grid;
+  justify-items: center;
+  gap: 0.25rem;
+  width: 100%;
+  padding: 0.5rem;
+}
+
+/* The boat on the home, with the profile's symbol on its sail. */
+.home-boat {
+  position: relative;
+  width: min(60%, 14rem);
+  container-type: inline-size;
+}
+
+img.home-art {
+  display: block;
+  width: 100%;
+  max-width: none;
+  height: auto;
+}
+
+.symbol-panel {
+  max-height: 55dvh;
+  padding: 0.75rem;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+}
+
+.symbol-bar {
+  position: sticky;
+  top: -0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  background: Canvas;
+}
+
+.symbol-bar h2 {
+  flex: 1;
+  margin: 0;
+}
+
+.symbol-panel h3 {
+  margin: 0.75rem 0 0.25rem;
+}
+
+.hint {
+  margin: 0;
+  opacity: 0.7;
+}
+
+.hint + .rows {
+  margin-top: 0.75rem;
 }

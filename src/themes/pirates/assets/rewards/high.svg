@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><defs><clipPath id="c"><path d="M62 250 V196 Q62 104 256 104 Q450 104 450 196 V250 V424 Q450 432 442 432 H70 Q62 432 62 424 Z"/></clipPath></defs><ellipse cx="256" cy="446" rx="206" ry="24" fill="#000" opacity=".16"/>
+<path d="M62 250 V196 Q62 104 256 104 Q450 104 450 196 V250 V424 Q450 432 442 432 H70 Q62 432 62 424 Z" fill="#a8672f"/>
+<g clip-path="url(#c)">
+<path d="M62 250 H450 V440 H62 Z" fill="#a8672f"/>
+<path d="M62 100 H450 V250 H62 Z" fill="#bb7a3d"/>
+<path d="M62 304 H450 M62 360 H450" stroke="#7b4a20" stroke-width="7"/>
+<path d="M150 135 V250 M256 120 V250 M362 135 V250" stroke="#7b4a20" stroke-width="6" opacity=".7"/>
+<rect x="62" y="236" width="388" height="28" fill="#f6c445" stroke="#a8731a" stroke-width="6"/>
+<rect x="104" y="90" width="46" height="360" fill="#f6c445" stroke="#a8731a" stroke-width="6"/>
+<rect x="362" y="90" width="46" height="360" fill="#f6c445" stroke="#a8731a" stroke-width="6"/>
+<g fill="#a8731a"><circle cx="127" cy="290" r="6"/><circle cx="127" cy="400" r="6"/><circle cx="385" cy="290" r="6"/><circle cx="385" cy="400" r="6"/><circle cx="127" cy="150" r="6"/><circle cx="385" cy="150" r="6"/></g>
+</g>
+<path d="M62 250 V196 Q62 104 256 104 Q450 104 450 196 V250 V424 Q450 432 442 432 H70 Q62 432 62 424 Z" fill="none" stroke="#2f2a36" stroke-width="12" stroke-linejoin="round"/>
+<rect x="222" y="226" width="68" height="84" rx="14" fill="#ffd965" stroke="#2f2a36" stroke-width="10"/>
+<circle cx="256" cy="262" r="11" fill="#2f2a36"/><rect x="251" y="266" width="10" height="26" rx="4" fill="#2f2a36"/>
+<path d="M256 140 l24 28 -24 30 -24 -30 z" fill="#e5384f" stroke="#2f2a36" stroke-width="8" stroke-linejoin="round"/><path d="M244 160 l12 -10" stroke="#fff" stroke-width="6" stroke-linecap="round" opacity=".8"/><path d="M60 94 Q60 120 86 120 Q60 120 60 146 Q60 120 34 120 Q60 120 60 94Z" fill="#fff6bf" stroke="#f5c542" stroke-width="3"/><path d="M458 76 Q458 96 478 96 Q458 96 458 116 Q458 96 438 96 Q458 96 458 76Z" fill="#fff6bf" stroke="#f5c542" stroke-width="3"/><path d="M430 156 Q430 170 444 170 Q430 170 430 184 Q430 170 416 170 Q430 170 430 156Z" fill="#fff6bf" stroke="#f5c542" stroke-width="3"/><path d="M88 46 Q88 60 102 60 Q88 60 88 74 Q88 60 74 60 Q88 60 88 46Z" fill="#fff6bf" stroke="#f5c542" stroke-width="3"/></svg>

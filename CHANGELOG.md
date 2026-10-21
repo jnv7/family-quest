@@ -6,6 +6,81 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.6] — 2026-10-21
+
+Closes release 0.7.
+
+### Added
+
+- Load time: the product owner measured the first, uncached load on a phone and the installed app, and accepted it as under the 3 seconds of the exit criterion; no change was needed. The numbers were not recorded in the repository.
+- For 0.8 to compare, the production build of this release: app code 132.5 kB (51.6 kB gzip), the Firestore SDK chunk 634.0 kB (187.5 kB gzip), the `collection` chunk 5.4 kB, the stylesheet 9.0 kB (2.5 kB gzip), and a service worker precache of 34 entries, 1029.8 KiB (the pirate map is 94 kB, the other pirate art 35 kB).
+
+## [0.7.5] — 2026-10-20
+
+### Added
+
+- Moorings: a theme may declare spots on the map per profile kind, and the engine moors one boat (`homeVariants[kind]`) at each, one per non-archived profile, in creation order. Only the active profile's own boat opens their `home`; the others are decoration and show no name, count or collectible. A theme without moorings looks as before.
+- Profile symbols: each profile can have one emoji from the theme's `profileSymbols` (every theme now has at least 12), shown on the sail of its boat. The owner chooses it in the `home`, and an admin can choose it when creating a profile. `DataStore`: `worlds.setProfileSymbol`, and `symbol` in `CreateProfileInput`, with both adapters and the contract suite. `Avatar` gains `symbol` (null when absent, no schema version change, no rules change).
+- `validate-theme`: spots inside the map and not overlapping, `symbolAt` inside its spot, and each symbol a single emoji.
+- The pirate theme moors up to eight children at a T-shaped pier, with the example boats removed from the map image; the child boat is a small ship with a plain sail that carries the symbol.
+
+### Changed (product owner's review, 2026-10-20)
+
+- Any emoji can be a symbol, not only the theme's: the `home` has a button under the boat that opens a panel with every emoji (the theme's `profileSymbols` become the suggestions shown first), and the chosen emoji goes onto the sail of the boat on the `home` at once (`homeSymbolAt` in the theme says where). The symbol is the avatar for now, so the empty "avatar" place is gone.
+- The plan alert is a speech bubble with dots above the place, not over its art (bigger and bouncing for today, small for tomorrow), instead of a glowing rectangle.
+- There is no reserve list on the profile: a collectible sent away leaves the `home` and is seen with the others in the `showcase`, so the "reserve" name no longer confuses. Nothing is deleted. The panel offers the theme's suggestions and then the animals and plants only, with larger squares.
+- The adults' symbols show on the big ship at the pier for everyone, children included (`symbolAt` on the place, new and optional in the theme): up to three share the sail.
+- The `party` list says what it is. Map places have bigger art and a quieter name; the pirate parrot and lighthouse are larger.
+
+- The `checkin` and the `board` lists are cards that stand out from the page. In the `checkin` the button that completes a task is in front of it, and "I think I did better" is no longer a button: a static line before the list says to talk to the parents (`talkFlag` stays in the data, unset by the interface).
+- From the `showcase`, a person can bring one of their own collectibles back into the party (and choose who leaves if it is full).
+
+### Fixed
+
+- A theme's picture of the map was drawn at 12% opacity, as the faint backdrop meant for emoji; images are now shown in full. Map places no longer have a border, and their art fits above the name.
+
+## [0.7.4] — 2026-10-20
+
+### Added
+
+- Final art for the pirate theme, with no data change (slot ids and the theme id are untouched; the collectibles keep their emoji art for now): a painted map of one island with a pier, a path network and a forest, built from Kenney's Pirate Pack tiles (CC0); a lighthouse, cave, tavern and parrot, three chests (wood, silver, gold) for the rewards and an old pirate for the check-in, drawn for this repository as SVG (MIT); and a large ship with plain golden sails for adults and a rowing boat for children, from the Pirate Pack. The map shows a T-shaped pier with the adults' ship and two moored rowing boats. Credits are listed and `CREDITS.md` is regenerated.
+- The showcase is now a "taberna" (the former "bar"), with the gender updated.
+
+### Changed
+
+- The map places have no panel behind their art any more; the name carries the contrast. This is the only change outside the theme, and it applies to every theme.
+
+## [0.7.3] — 2026-10-20
+
+### Added
+
+- `npm run art:prepare`: turns source images kept outside the repository into the theme's `webp` art, fitted to the budget of their kind and with all metadata stripped.
+- `credits.json` for every theme (schema `schemas/credits.schema.json`), and `CREDITS.md`, generated by `npm run credits` and checked in CI.
+- `validate-theme` now checks the image files: formats, credits, licences, budgets (map, places and other art, collectibles, theme total) and EXIF/XMP metadata, naming the file that fails.
+
+### Fixed
+
+- The install icons of both minimal themes carried EXIF and XMP metadata (a generator's default tags, nothing personal); they were re-encoded without it.
+
+## [0.7.2] — 2026-10-20
+
+### Added
+
+- The `showcase` place: a grid of the latest collectibles that went to the reserve, from everyone, newest first, up to `showcaseSize`. A tap shows one larger, with its name and tier name. It shows no owner, no date and no count. An admin can rename any item there (moderation).
+- `DataStore`: `collectibles.observeShowcase` and `ShowcaseItem`, which has no owner field, in both adapters and the contract suite.
+
+## [0.7.1] — 2026-10-20
+
+### Added
+
+- The `home` place: the profile with the theme's look for its kind, an empty labelled place for the avatar (0.8), the party, the pending collectibles and the reserve. A collectible can be renamed, sent to the reserve in one tap, or brought back, asking who leaves when the party is full. No counts, no comparisons.
+- Admins can rename any collectible (moderation), without deleting anything.
+- Domain: `displayName` and `collectionOf` (`src/core/collection.ts`), and the nickname rules. `DataStore`: `collectibles.setNickname`, with both adapters and the contract suite.
+
+### Changed
+
+- The choices to join the party are shared by the `vault` and the `home` (`src/ui/party.ts`).
+
 ## [0.6.4] — 2026-10-20
 
 Closes release 0.6.

@@ -32,6 +32,9 @@ jobs:
       - name: Theme validation
         run: npm run validate-theme
 
+      - name: Credits up to date
+        run: npm run credits -- --check
+
       - name: Unit tests
         run: npm test
 

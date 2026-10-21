@@ -149,9 +149,11 @@ export interface Avatar {
   hair: number;
   outfit: number;
   accessory: number;
+  /** One emoji from the theme's `profileSymbols`, shown on the profile's boat; null until chosen. */
+  symbol: string | null;
 }
 
-export const DEFAULT_AVATAR: Avatar = { body: 0, hair: 0, outfit: 0, accessory: 0 };
+export const DEFAULT_AVATAR: Avatar = { body: 0, hair: 0, outfit: 0, accessory: 0, symbol: null };
 
 /** `worlds/{worldId}/profiles/{profileId}`: one person. */
 export interface Profile extends DocMeta {

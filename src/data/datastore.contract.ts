@@ -21,7 +21,7 @@ import {
   type TaskDef,
   type World,
 } from '../core/model';
-import { DataStoreError, type DataStore, type DataStoreErrorCode, type TaskDefInput, type Unsubscribe, type Write } from './DataStore';
+import { DataStoreError, type DataStore, type ShowcaseItem, type DataStoreErrorCode, type TaskDefInput, type Unsubscribe, type Write } from './DataStore';
 
 /** Signed-in devices that share one backend. */
 export interface ContractDevices {
@@ -681,6 +681,167 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
         await eventually(() => expect(partyOf()).toEqual([]));
         profiles.close();
         owned.close();
+      });
+    });
+
+    describe('nicknames', () => {
+      async function withCollectible() {
+        const env = await setup();
+        const task = env.admin.tasks.createAdhocTask(env.worldId, adhoc(env.childProfileId));
+        await task.settled;
+        const id = task.result.taskId;
+        await env.child.tasks.completeTask(env.worldId, id, { answer: null, talkFlag: false, rewardTier: 'low' }).settled;
+        await env.child.rewards.openReward(env.worldId, id, { slot: 'slot0' }).settled;
+        const owned = new Watch<Collectible[]>((v, e) => env.admin.collectibles.observeCollectibles(env.worldId, env.childProfileId, v, e));
+        await eventually(() => expect(owned.value).toHaveLength(1));
+        const nickname = () => owned.value?.[0]?.nickname;
+        return { ...env, id, owned, nickname };
+      }
+
+      it('lets the owner set a trimmed nickname, then clear it', async () => {
+        const { child, worldId, id, owned, nickname } = await withCollectible();
+        await child.collectibles.setNickname(worldId, id, '  Rex ').settled;
+        await eventually(() => expect(nickname()).toBe('Rex'));
+        await child.collectibles.setNickname(worldId, id, '   ').settled;
+        await eventually(() => expect(nickname()).toBeNull());
+        owned.close();
+      });
+
+      it('accepts 30 characters and refuses 31 before any write', async () => {
+        const { child, worldId, id, owned, nickname } = await withCollectible();
+        await child.collectibles.setNickname(worldId, id, 'x'.repeat(LIMITS.nickname)).settled;
+        await eventually(() => expect(nickname()).toBe('x'.repeat(LIMITS.nickname)));
+        await rejectsWith(child.collectibles.setNickname(worldId, id, 'y'.repeat(LIMITS.nickname + 1)), 'invalid-argument');
+        expect(nickname()).toBe('x'.repeat(LIMITS.nickname));
+        owned.close();
+      });
+
+      it('lets an admin rename another profile’s collectible (moderation)', async () => {
+        const { admin, worldId, id, owned, nickname } = await withCollectible();
+        await admin.collectibles.setNickname(worldId, id, 'Moderated').settled;
+        await eventually(() => expect(nickname()).toBe('Moderated'));
+        owned.close();
+      });
+
+      it('refuses another child', async () => {
+        const { admin, newcomer, worldId, id, owned, nickname } = await withCollectible();
+        const other = admin.worlds.createProfile(worldId, { displayName: 'Robin', kind: 'child' });
+        await other.settled;
+        await newcomer.worlds.chooseProfile(worldId, other.result.profileId).settled;
+        await rejectsWith(newcomer.collectibles.setNickname(worldId, id, 'Mine now'), 'permission-denied');
+        expect(nickname()).toBeNull();
+        owned.close();
+      });
+    });
+
+    describe('showcase', () => {
+      /** Opens one collectible for the device's profile and moves it to the reserve at `at`. */
+      async function reserved(device: DataStore, adminDevice: DataStore, worldId: string, profileId: ProfileId, title: string, at: Millis) {
+        const task = adminDevice.tasks.createAdhocTask(worldId, adhoc(profileId, title));
+        await task.settled;
+        const id = task.result.taskId;
+        await device.tasks.completeTask(worldId, id, { answer: null, talkFlag: false, rewardTier: 'low' }).settled;
+        await device.rewards.openReward(worldId, id, { slot: `slot-${title}` }).settled;
+        now = at;
+        await device.collectibles.arrangeParty(worldId, profileId, { partyIds: [], toReserve: [id], fromReserve: [] }).settled;
+        return id;
+      }
+
+      it('lists the reserve of every profile, newest first, on every device, without the owner', async () => {
+        const { admin, child, newcomer, worldId, adminProfileId, childProfileId } = await setup();
+        const a = await reserved(child, admin, worldId, childProfileId, 'a', START + 1000);
+        const b = await reserved(admin, admin, worldId, adminProfileId, 'b', START + 2000);
+        const c = await reserved(child, admin, worldId, childProfileId, 'c', START + 3000);
+        for (const device of [admin, child, newcomer]) {
+          const showcase = new Watch<ShowcaseItem[]>((v, e) => device.collectibles.observeShowcase(worldId, 30, v, e));
+          await eventually(() => expect(showcase.value?.map((item) => item.id)).toEqual([c, b, a]));
+          for (const item of showcase.value!) {
+            expect(Object.keys(item).sort()).toEqual(['id', 'nickname', 'reserveAt', 'slot', 'tier']);
+            expect(item).not.toHaveProperty('profileId');
+          }
+          expect(showcase.value![0]).toMatchObject({ slot: 'slot-c', tier: 'low', nickname: null, reserveAt: START + 3000 });
+          showcase.close();
+        }
+      });
+
+      it('shows only the newest ones up to the limit, and keeps the others stored', async () => {
+        const { admin, child, worldId, childProfileId } = await setup();
+        const ids: string[] = [];
+        for (const [i, title] of ['a', 'b', 'c'].entries()) ids.push(await reserved(child, admin, worldId, childProfileId, title, START + 1000 * (i + 1)));
+        const showcase = new Watch<ShowcaseItem[]>((v, e) => admin.collectibles.observeShowcase(worldId, 2, v, e));
+        await eventually(() => expect(showcase.value?.map((item) => item.id)).toEqual([ids[2], ids[1]]));
+        const owned = new Watch<Collectible[]>((v, e) => child.collectibles.observeCollectibles(worldId, childProfileId, v, e));
+        await eventually(() => expect(owned.value).toHaveLength(3));
+        showcase.close();
+        owned.close();
+      });
+
+      it('drops a collectible that goes back to the party, and shows a new nickname', async () => {
+        const { admin, child, worldId, childProfileId } = await setup();
+        const a = await reserved(child, admin, worldId, childProfileId, 'a', START + 1000);
+        const b = await reserved(child, admin, worldId, childProfileId, 'b', START + 2000);
+        const showcase = new Watch<ShowcaseItem[]>((v, e) => admin.collectibles.observeShowcase(worldId, 30, v, e));
+        await eventually(() => expect(showcase.value).toHaveLength(2));
+        await admin.collectibles.setNickname(worldId, a, 'Moderated').settled;
+        await eventually(() => expect(showcase.value?.find((item) => item.id === a)?.nickname).toBe('Moderated'));
+        await child.collectibles.arrangeParty(worldId, childProfileId, { partyIds: [b], toReserve: [], fromReserve: [b] }).settled;
+        await eventually(() => expect(showcase.value?.map((item) => item.id)).toEqual([a]));
+        showcase.close();
+      });
+    });
+
+    describe('profile symbols', () => {
+      const profilesOf = (device: DataStore, worldId: string) => new Watch<Profile[]>((v, e) => device.worlds.observeProfiles(worldId, v, e));
+      const symbolOf = (watch: Watch<Profile[]>, id: string) => watch.value?.find((p) => p.id === id)?.avatar.symbol;
+
+      it('starts with no symbol, and lets the owner choose and clear one without touching the rest of the avatar', async () => {
+        const { admin, child, worldId, childProfileId } = await setup();
+        const profiles = profilesOf(admin, worldId);
+        await eventually(() => expect(symbolOf(profiles, childProfileId)).toBeNull());
+        await child.worlds.setProfileSymbol(worldId, childProfileId, '🦀').settled;
+        await eventually(() => expect(symbolOf(profiles, childProfileId)).toBe('🦀'));
+        expect(profiles.value!.find((p) => p.id === childProfileId)!.avatar).toEqual({ body: 0, hair: 0, outfit: 0, accessory: 0, symbol: '🦀' });
+        await child.worlds.setProfileSymbol(worldId, childProfileId, null).settled;
+        await eventually(() => expect(symbolOf(profiles, childProfileId)).toBeNull());
+        profiles.close();
+      });
+
+      it('lets an admin choose the symbol of another profile', async () => {
+        const { admin, worldId, childProfileId } = await setup();
+        const profiles = profilesOf(admin, worldId);
+        await admin.worlds.setProfileSymbol(worldId, childProfileId, '🐙').settled;
+        await eventually(() => expect(symbolOf(profiles, childProfileId)).toBe('🐙'));
+        profiles.close();
+      });
+
+      it('refuses a child choosing the symbol of another profile', async () => {
+        const { admin, child, worldId, adminProfileId } = await setup();
+        const profiles = profilesOf(admin, worldId);
+        await rejectsWith(child.worlds.setProfileSymbol(worldId, adminProfileId, '🐬'), 'permission-denied');
+        expect(symbolOf(profiles, adminProfileId)).toBeNull();
+        profiles.close();
+      });
+
+      it('accepts any single emoji, and refuses anything else before any write', async () => {
+        const { admin, child, worldId, childProfileId } = await setup();
+        const profiles = profilesOf(admin, worldId);
+        await child.worlds.setProfileSymbol(worldId, childProfileId, '🏴‍☠️').settled;
+        await eventually(() => expect(symbolOf(profiles, childProfileId)).toBe('🏴‍☠️'));
+        await rejectsWith(child.worlds.setProfileSymbol(worldId, childProfileId, 'x'), 'invalid-argument');
+        await rejectsWith(child.worlds.setProfileSymbol(worldId, childProfileId, '🐬🦀'), 'invalid-argument');
+        expect(symbolOf(profiles, childProfileId)).toBe('🏴‍☠️');
+        profiles.close();
+      });
+
+      it('lets an admin choose a symbol when creating a profile, and refuses one outside the list', async () => {
+        const { admin, worldId } = await setup();
+        const created = admin.worlds.createProfile(worldId, { displayName: 'Robin', kind: 'child', symbol: '🐬' });
+        await created.settled;
+        const profiles = profilesOf(admin, worldId);
+        await eventually(() => expect(symbolOf(profiles, created.result.profileId)).toBe('🐬'));
+        await rejectsWith(admin.worlds.createProfile(worldId, { displayName: 'Kim', kind: 'child', symbol: 'x' }), 'invalid-argument');
+        await eventually(() => expect(profiles.value!.some((p) => p.displayName === 'Kim')).toBe(false));
+        profiles.close();
       });
     });
 

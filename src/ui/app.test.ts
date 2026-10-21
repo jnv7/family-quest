@@ -4,7 +4,7 @@ import type { Tier } from '../core/model';
 import { createRandomInt } from '../core/random';
 import { DataStoreError, type DataStore } from '../data/DataStore';
 import { createMemoryBackend, createMemoryStore } from '../data/memory';
-import { loadTheme } from '../theme';
+import { loadTheme, type Theme } from '../theme';
 import { startApp } from './app';
 import type { Installer, InstallMode, Platform } from './install';
 import { memoryNavigation } from './navigation';
@@ -35,7 +35,7 @@ let stops: Array<() => void> = [];
 /** One device: its own store, remembered world and screen, sharing the backend. */
 async function openDevice(
   uid: string,
-  options: { hash?: string; savedWorld?: string; savedTheme?: string; launchTheme?: string; wrap?: (store: DataStore) => DataStore; installer?: Installer } = {},
+  options: { theme?: Theme; hash?: string; savedWorld?: string; savedTheme?: string; launchTheme?: string; wrap?: (store: DataStore) => DataStore; installer?: Installer } = {},
 ) {
   const storage = new Map<string, string>();
   const world = createWorldMemory({
@@ -48,7 +48,7 @@ async function openDevice(
   const root = document.createElement('main');
   document.body.append(root);
   const store = (options.wrap ?? ((s) => s))(createMemoryStore(backend, { uid, clock, randomInt }));
-  stops.push(await startApp({ root, store, theme, baseUrl: BASE_URL, world, clock, randomInt, navigation: memoryNavigation(options.hash ?? ''), installer: options.installer ?? fakeInstaller(), assetBase: '/family-quest/', launchTheme: options.launchTheme ?? null }));
+  stops.push(await startApp({ root, store, theme: options.theme ?? theme, baseUrl: BASE_URL, world, clock, randomInt, navigation: memoryNavigation(options.hash ?? ''), installer: options.installer ?? fakeInstaller(), assetBase: '/family-quest/', launchTheme: options.launchTheme ?? null }));
 
   const find = (selector: string, text?: string) =>
     [...root.querySelectorAll<HTMLElement>(selector)].find((el) => text === undefined || el.textContent?.includes(text));
@@ -456,7 +456,7 @@ async function createTask(device: Awaited<ReturnType<typeof openDevice>>, title:
 }
 
 describe('the map', () => {
-  it('lays out the five places of the theme, and only the board, the check-in and the vault lead somewhere yet', async () => {
+  it('lays out the five places of the theme, and every place leads somewhere', async () => {
     const { admin } = await createFamily();
     await admin.click('button', 'Continuar');
     await admin.see('Olá, Alex!');
@@ -469,7 +469,7 @@ describe('the map', () => {
       'Cofre',
       'Vitrina',
     ]);
-    expect(places.filter((p) => !p.disabled).map((p) => p.querySelector('.place-name')?.textContent)).toEqual(['Quadro', 'Registo', 'Cofre']);
+    expect(places.filter((p) => !p.disabled).map((p) => p.querySelector('.place-name')?.textContent)).toEqual(['Quadro', 'Registo', 'Casa', 'Cofre', 'Vitrina']);
     expect(places[0]!.style.left).toBe('8%'); // position comes from theme.json
 
     await admin.click('button.place', 'Quadro');
@@ -656,18 +656,20 @@ describe('the check-in', () => {
     expect(storedTask(worldId)).toMatchObject({ status: 'done', answer: 'yes' });
   });
 
-  it('keeps "I think I did better" on the task, and it is there when the task is completed', async () => {
-    const { admin, child, worldId } = await familyWithChild();
+  it('puts the button in front of the task, and a static note before the list instead of a button for "I did better"', async () => {
+    const { admin, child } = await familyWithChild();
     await createTask(admin, 'Ler um capítulo', 'Sam');
 
     await child.click('button.place', 'Registo');
-    await child.click('button.better', 'Acho que fiz melhor');
-    await vi.waitFor(() => expect(storedTask(worldId).talkFlag).toBe(true));
-    await vi.waitFor(() => expect(child.find('button.better')?.getAttribute('aria-pressed')).toBe('true'));
-
-    await child.click('button', 'Feito');
-    await child.notSee('Ler um capítulo');
-    expect(storedTask(worldId)).toMatchObject({ status: 'done', talkFlag: true });
+    await child.see('Ler um capítulo');
+    const row = child.find('li.checkin-task')!;
+    expect(row.firstElementChild?.querySelector('button')?.textContent).toBe('Feito'); // the button comes first
+    expect(row.querySelector('.task-title')?.textContent).toBe('Ler um capítulo');
+    const note = child.find('p.hint', 'fala com os teus pais')!;
+    expect(note.textContent).toBe('Se achas que fizeste uma tarefa melhor do que o esperado, fala com os teus pais.');
+    expect(note.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy(); // before the list
+    expect(child.find('button', 'Acho que fiz melhor')).toBeUndefined();
+    expect(child.root.querySelectorAll('li.checkin-task button')).toHaveLength(1); // nothing but the completing button
   });
 
   it('says goodbye when there is nothing to complete, and never shows other people’s tasks', async () => {
@@ -782,37 +784,38 @@ describe('opening rewards', () => {
   });
 });
 
-describe('the party and the reserve', () => {
-  const SUNDAY = Date.parse('2026-10-25T10:00:00Z');
-  const state = (worldId: string) => backend.state.get(worldId)!;
-  const profileSam = (worldId: string) => [...state(worldId).profiles.values()].find((p) => p.displayName === 'Sam')!;
+const SUNDAY = Date.parse('2026-10-25T10:00:00Z');
+const state = (worldId: string) => backend.state.get(worldId)!;
+const profileSam = (worldId: string) => [...state(worldId).profiles.values()].find((p) => p.displayName === 'Sam')!;
 
-  /** A child who earned `count` rewards in a closed week, standing in the vault. */
-  async function childWithRewards(count: number) {
-    const { admin, child, worldId } = await familyWithChild();
-    for (let i = 0; i < count; i++) {
-      await createTask(admin, `Tarefa ${i}`, 'Sam');
-      await admin.click('button', 'Voltar');
-    }
-    await child.click('button.place', 'Registo');
-    for (let i = 0; i < count; i++) {
-      await child.click('button', 'Feito');
-      await vi.waitFor(() => expect(state(worldId).rewards.size).toBe(i + 1));
-    }
-    await child.click('button', 'Voltar');
-    now = SUNDAY;
-    await child.click('button.place', 'Cofre');
-    return { admin, child, worldId };
+/** A child who earned `count` rewards in a closed week, standing in the vault. */
+async function childWithRewards(count: number) {
+  const { admin, child, worldId } = await familyWithChild();
+  for (let i = 0; i < count; i++) {
+    await createTask(admin, `Tarefa ${i}`, 'Sam');
+    await admin.click('button', 'Voltar');
   }
+  await child.click('button.place', 'Registo');
+  for (let i = 0; i < count; i++) {
+    await child.click('button', 'Feito');
+    await vi.waitFor(() => expect(state(worldId).rewards.size).toBe(i + 1));
+  }
+  await child.click('button', 'Voltar');
+  now = SUNDAY;
+  await child.click('button.place', 'Cofre');
+  return { admin, child, worldId };
+}
 
-  const openAll = async (child: Awaited<ReturnType<typeof openDevice>>, worldId: string, count: number) => {
-    for (let i = 0; i < count; i++) {
-      await child.click('button', 'Abrir');
-      await vi.waitFor(() => expect(state(worldId).collectibles.size).toBe(i + 1));
-      await child.click('button', 'Mais tarde');
-    }
-  };
+const openAll = async (child: Awaited<ReturnType<typeof openDevice>>, worldId: string, count: number) => {
+  for (let i = 0; i < count; i++) {
+    await child.click('button', 'Abrir');
+    await vi.waitFor(() => expect(state(worldId).collectibles.size).toBe(i + 1));
+    await child.click('button', 'Mais tarde');
+  }
+};
 
+
+describe('the party and the reserve', () => {
   it('puts a new collectible in the party when there is room, from the reveal', async () => {
     const { child, worldId } = await childWithRewards(1);
     await child.click('button', 'Abrir');
@@ -868,6 +871,367 @@ describe('the party and the reserve', () => {
     await vi.waitFor(() => expect(state(worldId).collectibles.get(id)!.reserveAt).toBe(now));
     expect(profileSam(worldId).partyIds).toEqual([]);
     expect(state(worldId).collectibles.size).toBe(1);
+  });
+});
+
+describe('the home', () => {
+  /** A child with one collectible in the party and one left pending, standing on the home. */
+  async function childAtHome() {
+    const { child, worldId } = await childWithRewards(2);
+    await openAll(child, worldId, 2);
+    const [first, second] = [...state(worldId).collectibles.keys()] as [string, string];
+    const party = [...child.root.querySelectorAll<HTMLButtonElement>('.recent-card button.primary')];
+    party[0]!.click();
+    await vi.waitFor(() => expect(profileSam(worldId).partyIds).toHaveLength(1));
+    await child.click('button', 'Voltar');
+    await child.click('button.place', 'Casa');
+    return { child, worldId, first, second };
+  }
+  const cards = (device: Awaited<ReturnType<typeof openDevice>>, section: number) =>
+    [...device.root.querySelectorAll('section.stack')[section]!.querySelectorAll('li.collectible-card')];
+
+  it('shows the profile with the look of its kind, the button to choose a symbol, the party and the pending collectibles, with no counts', async () => {
+    const { child } = await childAtHome();
+    await child.see('Sam');
+    await child.see('Escolher o meu símbolo');
+    expect(child.root.textContent).not.toContain('avatar');
+    await child.see('que andam contigo');
+    expect(child.root.textContent).not.toContain('Aqui descansam'); // no reserve on the profile
+    expect(child.root.querySelector('.home-art')?.textContent).toBe('emoji' in theme.homeVariants.child ? theme.homeVariants.child.emoji : '');
+    await vi.waitFor(() => expect(cards(child, 0)).toHaveLength(1));
+    expect(cards(child, 1)).toHaveLength(1);
+    expect(child.root.textContent).not.toMatch(/\d+ (de|na|no|em)\b/);
+  });
+
+  it('renames a collectible, then shows the catalogue name again when the name is cleared', async () => {
+    const { child, worldId, first } = await childAtHome();
+    const catalogueName = () => cards(child, 0)[0]?.querySelector('.reveal-name')?.textContent;
+    await vi.waitFor(() => expect(cards(child, 0)).toHaveLength(1));
+    const original = catalogueName();
+    await child.click('button', 'Mudar o nome');
+    await child.type('Nome', 'Bolinhas');
+    child.submit();
+    await vi.waitFor(() => expect(state(worldId).collectibles.get(first)!.nickname).toBe('Bolinhas'));
+    await vi.waitFor(() => expect(catalogueName()).toBe('Bolinhas'));
+
+    await child.click('button', 'Mudar o nome');
+    await child.type('Nome', '   ');
+    child.submit();
+    await vi.waitFor(() => expect(state(worldId).collectibles.get(first)!.nickname).toBeNull());
+    await vi.waitFor(() => expect(catalogueName()).toBe(original));
+  });
+
+  it('sends a party member away: it leaves the profile and shows in the showcase, and is not deleted', async () => {
+    const { child, worldId, first } = await childAtHome();
+    await child.click('button', 'Enviar para a vitrina');
+    await vi.waitFor(() => expect(profileSam(worldId).partyIds).toEqual([]));
+    expect(state(worldId).collectibles.get(first)!.reserveAt).toBe(now);
+    await vi.waitFor(() => expect(cards(child, 0)).toHaveLength(0));
+    expect(child.root.querySelectorAll('li.collectible-card')).toHaveLength(1); // only the pending one is left
+    expect(state(worldId).collectibles.size).toBe(2);
+
+    await child.click('button', 'Voltar');
+    await child.click('button.place', 'Vitrina');
+    await vi.waitFor(() => expect(child.root.querySelectorAll('.showcase-item')).toHaveLength(1));
+  });
+
+  it('shows the tier name instead of crashing when the theme lacks the slot of a collectible', async () => {
+    const { child, worldId, first } = await childAtHome();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    state(worldId).collectibles.get(first)!.slot = 'no-such-slot';
+    await child.click('button', 'Voltar');
+    await child.click('button.place', 'Casa');
+    const tier = state(worldId).collectibles.get(first)!.tier;
+    await vi.waitFor(() => expect(cards(child, 0)[0]!.querySelector('.reveal-name')?.textContent).toBe(theme.tiers[tier]));
+  });
+});
+
+describe('the showcase', () => {
+  /** A child with two collectibles in the reserve, one of them nicknamed, and the admin on the map. */
+  async function reserveOfTheChild() {
+    const { admin, child, worldId } = await childWithRewards(2);
+    await openAll(child, worldId, 2);
+    await vi.waitFor(() => expect(state(worldId).collectibles.size).toBe(2));
+    await child.click('button', 'Voltar');
+    // The first day after: the app opens, and the pending collectibles go to the reserve.
+    now = SUNDAY + 24 * 3_600_000;
+    const next = await openDevice('child-device', { savedWorld: worldId });
+    await next.see('Olá, Sam!');
+    await vi.waitFor(() => expect([...state(worldId).collectibles.values()].every((c) => c.reserveAt !== null)).toBe(true));
+    return { admin, child: next, worldId };
+  }
+  const items = (device: Awaited<ReturnType<typeof openDevice>>) => [...device.root.querySelectorAll('.showcase-item')];
+
+  it('shows the reserve of the family without owner, date or count, and shows an item larger on a tap', async () => {
+    const { admin, child, worldId } = await reserveOfTheChild();
+    await admin.click('button.place', 'Vitrina');
+    await vi.waitFor(() => expect(items(admin)).toHaveLength(2));
+    // The same view on the child's phone.
+    await child.click('button.place', 'Vitrina');
+    await vi.waitFor(() => expect(items(child)).toHaveLength(2));
+    expect(child.root.textContent).not.toMatch(/Sam|Alex/);
+    expect(admin.root.textContent).not.toMatch(/Sam/);
+    expect(child.root.textContent).not.toMatch(/\d/);
+
+    (items(child)[0] as HTMLElement).click();
+    const tier = [...state(worldId).collectibles.values()].sort((a, b) => b.reserveAt! - a.reserveAt! || (a.id < b.id ? 1 : -1))[0]!.tier;
+    await vi.waitFor(() => expect(child.root.querySelector('.reveal-tier')?.textContent).toBe(theme.tiers[tier]));
+    expect(child.root.querySelector('.rename, form')).toBeNull();
+    await child.click('button', 'Fechar');
+  });
+
+  it('lets a person bring one of their own back into the party from here, and nobody else', async () => {
+    const { admin, child, worldId } = await reserveOfTheChild();
+    await admin.click('button.place', 'Vitrina');
+    await vi.waitFor(() => expect(items(admin)).toHaveLength(2));
+    (items(admin)[0] as HTMLElement).click();
+    await admin.see('Fechar');
+    expect(admin.find('button', 'Pôr na equipa')).toBeUndefined(); // not Alex's
+
+    await child.click('button.place', 'Vitrina');
+    await vi.waitFor(() => expect(items(child)).toHaveLength(2));
+    (items(child)[0] as HTMLElement).click();
+    await child.click('button.primary', 'Pôr na equipa');
+    await vi.waitFor(() => expect(profileSam(worldId).partyIds).toHaveLength(1));
+    const id = profileSam(worldId).partyIds[0]!;
+    expect(state(worldId).collectibles.get(id)!.reserveAt).toBeNull();
+    await vi.waitFor(() => expect(items(child)).toHaveLength(1)); // it left the showcase
+    expect(state(worldId).collectibles.size).toBe(2); // nothing deleted
+  });
+
+  it('lets an admin rename an item, and not a child', async () => {
+    const { admin, child, worldId } = await reserveOfTheChild();
+    await child.click('button.place', 'Vitrina');
+    await vi.waitFor(() => expect(items(child)).toHaveLength(2));
+    (items(child)[0] as HTMLElement).click();
+    await child.see('Fechar');
+    await child.notSee('Mudar o nome');
+
+    await admin.click('button.place', 'Vitrina');
+    await vi.waitFor(() => expect(items(admin)).toHaveLength(2));
+    (items(admin)[0] as HTMLElement).click();
+    await admin.click('button', 'Mudar o nome');
+    await admin.type('Nome', 'Moderado');
+    admin.submit();
+    await vi.waitFor(() => expect([...state(worldId).collectibles.values()].some((c) => c.nickname === 'Moderado')).toBe(true));
+    await vi.waitFor(() => expect(items(admin).some((el) => el.textContent?.includes('Moderado'))).toBe(true));
+  });
+
+  it('is empty at first, and says so without a count', async () => {
+    const { admin } = await familyWithChild();
+    await admin.click('button.place', 'Vitrina');
+    await admin.see('Ainda não há nada');
+  });
+});
+
+describe('moorings and symbols', () => {
+  /**
+   * A test theme with moorings, so no real theme's vocabulary appears here. Its id is not a bundled
+   * theme, so the app keeps the theme it was given (as for any theme id this build does not have).
+   */
+  const THEME_ID = 'harbour-test';
+  const base = loadTheme('minimal');
+  const SYMBOLS = ['🐬', '🦀', '🐙', '🐢', '🐳', '🦊', '🐼', '🦁', '🐸', '🦉', '🦋', '🐝'];
+  const harbour: Theme = {
+    ...base,
+    id: THEME_ID,
+    profileSymbols: SYMBOLS,
+    homeSymbolAt: { child: { x: 50, y: 40, size: 40 } },
+    places: { ...base.places, home: { ...base.places.home, art: base.homeVariants.adult, symbolAt: { x: 50, y: 40, size: 40 } } },
+    map: {
+      ...base.map,
+      moorings: {
+        child: {
+          spots: Array.from({ length: 4 }, (_, i) => ({ x: 10 + i * 20, y: 85, width: 8, height: 6 })),
+          symbolAt: { x: 50, y: 40, size: 30 },
+        },
+      },
+    },
+  };
+  const spots = harbour.map.moorings!.child!.spots;
+  const [DOLPHIN, CRAB, OCTOPUS] = SYMBOLS as [string, string, string];
+  /** A world with the test theme, seeded through the store: the adult "Alex" and the given children. */
+  async function seed(children: Array<{ name: string; symbol?: string | null; archived?: boolean }>) {
+    const store = createMemoryStore(backend, { uid: 'seed', clock, randomInt });
+    await store.session.signIn();
+    const created = store.worlds.createWorld({ name: 'Casa', themeId: THEME_ID, creatorDisplayName: 'Alex' });
+    await created.settled;
+    const { worldId } = created.result;
+    const ids: Record<string, string> = {};
+    for (const child of children) {
+      now += 1000; // a distinct creation time per profile
+      const profile = store.worlds.createProfile(worldId, { displayName: child.name, kind: 'child', symbol: child.symbol ?? null });
+      await profile.settled;
+      ids[child.name] = profile.result.profileId;
+      if (child.archived) await store.worlds.setProfileArchived(worldId, profile.result.profileId, true).settled;
+    }
+    return { worldId, ids };
+  }
+  const asAdult = async (worldId: string) => {
+    const admin = await openDevice('seed', { theme: harbour, savedWorld: worldId });
+    await admin.see('Olá, Alex!');
+    return admin;
+  };
+  const asChild = async (worldId: string, name: string, uid = 'child-device') => {
+    const device = await openDevice(uid, { theme: harbour, hash: `#/join/${worldId}` });
+    await device.click('button.profile', name);
+    await device.see(`Olá, ${name}!`);
+    return device;
+  };
+  const boats = (device: Awaited<ReturnType<typeof openDevice>>) => [...device.root.querySelectorAll<HTMLElement>('.boat')];
+
+  it('draws no boat for no children', async () => {
+    const { worldId } = await seed([]);
+    const admin = await asAdult(worldId);
+    expect(admin.root.querySelector('.boats')).not.toBeNull();
+    expect(boats(admin)).toHaveLength(0);
+  });
+
+  it('moors one boat per child in creation order, with its symbol on the sail', async () => {
+    const { worldId } = await seed([{ name: 'Sam', symbol: DOLPHIN }, { name: 'Robin', symbol: CRAB }, { name: 'Kim' }]);
+    const admin = await asAdult(worldId);
+    await vi.waitFor(() => expect(boats(admin)).toHaveLength(3));
+    expect(boats(admin).map((boat) => boat.querySelector('.boat-symbol')?.textContent ?? null)).toEqual([DOLPHIN, CRAB, null]);
+    boats(admin).forEach((boat, i) => {
+      expect(boat.style.left).toBe(`${spots[i]!.x}%`);
+      expect(boat.style.top).toBe(`${spots[i]!.y}%`);
+    });
+  });
+
+  it('draws only as many boats as there are spots, in creation order, and skips an archived child', async () => {
+    const names = Array.from({ length: spots.length + 2 }, (_, i) => ({ name: `Criança ${i}`, symbol: null as string | null }));
+    names[0] = { ...names[0]!, archived: true } as never;
+    const { worldId } = await seed(names);
+    const admin = await asAdult(worldId);
+    await vi.waitFor(() => expect(boats(admin)).toHaveLength(spots.length));
+    expect(boats(admin).map((boat) => boat.style.left)).toEqual(spots.map((spot) => `${spot.x}%`));
+  });
+
+  it('draws the same layout on two devices', async () => {
+    const { worldId } = await seed([{ name: 'Sam', symbol: DOLPHIN }, { name: 'Robin', symbol: CRAB }]);
+    const admin = await asAdult(worldId);
+    const child = await asChild(worldId, 'Sam');
+    await vi.waitFor(() => expect(boats(admin)).toHaveLength(2));
+    await vi.waitFor(() => expect(boats(child)).toHaveLength(2));
+    const layout = (device: typeof admin) => boats(device).map((boat) => [boat.style.left, boat.style.top, boat.querySelector('.boat-symbol')?.textContent]);
+    expect(layout(child)).toEqual(layout(admin));
+  });
+
+  it('shows no name on the map, and keeps the other boats out of reach', async () => {
+    const { worldId } = await seed([{ name: 'Sam', symbol: DOLPHIN }, { name: 'Robin', symbol: CRAB }]);
+    const child = await asChild(worldId, 'Sam');
+    await vi.waitFor(() => expect(boats(child)).toHaveLength(2));
+    expect(child.root.querySelector('.map')!.textContent).not.toContain('Robin');
+    expect(child.root.querySelector('.map')!.innerHTML).not.toContain('Robin');
+    const [own, other] = boats(child) as [HTMLElement, HTMLElement];
+    expect(own.tagName).toBe('BUTTON');
+    expect(own.getAttribute('aria-label')).toBe('Abrir a casa');
+    expect(other.tagName).toBe('DIV');
+    expect(other.getAttribute('aria-hidden')).toBe('true');
+    other.click();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(child.root.querySelector('.map')).not.toBeNull(); // still on the map
+  });
+
+  it('opens the home when the own boat is tapped, and follows the profile when it changes', async () => {
+    const { worldId } = await seed([{ name: 'Sam', symbol: DOLPHIN }, { name: 'Robin', symbol: CRAB }]);
+    const child = await asChild(worldId, 'Robin');
+    await vi.waitFor(() => expect(boats(child)).toHaveLength(2));
+    expect(boats(child).map((boat) => boat.tagName)).toEqual(['DIV', 'BUTTON']); // Robin is the second boat
+    (boats(child)[1] as HTMLElement).click();
+    await child.see('Escolher o meu símbolo');
+    await child.click('button', 'Voltar');
+    await child.click('button', 'Trocar de perfil');
+    await child.click('button.profile', 'Sam');
+    await vi.waitFor(() => expect(boats(child).map((boat) => boat.tagName)).toEqual(['BUTTON', 'DIV']));
+  });
+
+  it('leaves the map as it was for a theme without moorings', async () => {
+    const { admin } = await createFamily();
+    await admin.click('button', 'Continuar');
+    await admin.see('Olá, Alex!');
+    expect(admin.root.querySelector('.boats')).toBeNull();
+    expect(admin.root.querySelector('.boat')).toBeNull();
+  });
+
+  it('opens a panel with the suggestions and the animals, puts the chosen one on the sail of the home boat and on the map, and clears it', async () => {
+    const { worldId, ids } = await seed([{ name: 'Sam' }]);
+    const child = await asChild(worldId, 'Sam');
+    await child.click('button.boat', '');
+    await child.click('button', 'Escolher o meu símbolo');
+    await child.see('Sugestões');
+    // Not among the theme's suggestions, but among the animals; nothing else is offered.
+    const ELEPHANT = '🐘';
+    expect(SYMBOLS).not.toContain(ELEPHANT);
+    const offered = [...child.root.querySelectorAll<HTMLElement>('.symbol-panel [data-emoji]')].map((el) => el.dataset.emoji!);
+    expect(offered.length).toBeGreaterThan(100);
+    expect(offered).not.toContain('🚀');
+    expect(offered.slice(0, SYMBOLS.length)).toEqual(SYMBOLS); // the theme's suggestions come first
+    (child.root.querySelector(`.symbol-panel [data-emoji="${ELEPHANT}"]`) as HTMLElement).click();
+    await vi.waitFor(() => expect(backend.state.get(worldId)!.profiles.get(ids.Sam!)!.avatar.symbol).toBe(ELEPHANT));
+    await vi.waitFor(() => expect(child.root.querySelector('.home-boat .boat-symbol')?.textContent).toBe(ELEPHANT));
+    expect(child.root.querySelector('.symbol-panel')!.hasAttribute('hidden')).toBe(true); // closed after choosing
+    await child.click('button', 'Voltar');
+    await vi.waitFor(() => expect(child.root.querySelector('.boat-symbol')?.textContent).toBe(ELEPHANT));
+    await child.click('button.boat', '');
+    await child.click('button', 'Escolher o meu símbolo');
+    await child.click('button', 'Sem símbolo');
+    await vi.waitFor(() => expect(backend.state.get(worldId)!.profiles.get(ids.Sam!)!.avatar.symbol).toBeNull());
+  });
+
+  it('shows the adults’ symbols on the big ship at the pier, to everyone, and not the children’s', async () => {
+    const { worldId } = await seed([{ name: 'Sam', symbol: CRAB }]);
+    const admin = await asAdult(worldId);
+    await admin.click('button.place', 'Casa');
+    await admin.click('button', 'Escolher o meu símbolo');
+    (admin.root.querySelector('.symbol-panel [data-emoji="🐬"]') as HTMLElement).click();
+    await admin.click('button', 'Voltar');
+    const onShip = (device: typeof admin) => [...device.root.querySelectorAll('button.place .place-slot .boat-symbol')].map((el) => el.textContent);
+    await vi.waitFor(() => expect(onShip(admin)).toEqual(['🐬']));
+    const child = await asChild(worldId, 'Sam');
+    await vi.waitFor(() => expect(boats(child)).toHaveLength(1));
+    await vi.waitFor(() => expect(onShip(child)).toEqual(['🐬'])); // the child sees the adult's symbol, not their own
+  });
+
+  it('shares the sail between several adults, in creation order, and skips an adult without a symbol', async () => {
+    const { worldId } = await seed([]);
+    const store = createMemoryStore(backend, { uid: 'seed', clock, randomInt });
+    await store.session.signIn();
+    const alex = [...backend.state.get(worldId)!.profiles.values()][0]!;
+    await store.worlds.setProfileSymbol(worldId, alex.id, '🐬').settled;
+    now += 1000;
+    await store.worlds.createProfile(worldId, { displayName: 'Robin', kind: 'adult', symbol: '🦀' }).settled;
+    now += 1000;
+    await store.worlds.createProfile(worldId, { displayName: 'Kim', kind: 'adult' }).settled;
+    now += 1000;
+    await store.worlds.createProfile(worldId, { displayName: 'Lee', kind: 'adult', symbol: '🐙' }).settled;
+    const admin = await asAdult(worldId);
+    await vi.waitFor(() => expect([...admin.root.querySelectorAll('button.place .place-slot .boat-symbol')].map((el) => el.textContent)).toEqual(['🐬', '🦀', '🐙']));
+    expect(admin.root.querySelector('.map')!.textContent).not.toMatch(/Robin|Kim|Lee/);
+  });
+
+  it('shows the symbol next to the name when the theme gives no place for it on the home art', async () => {
+    const { worldId } = await seed([]);
+    const admin = await asAdult(worldId); // the test theme places the symbol for children only
+    await admin.click('button.place', 'Casa');
+    await admin.click('button', 'Escolher o meu símbolo');
+    (admin.root.querySelector('.symbol-panel [data-emoji="🐬"]') as HTMLElement).click();
+    await vi.waitFor(() => expect(admin.find('.home-header .reveal-name')?.textContent).toBe('Alex 🐬'));
+    expect(admin.root.querySelector('.home-boat .boat-symbol')).toBeNull();
+  });
+
+  it('lets an admin choose the symbol of a new profile in the management screen', async () => {
+    const { worldId } = await seed([]);
+    const admin = await asAdult(worldId);
+    await admin.click('button', 'Gerir');
+    await admin.type('Nome', 'Sam');
+    await admin.choose('Símbolo', DOLPHIN);
+    admin.submit();
+    await vi.waitFor(() => {
+      const sam = [...backend.state.get(worldId)!.profiles.values()].find((p) => p.displayName === 'Sam');
+      expect(sam?.avatar.symbol).toBe(DOLPHIN);
+    });
   });
 });
 

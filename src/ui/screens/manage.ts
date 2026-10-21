@@ -14,16 +14,21 @@ export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
     h('option', { value: 'child' }, ctx.text('manage.kindChild')),
     h('option', { value: 'adult' }, ctx.text('manage.kindAdult')),
   );
+  const symbol = h('select', {},
+    h('option', { value: '' }, ctx.text('manage.symbolNone')),
+    ...ctx.theme.profileSymbols.map((emoji) => h('option', { value: emoji }, emoji)),
+  );
   const form = h('form', { class: 'stack' },
     h('label', {}, ctx.text('manage.name'), name),
     h('label', {}, ctx.text('manage.kind'), kind),
+    h('label', {}, ctx.text('manage.symbol'), symbol),
     h('button', { class: 'primary', type: 'submit' }, ctx.text('manage.add')),
   );
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     const displayName = name.value.trim();
     if (!displayName) return;
-    ctx.settle(ctx.store.worlds.createProfile(worldId, { displayName, kind: kind.value as ProfileKind }).settled);
+    ctx.settle(ctx.store.worlds.createProfile(worldId, { displayName, kind: kind.value as ProfileKind, symbol: symbol.value || null }).settled);
     form.reset();
   });
 

@@ -13,6 +13,7 @@
     "roles",
     "tiers",
     "rewardArt",
+    "profileSymbols",
     "map",
     "places",
     "homeVariants",
@@ -145,6 +146,101 @@
           "description": "Width divided by height of the map.",
           "type": "number",
           "exclusiveMinimum": 0
+        },
+        "moorings": {
+          "description": "Optional spots where the engine draws one boat per profile of a kind, using homeVariants (SPEC.md §7).",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "adult": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "spots",
+                "symbolAt"
+              ],
+              "properties": {
+                "spots": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "$ref": "#/$defs/spot"
+                  }
+                },
+                "symbolAt": {
+                  "description": "Where the profile's symbol goes on the boat: centre (x, y) and size, in percent of the spot; size is a share of the spot's width.",
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "x",
+                    "y",
+                    "size"
+                  ],
+                  "properties": {
+                    "x": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "y": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "size": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 100
+                    }
+                  }
+                }
+              }
+            },
+            "child": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "spots",
+                "symbolAt"
+              ],
+              "properties": {
+                "spots": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "$ref": "#/$defs/spot"
+                  }
+                },
+                "symbolAt": {
+                  "description": "Where the profile's symbol goes on the boat: centre (x, y) and size, in percent of the spot; size is a share of the spot's width.",
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "x",
+                    "y",
+                    "size"
+                  ],
+                  "properties": {
+                    "x": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "y": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "size": {
+                      "type": "number",
+                      "exclusiveMinimum": 0,
+                      "maximum": 100
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -283,6 +379,76 @@
           }
         }
       }
+    },
+    "profileSymbols": {
+      "description": "Emoji suggested first when a profile chooses its symbol. At least 12, without duplicates, one emoji each (checked by validate-theme). The picker offers every emoji, so a symbol is not limited to this list.",
+      "type": "array",
+      "minItems": 12,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 16
+      }
+    },
+    "homeSymbolAt": {
+      "description": "Optional, per profile kind: where the profile's symbol goes over the `homeVariants` art on the home, as the centre (x, y) and size, in percent of the art; size is a share of its width. Without it, the symbol is shown next to the name.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "adult": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "x",
+            "y",
+            "size"
+          ],
+          "properties": {
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "size": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 100
+            }
+          }
+        },
+        "child": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "x",
+            "y",
+            "size"
+          ],
+          "properties": {
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "size": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 100
+            }
+          }
+        }
+      }
     }
   },
   "$defs": {
@@ -405,6 +571,33 @@
               "maximum": 1500
             }
           }
+        },
+        "symbolAt": {
+          "description": "Optional. Where the active profile's symbol goes over this place's art, as the centre (x, y) and size, in percent of the area the art is drawn in; size is a share of its width. Used only when the art is the `homeVariants` art of the profile's kind (the big ship at the pier, for adults).",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "x",
+            "y",
+            "size"
+          ],
+          "properties": {
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "size": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 100
+            }
+          }
         }
       }
     },
@@ -432,6 +625,38 @@
         "image": {
           "type": "string",
           "pattern": "^assets/[a-z0-9][a-z0-9._/-]*\\.png$"
+        }
+      }
+    },
+    "spot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "properties": {
+        "x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "width": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 100
+        },
+        "height": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 100
         }
       }
     }
