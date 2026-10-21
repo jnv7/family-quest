@@ -54,7 +54,6 @@ export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
       ctx.go({ name: 'map' }, { replace: true });
       return;
     }
-    recurring.setProfiles(profiles);
     list.replaceChildren(
       ...profiles.map((profile) =>
         h('li', {},

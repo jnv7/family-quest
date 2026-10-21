@@ -13,7 +13,8 @@ export type Route =
   | { name: 'vault' }
   | { name: 'home' }
   | { name: 'showcase' }
-  | { name: 'newTask' }
+  /** `defId` is set when editing a recurring definition. */
+  | { name: 'newTask'; defId: string | null }
   | { name: 'manage' }
   | { name: 'share' }
   | { name: 'install' };
@@ -28,7 +29,6 @@ const SEGMENTS = {
   vault: 'vault',
   home: 'home',
   showcase: 'showcase',
-  newTask: 'new-task',
   manage: 'manage',
   share: 'share',
   install: 'install',
@@ -41,6 +41,7 @@ export function parseHash(hash: string): Route {
   if (first === 'join') {
     return { name: 'join', worldId: second ? decodeURIComponent(second) : null, themeId: third ? decodeURIComponent(third) : null };
   }
+  if (first === 'new-task') return { name: 'newTask', defId: second ? decodeURIComponent(second) : null };
   const simple = (Object.keys(SEGMENTS) as Array<keyof typeof SEGMENTS>).find((name) => SEGMENTS[name] === first);
   return simple ? { name: simple } : { name: 'start' };
 }
@@ -52,6 +53,7 @@ export function hashFor(route: Route): string {
     const world = `#/join/${encodeURIComponent(route.worldId)}`;
     return route.themeId ? `${world}/${encodeURIComponent(route.themeId)}` : world;
   }
+  if (route.name === 'newTask') return route.defId ? `#/new-task/${encodeURIComponent(route.defId)}` : '#/new-task';
   return `#/${SEGMENTS[route.name]}`;
 }
 

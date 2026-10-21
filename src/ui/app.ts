@@ -18,7 +18,7 @@ import { renderInstall } from './screens/install';
 import { renderJoin } from './screens/join';
 import { renderManage } from './screens/manage';
 import { renderMap } from './screens/map';
-import { renderNewTask } from './screens/newTask';
+import { renderTaskForm } from './screens/taskForm';
 import { renderProfiles } from './screens/profiles';
 import { renderShare } from './screens/share';
 import { renderStart } from './screens/start';
@@ -143,7 +143,7 @@ export async function startApp(options: AppOptions): Promise<() => void> {
       case 'showcase':
         return needsWorld(renderShowcase);
       case 'newTask':
-        return needsWorld(renderNewTask);
+        return needsWorld(renderTaskForm(route.defId));
       case 'manage':
         return needsWorld(renderManage);
       case 'share':

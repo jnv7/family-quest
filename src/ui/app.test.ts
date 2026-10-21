@@ -183,8 +183,13 @@ describe('managing profiles', () => {
   });
 });
 
+/** In the task form: ticks who the task is for. */
+async function pickPeople(device: Awaited<ReturnType<typeof openDevice>>, ...names: string[]) {
+  for (const name of names) await device.click('button.chip', name);
+}
+
 describe('managing recurring tasks', () => {
-  /** Opens the management screen of a world with a child profile "Sam", and returns the recurring-task form helpers. */
+  /** Opens the management screen of a world with a child profile "Sam". */
   async function openRecurring() {
     const { admin, worldId } = await createFamily();
     await admin.click('button', 'Continuar');
@@ -192,21 +197,20 @@ describe('managing recurring tasks', () => {
     await admin.type('Nome', 'Sam');
     admin.submit();
     await admin.see('Sam');
-    const form = () => admin.root.querySelectorAll('form')[1]!;
-    const save = () => form().dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-    return { admin, worldId, form, save };
+    return { admin, worldId };
   }
 
   it('creates a definition, dims it when deactivated, and brings it back', async () => {
-    const { admin, form, save } = await openRecurring();
+    const { admin } = await openRecurring();
     await admin.see('Ainda não há tarefas recorrentes.');
 
-    await admin.click('button', 'Nova tarefa recorrente');
-    expect(form().hidden).toBe(false);
+    await admin.click('button', 'Nova tarefa');
     await admin.type('O que é para fazer?', 'Arrumar o quarto');
-    save();
+    await pickPeople(admin, 'Todos');
+    await admin.click('button.chip', 'Todos os dias');
+    await admin.enabled('Criar tarefa');
+    admin.submit();
     await admin.see('Arrumar o quarto · Todos os dias');
-    expect(form().hidden).toBe(true);
 
     await admin.click('li button', 'Desativar');
     await admin.see('(desativada)');
@@ -216,24 +220,26 @@ describe('managing recurring tasks', () => {
     await admin.notSee('(desativada)');
   });
 
-  it('assigns a definition to chosen profiles, and edits it', async () => {
-    const { admin, form, save } = await openRecurring();
-    await admin.click('button', 'Nova tarefa recorrente');
+  it('assigns a definition to chosen profiles, and edits it without offering "once"', async () => {
+    const { admin, worldId } = await openRecurring();
+    await admin.click('button', 'Nova tarefa');
     await admin.type('O que é para fazer?', 'Regar as plantas');
-    await admin.choose('Repete', 'Todas as semanas');
-    await admin.choose('Dificuldade', 'Difícil');
-    const sam = [...form().querySelectorAll('label.check')].find((l) => l.textContent?.includes('Sam'))!;
-    (sam.querySelector('input') as HTMLInputElement).checked = true;
-    save();
+    await pickPeople(admin, 'Sam');
+    await admin.click('button.chip', 'Todas as semanas');
+    await admin.click('button.chip', 'Difícil');
+    admin.submit();
     await admin.see('Regar as plantas · Todas as semanas');
 
     await admin.click('li button', 'Editar');
-    expect((form().querySelector('input[type=text]') as HTMLInputElement).value).toBe('Regar as plantas');
-    expect(((form().querySelector('label.check input[value]:checked') as HTMLInputElement | null)?.parentElement?.textContent) ?? '').toContain('Sam');
+    await vi.waitFor(() => expect((admin.root.querySelector('input[type=text]') as HTMLInputElement).value).toBe('Regar as plantas'));
+    expect(admin.find('button.chip[aria-pressed=true]', 'Sam')).toBeDefined();
+    expect(admin.find('button.chip', 'Só uma vez')?.hidden).toBe(true);
     await admin.type('O que é para fazer?', 'Regar o jardim');
-    save();
+    await admin.enabled('Guardar');
+    admin.submit();
     await admin.see('Regar o jardim');
     await admin.notSee('Regar as plantas');
+    expect([...backend.state.get(worldId)!.taskDefs.values()]).toHaveLength(1);
   });
 });
 
@@ -242,9 +248,11 @@ type Device = Awaited<ReturnType<typeof openDevice>>;
 /** On the map of an admin device: creates a daily recurring task for everyone, and comes back to the map. */
 async function addRecurring(device: Device, title: string) {
   await device.click('button', 'Gerir');
-  await device.click('button', 'Nova tarefa recorrente');
+  await device.click('button', 'Nova tarefa');
   await device.type('O que é para fazer?', title);
-  device.root.querySelectorAll('form')[1]!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+  await pickPeople(device, 'Todos');
+  await device.click('button.chip', 'Todos os dias');
+  device.submit();
   await device.see(`${title} · Todos os dias`);
   await device.click('button', 'Voltar');
 }
@@ -320,11 +328,12 @@ describe('planning a big task', () => {
   async function bigTaskFamily() {
     const { admin, worldId } = await familyWithChild();
     await admin.click('button', 'Gerir');
-    await admin.click('button', 'Nova tarefa recorrente');
+    await admin.click('button', 'Nova tarefa');
     await admin.type('O que é para fazer?', 'Limpar a garagem');
-    await admin.choose('Repete', 'Todos os meses');
+    await pickPeople(admin, 'Todos');
+    await admin.click('button.chip', 'Todos os meses');
     (admin.root.querySelector('label.check input') as HTMLInputElement).checked = true; // "big"
-    admin.root.querySelectorAll('form')[1]!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    admin.submit();
     await admin.see('Limpar a garagem');
     const child = await openDevice('child-device', { savedWorld: worldId });
     await child.click('button.place', 'Quadro');
@@ -449,7 +458,8 @@ async function createTask(device: Awaited<ReturnType<typeof openDevice>>, title:
   await device.click('button.place', 'Quadro');
   await device.click('button', 'Nova tarefa');
   await device.type('O que é para fazer?', title);
-  if (forWho) await device.choose('Para quem', forWho);
+  // An adult must choose who it is for; a child has no such choice.
+  if (forWho) await pickPeople(device, forWho);
   await device.enabled('Criar tarefa');
   device.submit();
   await device.see('As tuas tarefas');
@@ -485,6 +495,7 @@ describe('the board and ad hoc tasks', () => {
 
     await admin.click('button', 'Nova tarefa');
     await admin.type('O que é para fazer?', 'Regar as plantas');
+    await pickPeople(admin, 'Alex');
     await admin.enabled('Criar tarefa');
     admin.submit();
     await admin.see('Regar as plantas');
@@ -503,10 +514,11 @@ describe('the board and ad hoc tasks', () => {
 
   it('lists the oldest task first', async () => {
     const { admin } = await familyWithChild();
-    await createTask(admin, 'Primeira');
+    await createTask(admin, 'Primeira', 'Alex');
     now += 60_000;
     await admin.click('button', 'Nova tarefa');
     await admin.type('O que é para fazer?', 'Segunda');
+    await pickPeople(admin, 'Alex');
     await admin.enabled('Criar tarefa');
     admin.submit();
     await admin.see('Segunda');
@@ -556,6 +568,76 @@ describe('the board and ad hoc tasks', () => {
     await child.enabled('Criar tarefa');
     child.submit();
     await child.see('Quarta');
+  });
+});
+
+describe('the one task form', () => {
+  const stored = (worldId: string) => [...backend.state.get(worldId)!.tasks.values()];
+  const defsOf = (worldId: string) => [...backend.state.get(worldId)!.taskDefs.values()];
+
+  /** A world with an adult and two children, "Sam" and "Kim"; returns the admin device. */
+  async function twoChildren() {
+    const { admin, worldId } = await familyWithChild();
+    await admin.click('button', 'Gerir');
+    await admin.type('Nome', 'Kim');
+    admin.submit();
+    await vi.waitFor(() => expect(admin.root.querySelectorAll('ul.rows li').length).toBeGreaterThanOrEqual(3));
+    await admin.click('button', 'Voltar');
+    await admin.click('button.place', 'Quadro');
+    await admin.click('button', 'Nova tarefa');
+    await admin.type('O que é para fazer?', 'Lavar a loiça');
+    return { admin, worldId };
+  }
+
+  it('is disabled until someone is chosen', async () => {
+    const { admin } = await twoChildren();
+    await vi.waitFor(() => expect(admin.find('button.chip', 'Kim')).toBeDefined());
+    expect((admin.find('button', 'Criar tarefa') as HTMLButtonElement).disabled).toBe(true);
+    await pickPeople(admin, 'Kim');
+    await admin.enabled('Criar tarefa');
+  });
+
+  it('makes one task for each chosen child when it happens once', async () => {
+    const { admin, worldId } = await twoChildren();
+    await pickPeople(admin, 'Sam', 'Kim');
+    await admin.enabled('Criar tarefa');
+    admin.submit();
+    await admin.see('As tuas tarefas');
+    expect(stored(worldId)).toHaveLength(2);
+    expect(new Set(stored(worldId).map((t) => t.profileId)).size).toBe(2);
+    expect(stored(worldId).every((t) => t.source === 'adhoc' && t.title === 'Lavar a loiça')).toBe(true);
+    expect(defsOf(worldId)).toHaveLength(0);
+  });
+
+  it('makes a task for every active profile when "everyone" is chosen once', async () => {
+    const { admin, worldId } = await twoChildren();
+    await pickPeople(admin, 'Todos');
+    await admin.enabled('Criar tarefa');
+    admin.submit();
+    await admin.see('As tuas tarefas');
+    expect(stored(worldId)).toHaveLength(3); // Alex, Sam and Kim
+  });
+
+  it('makes one definition for the chosen children when it repeats', async () => {
+    const { admin, worldId } = await twoChildren();
+    await pickPeople(admin, 'Sam', 'Kim');
+    await admin.click('button.chip', 'Todas as semanas');
+    admin.submit();
+    await admin.see('Lavar a loiça · Todas as semanas');
+    expect(stored(worldId)).toHaveLength(0);
+    expect(defsOf(worldId)).toHaveLength(1);
+    expect(defsOf(worldId)[0]!.assignedTo).toHaveLength(2);
+  });
+
+  it('keeps an empty list for "everyone" in a repeating task, and says it includes new profiles', async () => {
+    const { admin, worldId } = await twoChildren();
+    await pickPeople(admin, 'Todos');
+    expect(admin.find('small', 'perfis que vierem a ser criados')?.hidden).toBe(true); // once: no hint
+    await admin.click('button.chip', 'Todos os dias');
+    expect(admin.find('small', 'perfis que vierem a ser criados')?.hidden).toBe(false);
+    admin.submit();
+    await admin.see('Lavar a loiça · Todos os dias');
+    expect(defsOf(worldId)[0]!.assignedTo).toEqual([]);
   });
 });
 
@@ -636,8 +718,9 @@ describe('the check-in', () => {
     await admin.click('button.place', 'Quadro');
     await admin.click('button', 'Nova tarefa');
     await admin.type('O que é para fazer?', 'Lavar os dentes');
+    await admin.click('button', '+ Juntar uma pergunta');
     await admin.type('Pergunta de verificação', 'Lavaste mesmo?');
-    await admin.choose('Para quem', 'Sam');
+    await pickPeople(admin, 'Sam');
     await admin.enabled('Criar tarefa');
     admin.submit();
     await admin.see('As tuas tarefas');
@@ -674,7 +757,7 @@ describe('the check-in', () => {
 
   it('says goodbye when there is nothing to complete, and never shows other people’s tasks', async () => {
     const { admin, child } = await familyWithChild();
-    await createTask(admin, 'Só para mim'); // Alex's own task
+    await createTask(admin, 'Só para mim', 'Alex'); // Alex's own task
     await child.click('button.place', 'Registo');
     await child.see('Nada para concluir');
     expect(lines.farewell).toContain(bubble(child));

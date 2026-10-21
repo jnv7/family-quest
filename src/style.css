@@ -771,3 +771,44 @@ img.home-art {
 .hint + .rows {
   margin-top: 0.75rem;
 }
+
+/* The task form: single and multiple choices drawn as chips, 48 px tall for fingers. */
+.field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.field-label {
+  font-weight: 600;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+button.chip {
+  min-height: 3rem;
+  padding: 0 1rem;
+  border-radius: 999px;
+  border: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  background: Canvas;
+  color: inherit;
+  font: inherit;
+}
+
+button.chip[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent, #fff);
+  font-weight: 700;
+}
+
+button.link {
+  justify-self: start;
+  border: 0;
+  background: none;
+  text-decoration: underline;
+  min-height: 3rem;
+}

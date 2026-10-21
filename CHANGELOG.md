@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.1] — 2026-10-21
+
+### Changed
+
+- One way to create a task (`src/ui/screens/taskForm.ts`, route `#/new-task[/<defId>]`), opened from the `board` and from management, and in edit mode for a recurring definition. An adult chooses who it is for with chips (each profile with its symbol, plus "Todos"; nothing is chosen by default), how often it repeats (once, daily, weekly, monthly), the difficulty, an optional question (collapsed) and, when it repeats, whether it is a big task. A child sees only the title. Once creates one ad hoc task per chosen profile ("Todos" means every active profile now); repeating creates one definition ("Todos" keeps `assignedTo: []`, which includes future profiles, and the form says so). Editing a definition does not offer "once". Management keeps only the list of definitions. `newTask.ts` and the creation half of `taskDefs.ts` are gone.
+
 ## [0.7.6] — 2026-10-21
 
 Closes release 0.7.

@@ -30,7 +30,7 @@ export const renderBoard: WorldScreen = (ctx, root, { worldId }) => {
     list,
     empty,
     h('div', { class: 'stack' },
-      h('button', { class: 'primary', onClick: () => ctx.go({ name: 'newTask' }) }, ctx.text('board.new')),
+      h('button', { class: 'primary', onClick: () => ctx.go({ name: 'newTask', defId: null }) }, ctx.text('board.new')),
       h('button', { onClick: () => ctx.go({ name: 'map' }) }, ctx.text('app.back')),
     ),
   );
