@@ -138,6 +138,14 @@ Exit criteria:
 - two devices never build two rewards from the same piece;
 - a real family week and Sunday with pieces, without touching the code.
 
+### 0.10 — Settings and configuration (not yet planned)
+
+Noted by the product owner on 2026-10-21; to be detailed later. Candidate scope:
+
+- one place for definitions and configuration, in a menu meant to stay out of the main interface;
+- a check of new versions;
+- similar housekeeping.
+
 ### Later — Avatar and hardening (not yet planned)
 
 To be reviewed by the product owner after 0.9. Candidate scope:

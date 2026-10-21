@@ -210,7 +210,7 @@ A child's form keeps only the title. The details are in `docs/plans/0.8.md`, 0.8
 - it moves to `retired`, never comes back, gives no reward, and is hidden from every list;
 - nothing is deleted from the data, and nothing earned is lost, because an open task has earned nothing.
 
-**[proposal]** Who can retire:
+**[decided]** (product owner, 2026-10-21) Who can retire:
 
 - an adult, any open task, from the `checkin` (their own) or from the adults' view (anyone's);
 - a child, only an ad hoc task the child created for themselves, never one given by an adult and never a recurring one, so retiring is not a way to skip chores.
@@ -257,7 +257,7 @@ This needs a rules change, so it comes with an ADR, rules tests and a rules depl
 
 A newly obtained collectible is pending. It stays in its owner's list, where the owner can put it into the `party` (choosing who leaves if the party is full). After `ruleset.pendingDays` days from `obtainedAt`, the owner's client moves pending collectibles to the reserve the next time it opens, by setting `reserveAt`. A collectible that leaves the `party` goes to the reserve, with `reserveAt` set. The reserve is not a list on the profile: the collectibles in it have been sent away, and everyone sees them in the `showcase` (**[decided]**, product owner, 2026-10-20). The way back is the `showcase`: a person who taps one of their own collectibles there can put it back into the `party` (choosing who leaves if it is full), which clears its `reserveAt`. The item tells nobody else that it is theirs. Nothing is deleted.
 
-**Showcase.** A computed view: the collectibles with `reserveAt` set, ordered by `reserveAt` descending, limited to `showcaseSize` (10). It shows the name (`nickname`, or the theme's name for the `slot`) and never the owner. A collectible that drops out of the `showcase` has **left for another island**. It stays stored and is never deleted, but it is no longer shown, and nobody can bring it back (product owner, 2026-10-21). This is part of the game: the tavern only has room for the latest arrivals. **[decided]**
+**Showcase.** A computed view: the collectibles with `reserveAt` set, ordered by `reserveAt` descending, limited to `showcaseSize` (10), **shared by the whole world** (product owner, 2026-10-21). An adult sets the number in management. It shows the name (`nickname`, or the theme's name for the `slot`) and never the owner. A collectible that drops out of the `showcase` has **left for another island**. It stays stored and is never deleted, but it is no longer shown, and nobody can bring it back (product owner, 2026-10-21). This is part of the game: the tavern only has room for the latest arrivals. **[decided]**
 
 ## 7. Screens and flows
 
@@ -390,8 +390,6 @@ See `ROADMAP.md`. Each release is a minor version developed on its own `release/
 | Topic | Status |
 | --- | --- |
 | Weekly guaranteed minimum | Off by default |
-| The `showcase` limit (10): shared by the whole world, or the latest 10 of each person kept within reach | Asked of the product owner, 2026-10-21 |
-| Who can retire a task | Proposal in section 6 |
 | Firestore read quota with real-time listeners | Measure in 0.2 against the free limits |
 
 ## 14. Out of scope (v1)
