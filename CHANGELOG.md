@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.6] — 2026-10-21
+
+Closes release 0.7.
+
+### Added
+
+- Load time: the product owner measured the first, uncached load on a phone and the installed app, and accepted it as under the 3 seconds of the exit criterion; no change was needed. The numbers were not recorded in the repository.
+- For 0.8 to compare, the production build of this release: app code 132.5 kB (51.6 kB gzip), the Firestore SDK chunk 634.0 kB (187.5 kB gzip), the `collection` chunk 5.4 kB, the stylesheet 9.0 kB (2.5 kB gzip), and a service worker precache of 34 entries, 1029.8 KiB (the pirate map is 94 kB, the other pirate art 35 kB).
+
 ## [0.7.5] — 2026-10-20
 
 ### Added
