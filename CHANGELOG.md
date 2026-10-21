@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.3] — 2026-10-21
+
+### Changed
+
+- The character asks the question: a task with a question shows the character's small portrait and a speech bubble with the question and "Sim" / "Não" inside it (still two taps from the map). "Não" still makes the main bubble say a `doubt` line and leaves the task open.
+- Undo for 4 seconds: after "Feito" or "Sim" the card shows "Desfazer" while the character already congratulates. The completion and its reward are written when the 4 seconds end, at once when the page is hidden (`visibilitychange`, `pagehide`) or the check-in is left, and "Desfazer" writes nothing, so nothing is ever reopened in the data. Delayed calls go through `AppContext.later`, which tests replace.
+
 ## [0.8.2] — 2026-10-21
 
 ### Changed

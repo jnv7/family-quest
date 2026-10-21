@@ -9,6 +9,8 @@ import { observeWithRetry } from '../observe';
 import { observeSelf } from '../self';
 import { taskCard } from '../taskCard';
 
+const UNDO_MS = 4000;
+
 /**
  * Where a task is completed, in one tap on the task itself (SPEC.md §7.4), so
  * two taps from the map, with its button first. A task with a question shows it with "yes" and "no":
@@ -36,28 +38,72 @@ export const renderCheckin = (focusId: string | null): WorldScreen => (ctx, root
     bubble.textContent = pickLine(character.lines[kind], ctx.randomInt);
   };
 
+  /**
+   * A completion is written when the undo window ends, so "Desfazer" writes nothing and nothing is
+   * ever reopened in the data (SPEC.md §6). Hiding the page, or leaving the screen, writes at once.
+   */
+  const pending = new Map<string, { run: () => void; cancel: () => void }>();
+
   const complete = (task: Task, answer: 'yes' | null) => {
-    if (!world) return;
-    const rewardTier = drawTier(tierOddsFor(task.level, world.ruleset), ctx.randomInt);
-    ctx.settle(ctx.store.tasks.completeTask(worldId, task.id, { answer, talkFlag: task.talkFlag, rewardTier }).settled);
+    if (!world || pending.has(task.id)) return;
+    const current = world;
+    const run = () => {
+      const entry = pending.get(task.id);
+      if (!entry) return;
+      entry.cancel();
+      pending.delete(task.id);
+      const rewardTier = drawTier(tierOddsFor(task.level, current.ruleset), ctx.randomInt);
+      ctx.settle(ctx.store.tasks.completeTask(worldId, task.id, { answer, talkFlag: task.talkFlag, rewardTier }).settled);
+    };
+    pending.set(task.id, { run, cancel: ctx.later(run, UNDO_MS) });
     say('congrats');
     note.textContent = ctx.text('checkin.reward');
+    show();
   };
+
+  const undo = (task: Task) => {
+    pending.get(task.id)?.cancel();
+    pending.delete(task.id);
+    if (pending.size === 0) note.textContent = '';
+    say('greeting');
+    show();
+  };
+
+  const flush = () => [...pending.values()].forEach((entry) => entry.run());
+  const onHidden = () => {
+    if (document.hidden) flush();
+  };
+  document.addEventListener('visibilitychange', onHidden);
+  window.addEventListener('pagehide', flush);
 
   /** The button that completes the task comes first, then the task (SPEC.md §7.4). */
   const row = (task: Task, timeZone: string) => {
-    const action = task.question
-      ? h('div', { class: 'task-actions' },
-          h('button', { class: 'primary', onClick: () => complete(task, 'yes') }, ctx.text('checkin.yes')),
-          h('button', { onClick: () => say('doubt') }, ctx.text('checkin.no')),
-        )
-      : h('button', { class: 'primary', onClick: () => complete(task, null) }, ctx.text('checkin.done'));
+    const asking = task.question !== null && !pending.has(task.id);
+    const action = pending.has(task.id)
+      ? h('button', { onClick: () => undo(task) }, ctx.text('checkin.undo'))
+      : task.question
+        ? undefined
+        : h('button', { class: 'primary', onClick: () => complete(task, null) }, ctx.text('checkin.done'));
     return taskCard(ctx, {
       task,
       def: task.defId === null ? undefined : defs.get(task.defId),
       timeZone,
       action,
-      below: [task.question && h('p', { class: 'question' }, task.question)],
+      below: [
+        pending.has(task.id) && h('p', { class: 'message', role: 'status' }, ctx.text('checkin.doneNow')),
+        // The character asks the question, so the answer is a reply to them (SPEC.md §7.4).
+        asking &&
+          h('div', { class: 'ask' },
+            artElement(ctx.theme, character.art, 'character-art ask-art'),
+            h('div', { class: 'ask-bubble' },
+              h('p', { class: 'question' }, task.question),
+              h('div', { class: 'task-actions' },
+                h('button', { class: 'primary', onClick: () => complete(task, 'yes') }, ctx.text('checkin.yes')),
+                h('button', { onClick: () => say('doubt') }, ctx.text('checkin.no')),
+              ),
+            ),
+          ),
+      ],
       focus: task.id === focusId,
       className: 'checkin-task',
     });
@@ -114,6 +160,9 @@ export const renderCheckin = (focusId: string | null): WorldScreen => (ctx, root
     );
   });
   return () => {
+    flush();
+    document.removeEventListener('visibilitychange', onHidden);
+    window.removeEventListener('pagehide', flush);
     stopTasks();
     stopWorld();
     stopDefs();

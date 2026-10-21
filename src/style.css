@@ -829,3 +829,37 @@ button.link {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* The character asks the question: a small portrait and a speech bubble holding "yes" and "no". */
+.ask {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+img.ask-art {
+  width: 2.75rem;
+  height: 2.75rem;
+}
+
+span.ask-art {
+  font-size: 2rem;
+}
+
+.ask-bubble {
+  flex: 1;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem 1rem 1rem 0.2rem;
+  background: Canvas;
+}
+
+.ask-bubble .question {
+  margin: 0 0 0.5rem;
+}
+
+.ask-bubble .task-actions {
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+}

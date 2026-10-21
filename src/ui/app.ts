@@ -40,6 +40,8 @@ export interface AppOptions {
   installer: Installer;
   /** The theme the app was launched with (`?theme=` in the address of an installed app), if any. */
   launchTheme: string | null;
+  /** Schedules a delayed call; defaults to `setTimeout`. Tests pass their own. */
+  later?: (run: () => void, ms: number) => () => void;
   /** The app's base path, such as `/family-quest/`, where the per-theme manifests and icons are. */
   assetBase: string;
 }
@@ -49,6 +51,10 @@ const NOTICE_MS = 5000;
 /** Starts the interface and returns a function that stops it. */
 export async function startApp(options: AppOptions): Promise<() => void> {
   const { root, store, baseUrl, world, clock, randomInt, navigation, installer, assetBase, launchTheme } = options;
+  const later = options.later ?? ((run, ms) => {
+    const id = setTimeout(run, ms);
+    return () => clearTimeout(id);
+  });
   let theme = options.theme;
   let themeKnown = false;
   const text = (key: string, params?: Record<string, string | number>) => formatMessage(theme, key, params);
@@ -94,6 +100,7 @@ export async function startApp(options: AppOptions): Promise<() => void> {
     baseUrl,
     world,
     text,
+    later,
     notify,
     settle: (settled) => void settled.catch((error: unknown) => reportSettleError(error, notify)),
     go(route, { replace = false } = {}) {

@@ -18,6 +18,21 @@ const theme = loadTheme('minimal');
 let now = Date.parse('2026-10-20T10:00:00Z');
 const clock = () => now;
 
+/** Delayed calls (the undo window), run by the test instead of by real time. */
+let timers: Array<{ run: () => void; ms: number; done: boolean }> = [];
+const later = (run: () => void, ms: number) => {
+  const timer = { run, ms, done: false };
+  timers.push(timer);
+  return () => void (timer.done = true);
+};
+/** Lets every pending undo window end. */
+const runTimers = () => {
+  for (const timer of timers.filter((t) => !t.done)) {
+    timer.done = true;
+    timer.run();
+  }
+};
+
 /** An installer that lets a test choose the platform and what can be offered. */
 function fakeInstaller(mode: InstallMode = 'none', platform: Partial<Platform> = {}) {
   const installer: Installer & { prompt: ReturnType<typeof vi.fn> } = {
@@ -48,7 +63,7 @@ async function openDevice(
   const root = document.createElement('main');
   document.body.append(root);
   const store = (options.wrap ?? ((s) => s))(createMemoryStore(backend, { uid, clock, randomInt }));
-  stops.push(await startApp({ root, store, theme: options.theme ?? theme, baseUrl: BASE_URL, world, clock, randomInt, navigation: memoryNavigation(options.hash ?? ''), installer: options.installer ?? fakeInstaller(), assetBase: '/family-quest/', launchTheme: options.launchTheme ?? null }));
+  stops.push(await startApp({ root, store, theme: options.theme ?? theme, baseUrl: BASE_URL, world, clock, randomInt, navigation: memoryNavigation(options.hash ?? ''), installer: options.installer ?? fakeInstaller(), assetBase: '/family-quest/', later, launchTheme: options.launchTheme ?? null }));
 
   const find = (selector: string, text?: string) =>
     [...root.querySelectorAll<HTMLElement>(selector)].find((el) => text === undefined || el.textContent?.includes(text));
@@ -83,6 +98,7 @@ async function openDevice(
 
 beforeEach(() => {
   now = Date.parse('2026-10-20T10:00:00Z');
+  timers = [];
   backend = createMemoryBackend();
   vi.spyOn(console, 'error').mockImplementation(() => {});
   vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -396,6 +412,7 @@ describe('planning a big task', () => {
 
     await child.click('button.place', 'Registo');
     await child.click('button', 'Feito');
+    runTimers();
     await child.click('button', 'Voltar');
     await vi.waitFor(() => expect(alert()).toBeNull());
   });
@@ -740,6 +757,7 @@ describe('the check-in', () => {
     await child.see('Arrumar o quarto');
     expect(lines.greeting).toContain(bubble(child));
     await child.click('button', 'Feito'); // tap 2
+    runTimers();
 
     await child.notSee('Arrumar o quarto');
     expect(lines.congrats).toContain(bubble(child));
@@ -772,8 +790,59 @@ describe('the check-in', () => {
     expect(child.root.textContent).toContain('Lavaste mesmo?');
 
     await child.click('button', 'Sim');
+
+    runTimers();
     await child.notSee('Lavaste mesmo?');
     expect(storedTask(worldId)).toMatchObject({ status: 'done', answer: 'yes' });
+  });
+
+  it('gives four seconds to undo: nothing is written before, and "Desfazer" writes nothing at all', async () => {
+    const { admin, child, worldId } = await familyWithChild();
+    await createTask(admin, 'Arrumar o quarto', 'Sam');
+    await child.click('button.place', 'Registo');
+    await child.click('button', 'Feito');
+    await child.see('Desfazer');
+    expect(timers.at(-1)!.ms).toBe(4000);
+    expect(lines.congrats).toContain(bubble(child)); // the character already congratulates
+    expect(storedTask(worldId)).toMatchObject({ status: 'open' });
+
+    await child.click('button', 'Desfazer');
+    runTimers();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(storedTask(worldId)).toMatchObject({ status: 'open' });
+    expect(backend.state.get(worldId)!.rewards.size).toBe(0);
+    await child.see('Feito'); // the card is back
+
+    await child.click('button', 'Feito');
+    runTimers();
+    await vi.waitFor(() => expect(storedTask(worldId)).toMatchObject({ status: 'done' }));
+  });
+
+  it('writes at once when the page is hidden or the screen is left, and writes two completions in a row', async () => {
+    const { admin, child, worldId } = await familyWithChild();
+    await createTask(admin, 'Primeira', 'Sam');
+    await admin.click('button', 'Voltar');
+    await createTask(admin, 'Segunda', 'Sam');
+    await child.click('button.place', 'Registo');
+    await child.see('Segunda');
+    await child.click('button', 'Feito');
+    await child.click('button', 'Feito');
+    const done = () => [...backend.state.get(worldId)!.tasks.values()].filter((t) => t.status === 'done').length;
+    expect(done()).toBe(0);
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+    document.dispatchEvent(new Event('visibilitychange'));
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+    await vi.waitFor(() => expect(done()).toBe(2));
+    expect(backend.state.get(worldId)!.rewards.size).toBe(2);
+  });
+
+  it('writes a pending completion when the person leaves the check-in', async () => {
+    const { admin, child, worldId } = await familyWithChild();
+    await createTask(admin, 'Primeira', 'Sam');
+    await child.click('button.place', 'Registo');
+    await child.click('button', 'Feito');
+    await child.click('button', 'Voltar');
+    await vi.waitFor(() => expect(storedTask(worldId)).toMatchObject({ status: 'done' }));
   });
 
   it('puts the button in front of the task, and a static note before the list instead of a button for "I did better"', async () => {
@@ -783,7 +852,7 @@ describe('the check-in', () => {
     await child.click('button.place', 'Registo');
     await child.see('Ler um capítulo');
     const row = child.find('li.checkin-task')!;
-    expect(row.firstElementChild?.querySelector('button')?.textContent).toBe('Feito'); // the button comes first
+    expect(row.querySelector('button')?.textContent).toBe('Feito'); // the button comes first
     expect(row.querySelector('.task-title')?.textContent).toBe('Ler um capítulo');
     const note = child.find('p.hint', 'fala com os teus pais')!;
     expect(note.textContent).toBe('Se achas que fizeste uma tarefa melhor do que o esperado, fala com os teus pais.');
@@ -812,9 +881,11 @@ describe('the vault', () => {
 
     await child.click('button.place', 'Registo');
     await child.click('button', 'Feito');
+    runTimers();
     await vi.waitFor(() => expect(backend.state.get(worldId)!.rewards.size).toBe(1));
     now += 7 * 86_400_000; // the next week
     await child.click('button', 'Feito');
+    runTimers();
     await vi.waitFor(() => expect(backend.state.get(worldId)!.rewards.size).toBe(2));
 
     await child.click('button', 'Voltar');
@@ -840,6 +911,7 @@ describe('opening rewards', () => {
     await createTask(admin, 'Arrumar o quarto', 'Sam');
     await child.click('button.place', 'Registo');
     await child.click('button', 'Feito');
+    runTimers();
     await vi.waitFor(() => expect(backend.state.get(worldId)!.rewards.size).toBe(1));
     await child.click('button', 'Voltar');
     return { admin, child, worldId };
@@ -918,6 +990,7 @@ async function childWithRewards(count: number) {
   await child.click('button.place', 'Registo');
   for (let i = 0; i < count; i++) {
     await child.click('button', 'Feito');
+    runTimers();
     await vi.waitFor(() => expect(state(worldId).rewards.size).toBe(i + 1));
   }
   await child.click('button', 'Voltar');

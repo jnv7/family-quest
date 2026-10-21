@@ -104,6 +104,8 @@
     "checkin.done": "Feito",
     "checkin.yes": "Sim",
     "checkin.no": "Não",
+    "checkin.undo": "Desfazer",
+    "checkin.doneNow": "Feito!",
     "checkin.betterNote": "Se achas que fizeste uma tarefa melhor do que o esperado, fala com os teus pais.",
     "checkin.empty": "Nada para concluir por agora.",
     "app.installName": "Family Quest",
