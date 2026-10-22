@@ -459,6 +459,7 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
             periodKey: null,
             createdBy: active.id,
             origin: 'app',
+            ...(input.big === true ? { big: true } : {}),
             plan: null,
             status: 'open',
             doneAt: null,

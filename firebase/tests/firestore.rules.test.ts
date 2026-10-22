@@ -123,6 +123,7 @@ beforeEach(async () => {
       [p('taskDefs', 'defChild2'), taskDef({ assignedTo: ['pChild2'] })],
       [p('taskDefs', 'defBig'), taskDef({ cadence: 'weekly', big: true })],
       [p('tasks', 'tChildOpen'), openTask('pChild')],
+      [p('tasks', 'tChildBig'), openTask('pChild', { big: true })],
       [p('tasks', 'tChildQuestion'), openTask('pChild', { question: 'Did you do it well?' })],
       [p('tasks', 'tChildDone'), openTask('pChild', completion)],
       [p('tasks', 'defDaily_2026-10-17_pChild'), recurringTask('defDaily', '2026-10-17', 'pChild', completion)],
@@ -403,10 +404,26 @@ describe('completing tasks', () => {
     await assertFails(updateDoc(doc(as(ADMIN), p('tasks', 'tChildOpen')), { talkFlag: false }));
   });
 
-  it('only tasks from a big definition carry a plan', async () => {
+  it('only tasks from a big definition, and big ad hoc tasks, carry a plan', async () => {
     const plan = { date: '2026-10-20', trigger: 'After dinner' };
     await assertSucceeds(updateDoc(doc(as(CHILD), p('tasks', 'defBig_2026-W42_pChild')), { plan }));
+    await assertSucceeds(updateDoc(doc(as(CHILD), p('tasks', 'tChildBig')), { plan }));
     await assertFails(updateDoc(doc(as(CHILD), p('tasks', 'tChildOpen')), { plan }));
+  });
+
+  it('an ad hoc task can be created big, but a recurring one cannot, and the mark is only ever true', async () => {
+    await assertSucceeds(setDoc(doc(as(ADMIN), p('tasks', 'tNewBig')), openTask('pChild', { createdBy: 'pAdult', big: true })));
+    await assertFails(setDoc(doc(as(ADMIN), p('tasks', 'tNewNotBig')), openTask('pChild', { createdBy: 'pAdult', big: false })));
+    await assertFails(setDoc(doc(as(ADMIN), p('tasks', 'tNewBigText')), openTask('pChild', { createdBy: 'pAdult', big: 'yes' })));
+    await assertSucceeds(setDoc(doc(as(CHILD), p('tasks', 'defDaily_2026-10-19_pChild')), recurringTask('defDaily', '2026-10-19', 'pChild')));
+    await assertFails(setDoc(doc(as(CHILD), p('tasks', 'defDaily_2026-10-20_pChild')), recurringTask('defDaily', '2026-10-20', 'pChild', { big: true })));
+  });
+
+  it('nobody turns the big mark on or off after creation', async () => {
+    await assertFails(updateDoc(doc(as(ADMIN), p('tasks', 'tChildOpen')), { big: true }));
+    await assertFails(updateDoc(doc(as(CHILD), p('tasks', 'tChildOpen')), { big: true }));
+    await assertFails(updateDoc(doc(as(ADMIN), p('tasks', 'tChildBig')), { big: false }));
+    await assertFails(updateDoc(doc(as(CHILD), p('tasks', 'tChildBig')), { big: false }));
   });
 
   it('nobody deletes a task', async () => {

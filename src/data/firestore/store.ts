@@ -347,6 +347,7 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
             periodKey: null,
             createdBy: member.profileId,
             origin: 'app',
+            ...(input.big === true ? { big: true } : {}),
             plan: null,
             status: 'open',
             doneAt: null,

@@ -1273,6 +1273,32 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
         await rejectsWith(child.tasks.setPlan(worldId, adhocTask.result.taskId, plan), 'invalid-argument');
       });
 
+      it('is set by the owner on a big ad hoc task made by an admin, on any day from today on, and every device sees it', async () => {
+        const { admin, child, worldId, childProfileId } = await setup();
+        const made = admin.tasks.createAdhocTask(worldId, { ...adhoc(childProfileId), big: true });
+        await made.settled;
+        const { taskId } = made.result;
+        const mine = new Watch<Task[]>((v, e) => child.tasks.observeTasks(worldId, childProfileId, v, e));
+        const theirs = new Watch<Task[]>((v, e) => admin.tasks.observeTasks(worldId, childProfileId, v, e));
+        await eventually(() => expect(mine.value?.[0]).toMatchObject({ source: 'adhoc', big: true, plan: null }));
+
+        await child.tasks.setPlan(worldId, taskId, { date: '2027-03-01', trigger: 'after the holidays' }).settled;
+        for (const watch of [mine, theirs]) {
+          await eventually(() => expect(watch.value?.[0]?.plan).toEqual({ date: '2027-03-01', trigger: 'after the holidays' }));
+        }
+        await rejectsWith(child.tasks.setPlan(worldId, taskId, { date: '2026-10-17', trigger: 'yesterday' }), 'invalid-argument');
+        await rejectsWith(admin.tasks.setPlan(worldId, taskId, { date: '2026-10-25', trigger: 'not mine' }), 'permission-denied');
+        mine.close();
+        theirs.close();
+      });
+
+      it('is refused on an ad hoc task that was not made big', async () => {
+        const { admin, child, worldId, childProfileId } = await setup();
+        const made = admin.tasks.createAdhocTask(worldId, adhoc(childProfileId));
+        await made.settled;
+        await rejectsWith(child.tasks.setPlan(worldId, made.result.taskId, { date: '2026-10-25', trigger: 'x' }), 'invalid-argument');
+      });
+
       it('is refused with a day outside the period or a bad trigger, with invalid-argument', async () => {
         const { admin, child, worldId, childProfileId } = await setup();
         const taskId = await bigTask(admin, child, worldId, childProfileId);

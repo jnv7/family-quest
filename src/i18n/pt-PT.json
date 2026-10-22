@@ -58,7 +58,7 @@
     "recurring.new": "Nova tarefa",
     "recurring.edit": "Editar tarefa recorrente",
     "recurring.cadence": "Repete",
-    "recurring.big": "Tarefa grande (pode ser planeada)",
+    "newTask.big": "Tarefa grande (pode ser planeada)",
     "recurring.save": "Guardar",
     "recurring.editButton": "Editar",
     "recurring.deactivate": "Desativar",

@@ -113,6 +113,8 @@ export interface CreateAdhocTaskInput {
   title: string;
   level: TaskLevel;
   question: string | null;
+  /** Makes the task big, so its owner can plan it (SPEC.md §6). The form offers it to adults only; stored only when true. */
+  big?: boolean;
 }
 
 export interface TaskDefInput {

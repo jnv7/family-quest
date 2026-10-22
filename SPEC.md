@@ -115,7 +115,8 @@ A device in the world. `uid` comes from anonymous authentication.
 | `periodKey` | string or null | Period of a recurring task (see below); null for ad hoc |
 | `createdBy` | string | `profileId` of the creator |
 | `origin` | `app` or `api` | For future integrations |
-| `plan` | map or null | `{date, trigger}`; only `big` tasks (0.3) |
+| `big` | boolean, optional | `true` only on an ad hoc task made big (0.8); absent otherwise, and never changed after creation. A recurring task is big when its `taskDef` is |
+| `plan` | map or null | `{date, trigger}`; only tasks from a `big` definition (0.3) and big ad hoc tasks (0.8) |
 | `status` | `open`, `done` or (from 0.9) `retired` | A `done` or `retired` task never changes status again |
 | `doneAt` | timestamp or null | |
 | `answer` | `yes`, `no` or null | Answer to the `question` |
@@ -159,7 +160,7 @@ A completed task produces a `reward` with the task's id. Opening the reward prod
 | `members` | members | create: only its own `uid`, with `profileId` null, or with the creator's new adult profile inside the world-creating batch; update: the device itself changes only `profileId`, to an existing, non-archived profile |
 | `profiles` | members | create: `admin`, or the world's creator for its own adult profile inside the world-creating batch; update: `admin` changes `displayName`, `avatar` and `archived` (archiving only child profiles), never `kind`; the owner updates only `avatar` and `partyIds` |
 | `taskDefs` | members | `admin` |
-| `tasks` | `admin` or the owner | create ad hoc: `admin` for any profile, or the owner for itself with `origin: app`; create recurring: the owner only, with an id equal to `{defId}_{periodKey}_{profileId}`, for an active `taskDef` assigned to that profile; every new task has `status: open`; update: only the owner completes (`status` from `open` to `done`, together with `doneAt`, `answer`, `talkFlag`, `weekKey`), and the owner may change `talkFlag` and `plan` on an open task; an `admin` may change `title`, `level` and `question` on an open task; nobody changes `status` of a `done` task, nor `profileId`, `source`, `defId`, `periodKey`, `createdBy` or `createdAt` |
+| `tasks` | `admin` or the owner | create ad hoc: `admin` for any profile, or the owner for itself with `origin: app` (optionally with `big: true`, only on an ad hoc task); create recurring: the owner only, with an id equal to `{defId}_{periodKey}_{profileId}`, for an active `taskDef` assigned to that profile; every new task has `status: open`; update: only the owner completes (`status` from `open` to `done`, together with `doneAt`, `answer`, `talkFlag`, `weekKey`), and the owner may change `talkFlag` and `plan` on an open task (a plan only on a task from a big definition or a big ad hoc task); an `admin` may change `title`, `level` and `question` on an open task; nobody changes `status` of a `done` task, nor `profileId`, `source`, `defId`, `periodKey`, `big`, `createdBy` or `createdAt` |
 | `rewards` | `admin` or the owner | create: the owner only, never replacing an existing one, and only in the same batch that moves the task with the same id from `open` to `done` (checked with `get` and `getAfter`), with the same `profileId` and `weekKey`; update: the owner, only `openedAt`, once |
 | `collectibles` | members (the `showcase` needs to read other people's; the interface hides the owner) | create: the owner only, never replacing, and only in the same batch that sets `openedAt` on the reward with the same id, with that reward's `tier` and `profileId`; update: the owner, only `nickname` and `reserveAt`; `admin`, only `nickname` (moderation, since the `showcase` shows nicknames to everyone) **[decided]** |
 
@@ -188,7 +189,7 @@ Known edge case: the "no open task" check runs on the local cache, so a device w
 - **Repeats:** once, daily, weekly or monthly.
   - **once:** one ad hoc task per chosen profile ("everyone" means every non-archived profile at that moment);
   - **any repetition:** one `taskDef` with those profiles in `assignedTo` ("everyone" means `assignedTo: []`, which includes future profiles).
-- **Other fields:** the difficulty and an optional question; "big" is offered only when the task repeats.
+- **Other fields:** the difficulty, an optional question and "big" (can be planned). A big task that does not repeat is allowed (ADR 0007): its plan may be any day from today on, with no end, while a task of a big definition can be planned only up to the end of its period.
 
 A child's form keeps only the title. The details are in `docs/plans/0.8.md`, 0.8.1.
 

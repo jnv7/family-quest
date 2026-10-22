@@ -92,6 +92,21 @@ describe('validatePlan', () => {
     expect(validatePlan(adhoc, def('weekly'), plan('2026-10-20'), NOW, ZONE)).toBe('not-big');
   });
 
+  it('plans a big ad hoc task on any day from today on, with no end, and refuses a day in the past', () => {
+    const big = task('2026-W43', { source: 'adhoc', defId: null, periodKey: null, big: true });
+    expect(validatePlan(big, null, plan('2026-10-19'), NOW, ZONE)).toBe('ok');
+    expect(validatePlan(big, null, plan('2026-12-31'), NOW, ZONE)).toBe('ok');
+    expect(validatePlan(big, null, plan('2027-06-01'), NOW, ZONE)).toBe('ok');
+    expect(validatePlan(big, null, plan('2026-10-18'), NOW, ZONE)).toBe('date-out-of-range');
+    expect(validatePlan(big, null, plan('2026-10-20', ''), NOW, ZONE)).toBe('trigger-invalid');
+  });
+
+  it('refuses an ad hoc task that was not made big', () => {
+    const plain = task('2026-W43', { source: 'adhoc', defId: null, periodKey: null });
+    expect(validatePlan(plain, null, plan('2026-10-20'), NOW, ZONE)).toBe('not-big');
+    expect(validatePlan({ ...plain, big: false }, null, plan('2026-10-20'), NOW, ZONE)).toBe('not-big');
+  });
+
   it('accepts a trigger of 1 to the limit, and refuses an empty, blank or longer one', () => {
     expect(validatePlan(weekly, def('weekly'), plan('2026-10-20', 'x'), NOW, ZONE)).toBe('ok');
     expect(validatePlan(weekly, def('weekly'), plan('2026-10-20', 'x'.repeat(LIMITS.trigger)), NOW, ZONE)).toBe('ok');

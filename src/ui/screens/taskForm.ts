@@ -25,7 +25,7 @@ export const renderTaskForm = (defId: string | null): WorldScreen => (ctx, root,
   const big = h('input', { type: 'checkbox' });
   const questionField = h('label', { hidden: true }, ctx.text('newTask.question'), question, h('small', {}, ctx.text('newTask.questionHint')));
   const addQuestion = h('button', { type: 'button', class: 'link', onClick: () => ((questionField.hidden = false), (addQuestion.hidden = true), question.focus()) }, ctx.text('newTask.addQuestion'));
-  const bigField = h('label', { class: 'check' }, big, ctx.text('recurring.big'));
+  const bigField = h('label', { class: 'check' }, big, ctx.text('newTask.big'));
 
   /** Single choice among options, drawn as a row of buttons; the chosen one is pressed. */
   const segmented = <T extends string>(legend: string, values: readonly T[], label: (value: T) => string, initial: T, onChange: () => void) => {
@@ -124,7 +124,7 @@ export const renderTaskForm = (defId: string | null): WorldScreen => (ctx, root,
   function refresh(): void {
     if (!self) return;
     const recurring = adult() && repeat.get() !== 'once';
-    bigField.hidden = !recurring;
+    bigField.hidden = !adult();
     everyoneHint.hidden = !(recurring && everyone);
     if (editing) repeat.hide(['once']); // a definition is not a task: to stop it, deactivate it
     if (adult()) {
@@ -172,7 +172,7 @@ export const renderTaskForm = (defId: string | null): WorldScreen => (ctx, root,
     if (cadence === 'once') {
       const targets = everyone ? profiles.filter((p) => !p.archived).map((p) => p.id) : [...chosen];
       for (const profileId of targets) {
-        ctx.settle(ctx.store.tasks.createAdhocTask(worldId, { profileId, title: text, level: level.get(), question: asked }).settled);
+        ctx.settle(ctx.store.tasks.createAdhocTask(worldId, { profileId, title: text, level: level.get(), question: asked, big: big.checked }).settled);
       }
       ctx.notify('notice.taskCreated');
       ctx.go({ name: 'board' });

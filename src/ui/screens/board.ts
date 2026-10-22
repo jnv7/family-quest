@@ -41,18 +41,19 @@ export const renderBoard: WorldScreen = (ctx, root, { worldId }) => {
   /** The task whose plan is being edited. */
   let planning: TaskId | null = null;
 
-  const planForm = (task: Task, def: TaskDef, timeZone: string) => {
+  const planForm = (task: Task, def: TaskDef | undefined, timeZone: string) => {
     const today = dateKey(ctx.clock(), timeZone);
     const date = h('input', {
       type: 'date',
       required: true,
       min: today,
-      max: lastDayOfPeriod(def.cadence, task.periodKey ?? today),
+      // A task of a definition has until the end of its period; a big one-off task has no end.
+      max: def ? lastDayOfPeriod(def.cadence, task.periodKey ?? today) : undefined,
       value: task.plan?.date ?? today,
     });
     const trigger = h('input', { type: 'text', required: true, maxLength: LIMITS.trigger, autocomplete: 'off', value: task.plan?.trigger ?? '' });
     const save = (plan: { date: string; trigger: string } | null) => {
-      if (plan && validatePlan(task, def, plan, ctx.clock(), timeZone) !== 'ok') return;
+      if (plan && validatePlan(task, def ?? null, plan, ctx.clock(), timeZone) !== 'ok') return;
       ctx.settle(ctx.store.tasks.setPlan(worldId, task.id, plan).settled);
       planning = null;
       draw();
@@ -84,7 +85,7 @@ export const renderBoard: WorldScreen = (ctx, root, { worldId }) => {
     list.replaceChildren(
       ...shown.map((task) => {
         const def = task.defId === null ? undefined : defs.get(task.defId);
-        const canPlan = def?.big === true;
+        const canPlan = def?.big === true || (task.source === 'adhoc' && task.big === true);
         return taskCard(ctx, {
           task,
           def,

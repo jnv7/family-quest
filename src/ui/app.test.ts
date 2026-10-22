@@ -426,6 +426,41 @@ describe('planning a big task', () => {
     expect(planOf(worldId)).toBeNull();
   });
 
+  it('plans a big task that does not repeat, on any later day', async () => {
+    const { admin, worldId } = await familyWithChild();
+    await admin.click('button.place', 'Quadro');
+    await admin.click('button', 'Nova tarefa');
+    await admin.type('O que é para fazer?', 'Pintar a cerca');
+    await pickPeople(admin, 'Sam');
+    (admin.root.querySelector('label.check input') as HTMLInputElement).checked = true; // "big", with "once" chosen
+    admin.submit();
+    await admin.see('As tuas tarefas');
+    const stored = [...backend.state.get(worldId)!.tasks.values()][0]!;
+    expect(stored).toMatchObject({ source: 'adhoc', big: true });
+
+    const child = await openDevice('child-device', { savedWorld: worldId });
+    await child.click('button.place', 'Quadro');
+    await child.see('Pintar a cerca');
+    await child.click('button', 'Planear');
+    expect(child.root.querySelector<HTMLInputElement>('.plan-form input[type=date]')!.max).toBe(''); // no end of period
+    fill(child, 'Que dia?', '2027-01-15');
+    fill(child, 'Quando é que te lembras?', 'Nas férias');
+    submitPlan(child);
+    await child.see('15 de janeiro · Nas férias');
+    expect(planOf(worldId)).toEqual({ date: '2027-01-15', trigger: 'Nas férias' });
+  });
+
+  it('offers neither "big" nor a plan to a child, and no plan on a one-off task that was not made big', async () => {
+    const { admin, child } = await familyWithChild();
+    await createTask(admin, 'Regar as plantas', 'Sam');
+    await child.click('button.place', 'Quadro');
+    await child.see('Regar as plantas');
+    expect(child.find('button', 'Planear')).toBeUndefined();
+    await child.click('button', 'Nova tarefa');
+    await child.see('O que é para fazer?');
+    expect(child.root.querySelector('label.check')).toBeNull();
+  });
+
   it('offers no plan on a task that is not big', async () => {
     const { admin } = await familyWithChild();
     await addRecurring(admin, 'Arrumar o quarto');

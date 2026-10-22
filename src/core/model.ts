@@ -207,6 +207,11 @@ export interface Task extends DocMeta {
   /** Profile id of whoever created the task. */
   createdBy: ProfileId;
   origin: TaskOrigin;
+  /**
+   * Set (true) only on an ad hoc task made big: it can then be planned, like a task of a big recurring
+   * definition (whose `big` lives on the definition). Absent otherwise, and never changed after creation.
+   */
+  big?: boolean;
   plan: Plan | null;
   /** A done task never returns to open. */
   status: TaskStatus;

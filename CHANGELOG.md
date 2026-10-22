@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.10] — 2026-10-22
+
+### Added
+
+- Big tasks that do not repeat (ADR 0007, the product owner's request). An adult can make a one-off task "big" in the single task form, and its owner can plan it like a task of a big definition, on any day from today on (no end). The task gets an optional `big: true` field, stored only when true; `validatePlan` and `createAdhocTask` (both adapters, with the contract suite) know it. The `firestore.rules` change lets a plan sit on a big ad hoc task, allows `big` on create (ad hoc only) and keeps it immutable, with new rules tests. **The product owner must publish the rules** (`firebase deploy --only firestore:rules`) before devices can create such a task.
+
 ## [0.8.9] — 2026-10-21
 
 ### Changed (product owner's review of 0.8, 2026-10-21)
