@@ -1472,8 +1472,15 @@ describe('the home', () => {
     await child.click('button.place', 'Casa');
     return { child, worldId, first, second };
   }
-  const cards = (device: Awaited<ReturnType<typeof openDevice>>, section: number) =>
-    [...device.root.querySelectorAll('section.stack')[section]!.querySelectorAll('li.collectible-card')];
+  type HomeDevice = Awaited<ReturnType<typeof openDevice>>;
+  /** The small buttons of the party, and the card that a tap on one opens. */
+  const members = (device: HomeDevice) => [...device.root.querySelectorAll<HTMLElement>('.showcase-item')];
+  const partyCard = (device: HomeDevice) => device.root.querySelector<HTMLElement>('.party-card');
+  const openMember = async (device: HomeDevice) => {
+    await vi.waitFor(() => expect(members(device)).toHaveLength(1));
+    if (!partyCard(device)) members(device)[0]!.click();
+    await vi.waitFor(() => expect(partyCard(device)).not.toBeNull());
+  };
 
   it('shows the profile with the look of its kind, the button to choose a symbol, the party and the pending collectibles, with no counts', async () => {
     const { child } = await childAtHome();
@@ -1483,15 +1490,16 @@ describe('the home', () => {
     await child.see('que andam contigo');
     expect(child.root.textContent).not.toContain('Aqui descansam'); // no reserve on the profile
     expect(child.root.querySelector('.home-art')?.textContent).toBe('emoji' in theme.homeVariants.child ? theme.homeVariants.child.emoji : '');
-    await vi.waitFor(() => expect(cards(child, 0)).toHaveLength(1));
-    expect(cards(child, 1)).toHaveLength(1);
+    await vi.waitFor(() => expect(members(child)).toHaveLength(1));
+    expect(partyCard(child)).toBeNull(); // the card opens on a tap
+    expect(child.root.querySelectorAll('li.collectible-card')).toHaveLength(1); // the pending one
     expect(child.root.textContent).not.toMatch(/\d+ (de|na|no|em)\b/);
   });
 
   it('renames a collectible, then shows the catalogue name again when the name is cleared', async () => {
     const { child, worldId, first } = await childAtHome();
-    const catalogueName = () => cards(child, 0)[0]?.querySelector('.name-tag .tag-name')?.textContent;
-    await vi.waitFor(() => expect(cards(child, 0)).toHaveLength(1));
+    const catalogueName = () => partyCard(child)?.querySelector('.name-tag .tag-name')?.textContent;
+    await openMember(child);
     const original = catalogueName();
     await child.click('button.name-tag', 'dar um nome');
     await child.type('Nome', 'Bolinhas');
@@ -1508,9 +1516,9 @@ describe('the home', () => {
 
   it('edits the name tag in place: Escape cancels, leaving the field saves, a long name is refused, and the catalogue name stays under a nickname', async () => {
     const { child, worldId, first } = await childAtHome();
-    await vi.waitFor(() => expect(cards(child, 0)).toHaveLength(1));
-    const field = () => cards(child, 0)[0]!.querySelector('input') as HTMLInputElement | null;
-    const original = cards(child, 0)[0]!.querySelector('.tag-name')!.textContent;
+    await openMember(child);
+    const field = () => partyCard(child)!.querySelector('input') as HTMLInputElement | null;
+    const original = partyCard(child)!.querySelector('.tag-name')!.textContent;
 
     await child.click('button.name-tag', 'dar um nome');
     await vi.waitFor(() => expect(field()).not.toBeNull());
@@ -1526,7 +1534,7 @@ describe('the home', () => {
     field()!.dispatchEvent(new Event('input'));
     field()!.dispatchEvent(new Event('blur'));
     await vi.waitFor(() => expect(state(worldId).collectibles.get(first)!.nickname).toBe('Salvo ao sair'));
-    await vi.waitFor(() => expect(cards(child, 0)[0]!.querySelector('.tag-catalogue')?.textContent).toBe(original));
+    await vi.waitFor(() => expect(partyCard(child)!.querySelector('.tag-catalogue')?.textContent).toBe(original));
 
     await child.click('button.name-tag', 'Salvo ao sair');
     await vi.waitFor(() => expect(field()).not.toBeNull());
@@ -1540,10 +1548,12 @@ describe('the home', () => {
 
   it('sends a party member away: it leaves the profile and shows in the showcase, and is not deleted', async () => {
     const { child, worldId, first } = await childAtHome();
+    await openMember(child);
     await child.click('button', 'Enviar para a reserva');
     await vi.waitFor(() => expect(profileSam(worldId).partyIds).toEqual([]));
     expect(state(worldId).collectibles.get(first)!.reserveAt).toBe(now);
-    await vi.waitFor(() => expect(cards(child, 0)).toHaveLength(0));
+    await vi.waitFor(() => expect(members(child)).toHaveLength(0));
+    expect(partyCard(child)).toBeNull();
     expect(child.root.querySelectorAll('li.collectible-card')).toHaveLength(1); // only the pending one is left
     expect(state(worldId).collectibles.size).toBe(2);
 
@@ -1560,7 +1570,17 @@ describe('the home', () => {
     await child.click('button', 'Voltar');
     await child.click('button.place', 'Casa');
     const tier = state(worldId).collectibles.get(first)!.tier;
-    await vi.waitFor(() => expect(cards(child, 0)[0]!.querySelector('.tag-name')?.textContent).toBe(theme.tiers[tier]));
+    await vi.waitFor(() => expect(members(child)[0]!.querySelector('span')?.textContent).toBe(theme.tiers[tier]));
+    await openMember(child);
+    expect(partyCard(child)!.querySelector('.tag-name')?.textContent).toBe(theme.tiers[tier]);
+  });
+
+  it('closes the card with "Fechar", and shows only small buttons again', async () => {
+    const { child } = await childAtHome();
+    await openMember(child);
+    await child.click('.party-card button', 'Fechar');
+    await vi.waitFor(() => expect(partyCard(child)).toBeNull());
+    expect(members(child)).toHaveLength(1);
   });
 });
 
@@ -1991,6 +2011,7 @@ describe('the size of the party', () => {
     // Leaving is still possible, from the home.
     await child.click('button', 'Voltar');
     await child.click('button.place', 'Casa');
+    await child.click('button.showcase-item', '');
     await child.click('button', 'Enviar para');
     await vi.waitFor(() => expect(profileSam(worldId).partyIds).toHaveLength(2));
   });

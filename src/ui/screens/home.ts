@@ -1,10 +1,10 @@
 import { collectionOf } from '../../core/collection';
-import type { Collectible, Profile, ProfileId, Ruleset } from '../../core/model';
+import type { Collectible, Profile, ProfileId, Ruleset, TaskId } from '../../core/model';
 import type { WorldScreen } from '../context';
 import { artElement } from '../art';
 import { h } from '../dom';
 import { observeWithRetry } from '../observe';
-import { createPartyControls, createRenamer, entryOf } from '../party';
+import { createPartyControls, createRenamer, entryOf, nameOf } from '../party';
 import { observeSelf } from '../self';
 import emojiGroups from '../emoji.json';
 import { screenBar } from '../bar';
@@ -12,7 +12,8 @@ import { screenBar } from '../bar';
 /**
  * The home: the active profile's own place (SPEC.md §7.5). It shows the profile with the
  * theme's look for its kind with its symbol on the sail, and a button that opens a panel of emoji
- * (the theme's suggestions, then the animals and plants) to choose it from, then the party and the pending collectibles. A collectible sent away leaves the
+ * (the theme's suggestions, then the animals and plants) to choose it from, then the party and the pending collectibles.
+ * The party is a grid of small buttons, art and name; tapping one opens its card with what can be done. A collectible sent away leaves the
  * profile and is seen in the showcase with the others (SPEC.md §6); it is not deleted. Nothing here
  * is counted or compared (SPEC.md §2).
  */
@@ -21,6 +22,9 @@ export const renderHome: WorldScreen = (ctx, root, { worldId }) => {
   const header = h('section', { class: 'home-header' });
   const symbolPanel = h('section', { class: 'symbol-panel', hidden: true });
   const partySection = h('section', { class: 'stack' });
+  const detail = h('section', { class: 'reveal', hidden: true, role: 'dialog' });
+  /** The party member whose card is open. */
+  let selected: TaskId | null = null;
   const pendingSection = h('section', { class: 'stack' });
 
   let ruleset: Ruleset | null = null;
@@ -40,6 +44,34 @@ export const renderHome: WorldScreen = (ctx, root, { worldId }) => {
       renamer.tag(collectible, true),
       h('small', {}, ctx.theme.tiers[collectible.tier]),
       ...extras,
+    );
+  };
+
+  /** The party as small buttons: art and name. Tapping one opens its card. */
+  const partyGrid = (members: Collectible[]): HTMLElement =>
+    h('ul', { class: 'showcase-grid' },
+      ...members.map((collectible) => {
+        const entry = entryOf(ctx, collectible);
+        return h('li', {},
+          h('button', {
+            class: 'showcase-item',
+            type: 'button',
+            'data-id': collectible.id,
+            onClick: () => ((selected = selected === collectible.id ? null : collectible.id), draw()),
+          }, entry ? artElement(ctx.theme, entry.art, 'recent-art') : null, h('span', {}, nameOf(ctx, collectible))),
+        );
+      }),
+    );
+
+  /** The open card of a party member: its name tag, its tier, and what can be done with it. */
+  const partyCard = (collectible: Collectible): HTMLElement => {
+    const entry = entryOf(ctx, collectible);
+    return h('div', { class: 'party-card' },
+      entry ? artElement(ctx.theme, entry.art, 'reveal-art') : null,
+      renamer.tag(collectible, true),
+      h('p', { class: 'reveal-tier' }, ctx.theme.tiers[collectible.tier]),
+      h('button', { onClick: () => ((selected = null), controls.toReserve(collectible)) }, ctx.text('home.toReserve')),
+      h('button', { onClick: () => ((selected = null), renamer.reset(), draw()) }, ctx.text('showcase.close')),
     );
   };
 
@@ -107,11 +139,15 @@ export const renderHome: WorldScreen = (ctx, root, { worldId }) => {
     const list = (items: Collectible[], extras: (c: Collectible) => Array<HTMLElement | null>) =>
       items.map((collectible) => card(collectible, extras(collectible)));
 
-    section(partySection, ctx.text('home.party'), ctx.text('home.partyHint'), ctx.text('home.partyEmpty'),
-      list(party, (c) => [
-        h('button', { onClick: () => controls.toReserve(c) }, ctx.text('home.toReserve')),
-      ]),
+    const open = party.find((c) => c.id === selected) ?? null;
+    if (open === null) selected = null;
+    partySection.replaceChildren(
+      h('h2', {}, ctx.text('home.party')),
+      h('p', { class: 'hint' }, ctx.text('home.partyHint')),
+      party.length === 0 ? h('p', { class: 'message' }, ctx.text('home.partyEmpty')) : partyGrid(party),
     );
+    detail.hidden = open === null;
+    detail.replaceChildren(...(open === null ? [] : [partyCard(open)]));
     section(pendingSection, ctx.text('home.pending'), null, null, list(pending, (c) => [controls.choices(c)]));
     pendingSection.hidden = pending.length === 0;
   }
@@ -122,6 +158,7 @@ export const renderHome: WorldScreen = (ctx, root, { worldId }) => {
     header,
     symbolPanel,
     partySection,
+    detail,
     pendingSection,
   );
 
@@ -144,6 +181,7 @@ export const renderHome: WorldScreen = (ctx, root, { worldId }) => {
     watched = active.id;
     collectibles = null;
     renamer.reset();
+    selected = null;
     stopData = observeWithRetry(ctx, problem, (onError) =>
       ctx.store.collectibles.observeCollectibles(worldId, active.id, (value) => ((collectibles = value), draw()), onError),
     );

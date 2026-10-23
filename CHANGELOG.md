@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.9.10] — 2026-10-23
+
+### Changed
+
+- The `party` on the home is now a grid of small buttons, each with a collectible's art and name, like the `showcase`. Tapping one opens its card, with the name tag (tap to rename), its tier and the actions: send it to the reserve, or close. The pending ones keep their cards.
+
 ## [0.9.9] — 2026-10-23
 
 ### Changed (ADR 0010, the product owner's decision)
