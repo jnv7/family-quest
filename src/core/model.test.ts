@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_RULESET, TIERS, recurringTaskId } from './model';
+import { DEFAULT_RULESET, recurringTaskId } from './model';
+import { tokenRulesProblem } from './tokens';
 
 describe('recurringTaskId', () => {
   it('joins definition, period and profile', () => {
@@ -8,12 +9,7 @@ describe('recurringTaskId', () => {
 });
 
 describe('DEFAULT_RULESET', () => {
-  it('has tier odds that are integers summing to 100 for every level', () => {
-    for (const level of TIERS) {
-      const odds = DEFAULT_RULESET.tierOdds[level];
-      const values = TIERS.map((tier) => odds[tier]);
-      expect(values.every(Number.isInteger)).toBe(true);
-      expect(values.reduce((a, b) => a + b, 0)).toBe(100);
-    }
+  it('has token rules that tokenRulesProblem accepts', () => {
+    expect(tokenRulesProblem(DEFAULT_RULESET)).toBeNull();
   });
 });

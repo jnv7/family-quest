@@ -1,7 +1,7 @@
-import { drawTier, tierOddsFor } from '../../core/draw';
 import type { ProfileId, Task, TaskDef, World } from '../../core/model';
 import { isNewTask } from '../../core/alerts';
 import { sortForBoard } from '../../core/tasks';
+import { tokensFor } from '../../core/tokens';
 import type { WorldScreen } from '../context';
 import { artElement } from '../art';
 import { h } from '../dom';
@@ -17,13 +17,24 @@ const UNDO_MS = 4000;
  * Where a task is completed, in one tap on the task itself (SPEC.md §7.4), so
  * two taps from the map, with its button first. A task with a question shows it with "yes" and "no":
  * yes completes it, no leaves it open and the character answers kindly, with no
- * failure recorded (the proposal in SPEC.md §6). Completing also draws the reward's tier
- * (SPEC.md §6) and says that it went to the vault, which adds no tap.
+ * failure recorded (the proposal in SPEC.md §6). Completing earns tokens by the task's level
+ * (SPEC.md §6), shown as a row of token icons, which adds no tap.
  */
 export const renderCheckin: WorldScreen = (ctx, root, { worldId }) => {
   const { character } = ctx.theme;
   const bubble = h('p', { class: 'bubble', role: 'status' });
   const note = h('p', { class: 'reward-note', role: 'status' });
+  /** Tokens earned on this screen and not undone: shown as icons, never as a number (SPEC.md §2). */
+  let earned = 0;
+  const showEarned = () => {
+    if (earned === 0) return note.replaceChildren();
+    const label = ctx.text(earned === 1 ? 'checkin.earnedOne' : 'checkin.earned', { count: earned });
+    note.replaceChildren(
+      h('span', { class: 'earned', role: 'img', 'aria-label': label },
+        ...Array.from({ length: earned }, () => artElement(ctx.theme, ctx.theme.tokenArt, 'token-art')),
+      ),
+    );
+  };
   // Static text, not a button: talking to the parents about a task done better than expected happens out loud.
   const betterNote = h('p', { class: 'hint', hidden: true }, ctx.text('checkin.betterNote'));
   const list = h('ul', { class: 'rows checkin-tasks' });
@@ -32,7 +43,7 @@ export const renderCheckin: WorldScreen = (ctx, root, { worldId }) => {
   let spoken = false;
   /** Tasks with a question whose "done" was tapped: the character now asks. */
   const asking = new Set<string>();
-  // The odds belong to the world, so a task can be completed once the world has arrived (at once, from the cache).
+  // The token rules belong to the world, so a task can be completed once the world has arrived (at once, from the cache).
   let world: World | null = null;
   let tasks: Task[] | null = null;
   let defs = new Map<string, TaskDef>();
@@ -47,29 +58,31 @@ export const renderCheckin: WorldScreen = (ctx, root, { worldId }) => {
    * A completion is written when the undo window ends, so "Desfazer" writes nothing and nothing is
    * ever reopened in the data (SPEC.md §6). Hiding the page, or leaving the screen, writes at once.
    */
-  const pending = new Map<string, { run: () => void; cancel: () => void }>();
+  const pending = new Map<string, { run: () => void; cancel: () => void; tokens: number }>();
 
   const complete = (task: Task, answer: 'yes' | null) => {
     if (!world || pending.has(task.id)) return;
-    const current = world;
+    const tokens = tokensFor(task.level, world.ruleset);
     const run = () => {
       const entry = pending.get(task.id);
       if (!entry) return;
       entry.cancel();
       pending.delete(task.id);
-      const rewardTier = drawTier(tierOddsFor(task.level, current.ruleset), ctx.randomInt);
-      ctx.settle(ctx.store.tasks.completeTaskWithReward(worldId, task.id, { answer, talkFlag: task.talkFlag, rewardTier }).settled);
+      ctx.settle(ctx.store.tasks.completeTask(worldId, task.id, { answer, talkFlag: task.talkFlag, tokens }).settled);
     };
-    pending.set(task.id, { run, cancel: ctx.later(run, UNDO_MS) });
+    pending.set(task.id, { run, cancel: ctx.later(run, UNDO_MS), tokens });
     say('congrats');
-    note.textContent = ctx.text('checkin.reward');
+    earned += tokens;
+    showEarned();
     show();
   };
 
   const undo = (task: Task) => {
-    pending.get(task.id)?.cancel();
+    const entry = pending.get(task.id);
+    entry?.cancel();
     pending.delete(task.id);
-    if (pending.size === 0) note.textContent = '';
+    earned -= entry?.tokens ?? 0;
+    showEarned();
     say('greeting');
     show();
   };

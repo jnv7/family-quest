@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, dateKey, isoWeekday, lastDayOfPeriod, monthKey, periodKey, weekKey, weekRange, weekRelation } from './calendar';
+import { addDays, dateKey, isoWeekday, lastDayOfPeriod, monthKey, periodKey, weekKey } from './calendar';
 import type { IsoWeekday } from './model';
 
 const LISBON = 'Europe/Lisbon';
@@ -114,20 +114,5 @@ describe('addDays', () => {
   it('rejects what is not a date key or a whole number of days', () => {
     expect(() => addDays('2026-W43', 1)).toThrow();
     expect(() => addDays('2026-10-18', 1.5)).toThrow(RangeError);
-  });
-});
-
-describe('weekRange and weekRelation', () => {
-  it('gives the Monday and the Sunday of an ISO week, across a year end', () => {
-    expect(weekRange('2026-W43')).toEqual({ start: '2026-10-19', end: '2026-10-25' });
-    expect(weekRange('2026-W01')).toEqual({ start: '2025-12-29', end: '2026-01-04' });
-  });
-
-  it('knows this week, last week and the others, in Lisbon, also in the first week of a year', () => {
-    const wednesday = Date.parse('2026-10-28T10:00:00Z'); // week 44
-    expect(weekRelation('2026-W44', wednesday, LISBON)).toBe('this');
-    expect(weekRelation('2026-W43', wednesday, LISBON)).toBe('last');
-    expect(weekRelation('2026-W42', wednesday, LISBON)).toBe('other');
-    expect(weekRelation('2026-W53', Date.parse('2027-01-05T10:00:00Z'), LISBON)).toBe('last');
   });
 });

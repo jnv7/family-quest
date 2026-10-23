@@ -102,18 +102,13 @@ export interface DocMeta {
   createdAt: Millis;
 }
 
-/** Percentages per tier; integers that sum to 100. */
-export type TierOdds = Record<Tier, number>;
-
 export interface Ruleset {
   partySize: number;
   showcaseSize: number;
   childDailyTaskLimit: number;
   timezone: 'Europe/Lisbon';
   weekStartsOn: 1;
-  openingDay: IsoWeekday;
   pendingDays: number;
-  tierOdds: Record<TaskLevel, TierOdds>;
   /** Tokens earned by completing a task, per level; fixed on the task when it is completed. */
   tokensPerLevel: Record<TaskLevel, number>;
   /** The price of a reward, per tier; strictly increasing from low to high. */
@@ -128,13 +123,7 @@ export const DEFAULT_RULESET: Ruleset = {
   childDailyTaskLimit: 3,
   timezone: 'Europe/Lisbon',
   weekStartsOn: 1,
-  openingDay: 7,
   pendingDays: 1,
-  tierOdds: {
-    low: { low: 80, mid: 17, high: 3 },
-    mid: { low: 65, mid: 25, high: 10 },
-    high: { low: 45, mid: 35, high: 20 },
-  },
   tokensPerLevel: { low: 1, mid: 2, high: 4 },
   tokenPrices: { low: 5, mid: 12, high: 25 },
   guarantee: null,

@@ -1,8 +1,8 @@
-import { weekRange, weekRelation } from '../../core/calendar';
 import { drawSlot } from '../../core/draw';
-import type { Collectible, Profile, ProfileId, Reward, Ruleset, TaskId, WeekKey } from '../../core/model';
+import { TIERS, type Collectible, type Profile, type ProfileId, type Reward, type Ruleset, type TaskId, type Tier } from '../../core/model';
 import { collectibleState } from '../../core/party';
-import { canOpen } from '../../core/rewards';
+import { canAfford, priceOf } from '../../core/tokens';
+import { DataStoreError } from '../../data/DataStore';
 import type { WorldScreen } from '../context';
 import { artElement } from '../art';
 import { h } from '../dom';
@@ -12,46 +12,66 @@ import { createPartyControls, createRenamer, entryOf as entryOfTheme } from '../
 import { observeSelf } from '../self';
 import { screenBar } from '../bar';
 
-const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'] as const;
-const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const;
-
-/** Groups rewards by the week they were earned in, oldest week first; each group keeps its order. */
-export function groupByWeek(rewards: readonly Reward[]): Array<{ weekKey: WeekKey; rewards: Reward[] }> {
-  const groups = new Map<WeekKey, Reward[]>();
-  for (const reward of rewards) groups.set(reward.weekKey, [...(groups.get(reward.weekKey) ?? []), reward]);
-  return [...groups.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([weekKey, list]) => ({ weekKey, rewards: list }));
-}
-
 /**
- * The vault: the active profile's own unopened rewards (SPEC.md §7.6), shown with the art of
- * their tier, which a person opens from the opening day on (SPEC.md §6). A collectible that comes
- * out of a reward is pending: it can join the party at once, or stay in "recent" for a while
- * (SPEC.md §6). Nothing here is counted for anyone else or compared (SPEC.md §2), and nothing can
- * be deleted.
+ * The vault (SPEC.md §7.6). From top to bottom: the balance of the active profile, which is the one place
+ * a count is shown (SPEC.md §2); the rewards found before 0.9, which open for free; the depth, where the
+ * three tiers wait for tokens; what has just been revealed; and the recent collectibles. Choosing an
+ * affordable tier and tapping "open for N" buys a reward, already opened (ADR 0008). A collectible is
+ * pending until its owner decides: join the party, send it to the reserve, or leave it for later. Nothing
+ * here is compared with anyone else, and nothing can be deleted.
  *
- * The reveal is drawn from the collectibles the store reports, not from what this device drew:
- * if another device opened the same reward first, this one shows that device's collectible.
+ * The reveal is drawn from the collectibles the store reports, not from what this device drew: if the
+ * server refuses a purchase (the tokens were spent on another device), the reveal goes away and a line says why.
  */
 export const renderVault: WorldScreen = (ctx, root, { worldId }) => {
   const problem = h('div');
+  const balanceBox = h('div', { class: 'balance', hidden: true });
+  const found = h('section', { class: 'stack', hidden: true });
+  const depth = h('div', { class: 'stack' });
   const reveals = h('div', { class: 'stack' });
   const recent = h('section', { class: 'stack', hidden: true });
-  const content = h('div', { class: 'stack' });
 
   let ruleset: Ruleset | null = null;
   let profile: Profile | null = null;
   let rewards: Reward[] | null = null;
   let collectibles: Collectible[] | null = null;
-  /** Rewards this person opened on this screen, in the order they were opened, until dismissed. */
+  let balance: number | null = null;
+  /** Rewards this person opened or bought on this screen, in order, until dismissed. */
   let revealed: TaskId[] = [];
+  /** The tier chosen in the depth, waiting for "open for N". */
+  let selected: Tier | null = null;
+  let spentElsewhere = false;
   let tidied = false;
 
   const byId = () => new Map((collectibles ?? []).map((collectible) => [collectible.id, collectible]));
+  const tokenIcon = () => artElement(ctx.theme, ctx.theme.tokenArt, 'token-art');
 
+  /** A reward from before 0.9: opens for free, on any day. */
   const open = (reward: Reward) => {
     const slot = drawSlot(ctx.theme.catalog.slots, reward.tier, ctx.randomInt);
     revealed = [...revealed, reward.id];
     ctx.settle(ctx.store.rewards.openReward(worldId, reward.id, { slot }).settled);
+    draw();
+  };
+
+  const buy = (tier: Tier) => {
+    if (!ruleset || balance === null || !canAfford(balance, tier, ruleset)) return;
+    const slot = drawSlot(ctx.theme.catalog.slots, tier, ctx.randomInt);
+    const purchase = ctx.store.tokens.buyReward(worldId, { tier, price: priceOf(tier, ruleset), slot });
+    const { rewardId } = purchase.result;
+    selected = null;
+    spentElsewhere = false;
+    revealed = [...revealed, rewardId];
+    purchase.settled.catch((error: unknown) => {
+      // Another device of this profile spent the same tokens first: the server refused this one (ADR 0008).
+      if (error instanceof DataStoreError && error.code === 'permission-denied') {
+        revealed = revealed.filter((id) => id !== rewardId);
+        spentElsewhere = true;
+        draw();
+        return;
+      }
+      ctx.settle(Promise.reject(error));
+    });
     draw();
   };
 
@@ -61,6 +81,11 @@ export const renderVault: WorldScreen = (ctx, root, { worldId }) => {
   const choices = (collectible: Collectible) => controls.choices(collectible);
   const renamer = createRenamer(ctx, worldId, () => draw());
   const entryOf = (collectible: Collectible) => entryOfTheme(ctx, collectible);
+
+  const dismiss = (id: TaskId) => {
+    revealed = revealed.filter((revealedId) => revealedId !== id);
+    draw();
+  };
 
   const revealCard = (collectible: Collectible) => {
     const entry = entryOf(collectible);
@@ -72,7 +97,14 @@ export const renderVault: WorldScreen = (ctx, root, { worldId }) => {
       renamer.tag(collectible, true, ctx.text('vault.giveName')),
       h('p', { class: 'reveal-tier' }, ctx.theme.tiers[collectible.tier]),
       choices(collectible),
-      h('button', { onClick: () => ((revealed = revealed.filter((id) => id !== collectible.id)), draw()) }, ctx.text(pending ? 'party.later' : 'vault.close')),
+      pending &&
+        h('button', {
+          onClick: () => {
+            controls.toReserve(collectible);
+            dismiss(collectible.id);
+          },
+        }, ctx.text('vault.letGo')),
+      h('button', { onClick: () => dismiss(collectible.id) }, ctx.text(pending ? 'party.later' : 'vault.close')),
     );
   };
 
@@ -87,26 +119,60 @@ export const renderVault: WorldScreen = (ctx, root, { worldId }) => {
     );
   };
 
-  const rewardItem = (reward: Reward, rules: Ruleset) => {
-    const art = artElement(ctx.theme, ctx.theme.rewardArt[reward.tier], 'reward-art');
-    if (canOpen(reward, ctx.clock(), rules)) {
-      return h('li', { class: 'reward', 'data-tier': reward.tier }, art, h('button', { class: 'primary', onClick: () => open(reward) }, ctx.text('vault.open')));
-    }
-    return h('li', { class: 'reward waiting', 'data-tier': reward.tier }, art, h('small', {}, ctx.text('vault.notYet', { weekday: ctx.text(`weekday.${WEEKDAYS[rules.openingDay - 1]}`) })));
+  const foundItem = (reward: Reward) =>
+    h('li', { class: 'reward', 'data-tier': reward.tier },
+      artElement(ctx.theme, ctx.theme.rewardArt[reward.tier], 'reward-art'),
+      h('button', { class: 'primary', onClick: () => open(reward) }, ctx.text('vault.open')),
+    );
+
+  /** One tier of the depth: its art, the line that invites going deeper, and its price. */
+  const tierButton = (tier: Tier, rules: Ruleset, placement: Record<string, string> | null) => {
+    const affordable = balance !== null && canAfford(balance, tier, rules);
+    return h('button', {
+      type: 'button',
+      class: `tier${selected === tier ? ' selected' : ''}${affordable ? '' : ' dimmed'}${placement ? ' placed' : ''}`,
+      'data-tier': tier,
+      'aria-disabled': affordable ? 'false' : 'true',
+      'aria-pressed': selected === tier ? 'true' : 'false',
+      style: placement ? `left:${placement.left};top:${placement.top};width:${placement.width};height:${placement.height}` : undefined,
+      onClick: () => {
+        if (!affordable) return;
+        selected = selected === tier ? null : tier;
+        spentElsewhere = false;
+        draw();
+      },
+    },
+      artElement(ctx.theme, ctx.theme.rewardArt[tier], 'reward-art'),
+      h('span', { class: 'invite' }, ctx.theme.vault.invite[tier]),
+      h('span', { class: 'price' }, tokenIcon(), String(priceOf(tier, rules))),
+      !affordable && h('span', { class: 'sr-only' }, ctx.text('vault.cannotAfford')),
+    );
   };
 
-  /** The days of a week as "19–25 out.", with the month names from the locale file. */
-  const rangeLabel = (week: WeekKey): string => {
-    const { start, end } = weekRange(week);
-    const part = (date: string) => ({ day: Number(date.slice(8, 10)), month: ctx.text(`month.${MONTHS[Number(date.slice(5, 7)) - 1]}`) });
-    const [from, to] = [part(start), part(end)];
-    return from.month === to.month ? `${from.day}–${to.day} ${to.month}` : `${from.day} ${from.month}–${to.day} ${to.month}`;
-  };
-
-  /** "Esta semana", "Semana passada", or the days of the week; never an ISO week number. */
-  const weekHeading = (week: WeekKey): string => {
-    const relation = ruleset ? weekRelation(week, ctx.clock(), ruleset.timezone) : 'other';
-    return relation === 'this' ? ctx.text('vault.thisWeek') : relation === 'last' ? ctx.text('vault.lastWeek') : rangeLabel(week);
+  const drawDepth = (rules: Ruleset) => {
+    const { background, aspectRatio, spots } = ctx.theme.vault;
+    const placed = background !== undefined && aspectRatio !== undefined && spots !== undefined;
+    const tiers = TIERS.map((tier) =>
+      tierButton(
+        tier,
+        rules,
+        placed ? { left: `${spots[tier].x}%`, top: `${spots[tier].y}%`, width: `${spots[tier].width}%`, height: `${spots[tier].height}%` } : null,
+      ),
+    );
+    const chosen = selected;
+    depth.replaceChildren(
+      ...([
+      placed
+        ? h('div', { class: 'depth placed', style: `aspect-ratio:${aspectRatio}` }, artElement(ctx.theme, background, 'depth-bg'), ...tiers)
+        : h('div', { class: 'depth stacked' }, ...tiers),
+      spentElsewhere && h('p', { class: 'message', role: 'alert' }, ctx.text('vault.spentElsewhere')),
+      chosen !== null &&
+        h('button', { class: 'primary open-for', type: 'button', onClick: () => buy(chosen) },
+          ctx.text('vault.openFor', { count: priceOf(chosen, rules) }),
+          tokenIcon(),
+        ),
+      ] as Array<HTMLElement | false>).filter((node): node is HTMLElement => node !== false),
+    );
   };
 
   function draw(): void {
@@ -128,26 +194,28 @@ export const renderVault: WorldScreen = (ctx, root, { worldId }) => {
       ...(pending.length === 0 ? [] : [h('h2', {}, ctx.text('vault.recent')), ...pending.flatMap((c) => recentCard(c) ?? [])]),
     );
 
-    if (rewards === null || ruleset === null) return;
-    const rules = ruleset;
-    const shown = rewards.filter((reward) => !revealed.includes(reward.id) || !owned.has(reward.id));
-    if (shown.length === 0) {
-      const somethingElse = revealed.length > 0 || pending.length > 0;
-      content.replaceChildren(somethingElse ? '' : h('p', { class: 'message' }, ctx.text('vault.empty')));
-      return;
+    // The balance is shown to its owner only, here and nowhere else.
+    balanceBox.hidden = balance === null;
+    if (balance !== null) {
+      const label = ctx.text(balance === 1 ? 'vault.balanceOne' : 'vault.balance', { count: balance });
+      balanceBox.replaceChildren(h('span', { role: 'img', 'aria-label': label }, tokenIcon(), h('strong', {}, String(balance))));
     }
-    const openable = shown.filter((reward) => canOpen(reward, ctx.clock(), rules));
-    content.replaceChildren(
-      ...(openable.length >= 2
-        ? [h('button', { class: 'primary', onClick: () => openable.forEach(open) }, ctx.text('vault.openAll'))]
-        : []),
-      ...groupByWeek(shown).map((group) =>
-        h('section', { class: 'vault-week' },
-          h('h2', {}, weekHeading(group.weekKey)),
-          h('ul', { class: 'reward-list' }, ...group.rewards.map((reward) => rewardItem(reward, rules))),
-        ),
-      ),
+
+    const unopened = (rewards ?? []).filter((reward) => !revealed.includes(reward.id) || !owned.has(reward.id));
+    found.hidden = unopened.length === 0;
+    found.replaceChildren(
+      ...(unopened.length === 0
+        ? []
+        : [
+            h('h2', {}, ctx.text('vault.found')),
+            ...(unopened.length >= 2 ? [h('button', { class: 'primary', onClick: () => unopened.forEach(open) }, ctx.text('vault.openAll'))] : []),
+            h('ul', { class: 'reward-list' }, ...unopened.map(foundItem)),
+          ]),
     );
+
+    if (ruleset === null) return;
+    if (selected !== null && (balance === null || !canAfford(balance, selected, ruleset))) selected = null;
+    drawDepth(ruleset);
   }
 
   /** Opening the vault tidies the reserve once the lists have arrived (SPEC.md §6). */
@@ -160,10 +228,20 @@ export const renderVault: WorldScreen = (ctx, root, { worldId }) => {
   root.append(
     screenBar(ctx, { title: ctx.text('vault.title'), back: { name: 'map' } }),
     problem,
+    balanceBox,
+    found,
+    depth,
     reveals,
     recent,
-    content,
   );
+
+  // Tapping anywhere but a tier or "open for N" cancels the choice.
+  const onTap = (event: Event) => {
+    if (selected === null || (event.target as Element | null)?.closest('.tier, .open-for')) return;
+    selected = null;
+    draw();
+  };
+  root.addEventListener('click', onTap);
 
   const stopWorld = observeWithRetry(ctx, problem, (onError) =>
     ctx.store.worlds.observeWorld(worldId, (value) => ((ruleset = value.ruleset), tidy(), draw()), onError),
@@ -184,7 +262,9 @@ export const renderVault: WorldScreen = (ctx, root, { worldId }) => {
     watchedProfile = active.id;
     rewards = null;
     collectibles = null;
+    balance = null;
     revealed = [];
+    selected = null;
     tidied = false;
     const stopRewards = observeWithRetry(ctx, problem, (onError) =>
       ctx.store.rewards.observeUnopenedRewards(worldId, active.id, (value) => ((rewards = value), draw()), onError),
@@ -192,12 +272,17 @@ export const renderVault: WorldScreen = (ctx, root, { worldId }) => {
     const stopCollectibles = observeWithRetry(ctx, problem, (onError) =>
       ctx.store.collectibles.observeCollectibles(worldId, active.id, (value) => ((collectibles = value), tidy(), draw()), onError),
     );
+    const stopBalance = observeWithRetry(ctx, problem, (onError) =>
+      ctx.store.tokens.observeBalance(worldId, active.id, (value) => ((balance = value), draw()), onError),
+    );
     stopData = () => {
       stopRewards();
       stopCollectibles();
+      stopBalance();
     };
   });
   return () => {
+    root.removeEventListener('click', onTap);
     stopData();
     stopWorld();
     stopSelf();

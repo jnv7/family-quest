@@ -16,5 +16,9 @@ runDataStoreContract('memory', async ({ clock }) => {
     child2: await connect('device-child-2'),
     newcomer: await connect('device-newcomer'),
     setOnline: (device, online) => (device as MemoryDataStore).setOnline(online),
+    seedLegacyReward: ({ worldId, id, ...reward }) => {
+      // Committed like any write, so the devices' observers hear of it.
+      backend.commit({ ops: [{ worldId, collection: 'rewards', id, create: { schemaVersion: 1, id, openedAt: null, ...reward } }], check: () => null });
+    },
   };
 });

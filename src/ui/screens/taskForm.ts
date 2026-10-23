@@ -162,7 +162,7 @@ export const renderTaskForm = (defId: string | null): WorldScreen => (ctx, root,
     const text = title.value.trim();
     if (!self || !text || submit.disabled) return;
     if (!adult()) {
-      ctx.settle(ctx.store.tasks.createAdhocTask(worldId, { profileId: self.profile.id, title: text, level: 'mid', question: null }).settled);
+      ctx.settle(ctx.store.tasks.createAdhocTask(worldId, { profileId: self.profile.id, title: text, level: 'low', question: null }).settled);
       ctx.notify('notice.taskCreated');
       ctx.go({ name: 'board' });
       return;

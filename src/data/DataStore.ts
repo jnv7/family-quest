@@ -136,15 +136,6 @@ export interface CompleteTaskInput {
   tokens: number;
 }
 
-/** The 0.8 completion, which gives a reward instead of tokens. Removed in 0.9.5. */
-export interface CompleteTaskWithRewardInput {
-  /** `yes` when the task has a question; null otherwise. */
-  answer: Answer | null;
-  talkFlag: boolean;
-  /** Drawn by the caller with `drawTier(tierOddsFor(task.level, ruleset), randomInt)`. */
-  rewardTier: Tier;
-}
-
 // ---------------------------------------------------------------------------
 // Sub-interfaces
 
@@ -234,12 +225,6 @@ export interface TaskStore {
    * balance, so two offline devices that each complete a task end with the sum of both.
    */
   completeTask(worldId: WorldId, taskId: TaskId, input: CompleteTaskInput): Write;
-
-  /**
-   * The 0.8 completion: the open task moves to done and the same batch creates `rewards/{taskId}` with
-   * `input.rewardTier`, the task's profile and completion week, and `openedAt: null`. Nothing calls it from 0.9.5.
-   */
-  completeTaskWithReward(worldId: WorldId, taskId: TaskId, input: CompleteTaskWithRewardInput): Write;
 
   /**
    * `canRetire` first (`permission-denied`, before any write); then the task's status becomes `retired`, `retiredAt` is

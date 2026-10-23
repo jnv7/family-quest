@@ -59,7 +59,6 @@ import { randomWorldId } from '../../core/random';
 import {
   DataStoreError,
   type CompleteTaskInput,
-  type CompleteTaskWithRewardInput,
   type DataStore,
   type Observer,
   type ObserverError,
@@ -369,40 +368,6 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
             weekKey: null,
           };
           await setDoc(taskDoc(db, worldId, taskId), encodeTask(task));
-        });
-      },
-
-      completeTaskWithReward: (worldId, taskId, input: CompleteTaskWithRewardInput) => {
-        const doneAt = clock();
-        return write(undefined, async () => {
-          const [worldSnapshot, taskSnapshot] = await Promise.all([
-            readDoc(worldDoc(db, worldId)),
-            readDoc(taskDoc(db, worldId, taskId)),
-          ]);
-          const world = worldSnapshot.exists() ? decodeWorld(worldSnapshot) : null;
-          const task = taskSnapshot.exists() ? decodeTask(taskSnapshot) : null;
-          if (!world || !task) throw new DataStoreError('not-found', `Task ${taskId} does not exist`);
-          if (task.question !== null && input.answer !== 'yes') throw invalid('A task with a question is completed by answering yes');
-          if (task.question === null && input.answer !== null) throw invalid('A task without a question has no answer');
-          if (!(TIERS as readonly string[]).includes(input.rewardTier)) throw invalid(`Unknown reward tier: ${String(input.rewardTier)}`);
-          const completionWeek = weekKey(doneAt, world.ruleset.timezone);
-          const reward: Reward = {
-            schemaVersion: SCHEMA_VERSION,
-            createdAt: doneAt,
-            id: taskId,
-            profileId: task.profileId,
-            weekKey: completionWeek,
-            tier: input.rewardTier,
-            openedAt: null,
-          };
-          // One batch: the rules accept the reward only together with the task moving to done.
-          const batch = writeBatch(db);
-          batch.update(
-            taskDoc(db, worldId, taskId),
-            encodeTaskCompletion({ doneAt, answer: input.answer, talkFlag: input.talkFlag, weekKey: completionWeek }),
-          );
-          batch.set(rewardDoc(db, worldId, taskId), encodeReward(reward));
-          await batch.commit();
         });
       },
 

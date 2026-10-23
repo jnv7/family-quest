@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.9.5] — 2026-10-23
+
+### Changed
+
+- **The switch to tokens.** Completing a task earns tokens by its level (1, 2 and 4 by default), computed by `tokensFor` and written with `completeTask`; no reward is created. After "Feito" the check-in shows the tokens as a row of icons, with the number only in its text alternative for screen readers. Undo and "Não" still write nothing. A child's own task is now `low`, so it earns 1.
+- **The vault is rewritten.** From top to bottom: the balance of the active profile (the one place a count is shown), "Já encontrados" (rewards from before 0.9, which open for free on any day, with "Abrir todos" for two or more), the depth, what has just been revealed, and the recent ones. The depth shows the three tiers as the theme lays them out, each with its art, invite line and price. A tier the balance covers can be chosen (it rises a little) and bought with "Abrir por N"; one it does not cover is dimmed and does nothing. The reveal offers the party controls (with who leaves when it is full, and a line when it is above its size), "Enviar para" the reserve, and "Mais tarde". When the server refuses a purchase because the tokens were spent on another device, the reveal goes away and a line says so.
+- The weekly opening of rewards is gone: the vault no longer groups by week or waits for an opening day.
+
+### Removed
+
+- `completeTaskWithReward`, `drawTier`, `tierOddsFor`, `oddsProblem`, `canOpen`, `weekRange`, `weekRelation`, and `openingDay` and `tierOdds` from `Ruleset` (stored worlds keep them; nothing reads them). The contract suite now stores a reward from before 0.9 through a seed hook of each adapter, since nothing creates one.
+
 ## [0.9.4] — 2026-10-23
 
 ### Added

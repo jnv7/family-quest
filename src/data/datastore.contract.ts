@@ -18,6 +18,7 @@ import {
   type ProfileId,
   type Reward,
   type Task,
+  type Tier,
   type TaskDef,
   type World,
 } from '../core/model';
@@ -33,6 +34,8 @@ export interface ContractDevices {
   newcomer: DataStore;
   /** Takes one of the devices off the network, or back on it. Writes made meanwhile wait for the server. */
   setOnline(device: DataStore, online: boolean): Promise<void> | void;
+  /** Stores an unopened reward the way the 0.8 completion did, which no operation creates any more: it opens for free (ADR 0008 §4). */
+  seedLegacyReward(reward: { worldId: string; id: string; profileId: ProfileId; tier: Tier; weekKey: string; createdAt: Millis }): Promise<void> | void;
 }
 
 /** Builds fresh devices for one test; every store must read time from `clock`. */
@@ -118,6 +121,18 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
     }
 
     const adhoc = (profileId: ProfileId, title = 'Tidy up') => ({ profileId, title, level: 'mid' as const, question: null });
+
+    let legacyCount = 0;
+    /** A reward from before 0.9 for the profile, unopened; returns its id. */
+    async function legacyReward(
+      env: { seedLegacyReward: ContractDevices['seedLegacyReward']; worldId: string },
+      profileId: ProfileId,
+      tier: Tier = 'low',
+    ): Promise<string> {
+      const id = `legacy-${legacyCount++}`;
+      await env.seedLegacyReward({ worldId: env.worldId, id, profileId, tier, weekKey: weekKey(now, DEFAULT_RULESET.timezone), createdAt: now });
+      return id;
+    }
 
     describe('world', () => {
       it('creates a world with a long id, the default ruleset and the creator as admin', async () => {
@@ -282,7 +297,7 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
 
         await eventually(() => expect(open.value?.map((t) => t.title)).toEqual(['First', 'Second']));
 
-        await child.tasks.completeTaskWithReward(worldId, first.result.taskId, { answer: null, talkFlag: false, rewardTier: 'mid' }).settled;
+        await child.tasks.completeTask(worldId, first.result.taskId, { answer: null, talkFlag: false, tokens: 2 }).settled;
         await eventually(() => expect(open.value?.map((t) => t.title)).toEqual(['Second']));
         open.close();
       });
@@ -295,7 +310,7 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
         await task.settled;
 
         now = Date.parse('2026-10-25T23:30:00Z');
-        await child.tasks.completeTaskWithReward(worldId, task.result.taskId, { answer: null, talkFlag: true, rewardTier: 'mid' }).settled;
+        await child.tasks.completeTask(worldId, task.result.taskId, { answer: null, talkFlag: true, tokens: 2 }).settled;
 
         const watch = new Watch<Task[]>((v, e) => child.tasks.observeTasks(worldId, childProfileId, v, e));
         await eventually(() => expect(watch.value?.[0]?.status).toBe('done'));
@@ -314,7 +329,7 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
         await task.settled;
 
         now = Date.parse('2026-10-25T22:30:00Z'); // Sunday evening, week 43
-        const completion = child.tasks.completeTaskWithReward(worldId, task.result.taskId, { answer: null, talkFlag: false, rewardTier: 'mid' });
+        const completion = child.tasks.completeTask(worldId, task.result.taskId, { answer: null, talkFlag: false, tokens: 2 });
         const tapped = now;
         now = Date.parse('2026-10-26T09:00:00Z'); // Monday, week 44, before the write finishes
         await completion.settled;
@@ -331,9 +346,9 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
         await task.settled;
         const { taskId } = task.result;
 
-        await rejectsWith(child.tasks.completeTaskWithReward(worldId, taskId, { answer: null, talkFlag: false, rewardTier: 'mid' }), 'invalid-argument');
-        await rejectsWith(child.tasks.completeTaskWithReward(worldId, taskId, { answer: 'no', talkFlag: false, rewardTier: 'mid' }), 'invalid-argument');
-        await child.tasks.completeTaskWithReward(worldId, taskId, { answer: 'yes', talkFlag: false, rewardTier: 'mid' }).settled;
+        await rejectsWith(child.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: false, tokens: 2 }), 'invalid-argument');
+        await rejectsWith(child.tasks.completeTask(worldId, taskId, { answer: 'no', talkFlag: false, tokens: 2 }), 'invalid-argument');
+        await child.tasks.completeTask(worldId, taskId, { answer: 'yes', talkFlag: false, tokens: 2 }).settled;
       });
 
       it('refuses an admin completing someone else’s task', async () => {
@@ -342,7 +357,7 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
         await task.settled;
         const { taskId } = task.result;
 
-        await rejectsWith(admin.tasks.completeTaskWithReward(worldId, taskId, { answer: null, talkFlag: false, rewardTier: 'mid' }), 'permission-denied');
+        await rejectsWith(admin.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: false, tokens: 2 }), 'permission-denied');
 
         const watch = new Watch<Task[]>((v, e) => child.tasks.observeOpenTasks(worldId, childProfileId, v, e));
         await eventually(() => expect(watch.value?.map((t) => t.id)).toEqual([taskId]));
@@ -364,8 +379,8 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
 
         // The second device may or may not have seen the first completion yet;
         // either way the server must refuse it. Sequential so the winner is known.
-        await child.tasks.completeTaskWithReward(worldId, taskId, { answer: null, talkFlag: false, rewardTier: 'mid' }).settled;
-        await rejectsWith(child2.tasks.completeTaskWithReward(worldId, taskId, { answer: null, talkFlag: true, rewardTier: 'mid' }), 'permission-denied');
+        await child.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: false, tokens: 2 }).settled;
+        await rejectsWith(child2.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: true, tokens: 2 }), 'permission-denied');
 
         await eventually(() => {
           expect(watch1.value?.[0]).toMatchObject({ status: 'done', talkFlag: false });
@@ -376,120 +391,53 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
       });
     });
 
-    describe('rewards', () => {
-      const adhocFor = async (admin: DataStore, worldId: string, profileId: ProfileId, input = {}) => {
-        const task = admin.tasks.createAdhocTask(worldId, { ...adhoc(profileId), ...input });
-        await task.settled;
-        return task.result.taskId;
-      };
-
-      it('is created with the completion, unopened, with the task’s profile, week and the drawn tier', async () => {
-        const { admin, child, worldId, childProfileId } = await setup();
-        const taskId = await adhocFor(admin, worldId, childProfileId);
-
+    describe('rewards from before 0.9', () => {
+      it('lists the unopened rewards oldest first', async () => {
+        const env = await setup();
+        const { child, worldId, childProfileId } = env;
         const rewards = new Watch<Reward[]>((v, e) => child.rewards.observeUnopenedRewards(worldId, childProfileId, v, e));
         expect(await rewards.current()).toEqual([]);
 
-        now = Date.parse('2026-10-25T23:30:00Z');
-        await child.tasks.completeTaskWithReward(worldId, taskId, { answer: null, talkFlag: false, rewardTier: 'high' }).settled;
-
-        await eventually(() => expect(rewards.value).toHaveLength(1));
-        expect(rewards.value?.[0]).toMatchObject({
-          id: taskId,
-          profileId: childProfileId,
-          weekKey: weekKey(now, DEFAULT_RULESET.timezone),
-          tier: 'high',
-          openedAt: null,
-        });
-        rewards.close();
-      });
-
-      it('lists the unopened rewards oldest first', async () => {
-        const { admin, child, worldId, childProfileId } = await setup();
-        const first = await adhocFor(admin, worldId, childProfileId, { title: 'First' });
-        const second = await adhocFor(admin, worldId, childProfileId, { title: 'Second' });
-        const rewards = new Watch<Reward[]>((v, e) => child.rewards.observeUnopenedRewards(worldId, childProfileId, v, e));
-
-        now = START + 5000;
-        await child.tasks.completeTaskWithReward(worldId, second, { answer: null, talkFlag: false, rewardTier: 'low' }).settled;
         now = START + 9000;
-        await child.tasks.completeTaskWithReward(worldId, first, { answer: null, talkFlag: false, rewardTier: 'mid' }).settled;
+        const later = await legacyReward(env, childProfileId, 'mid');
+        now = START + 5000;
+        const earlier = await legacyReward(env, childProfileId, 'low');
 
-        await eventually(() => expect(rewards.value?.map((r) => r.id)).toEqual([second, first]));
+        await eventually(() => expect(rewards.value?.map((r) => r.id)).toEqual([earlier, later]));
+        expect(rewards.value?.[0]).toMatchObject({ profileId: childProfileId, tier: 'low', openedAt: null });
         rewards.close();
       });
 
-      it('creates the reward when the question was answered yes', async () => {
+      it('completing a task no longer creates one', async () => {
         const { admin, child, worldId, childProfileId } = await setup();
-        const taskId = await adhocFor(admin, worldId, childProfileId, { question: 'Did you wash your hands?' });
-        await child.tasks.completeTaskWithReward(worldId, taskId, { answer: 'yes', talkFlag: false, rewardTier: 'low' }).settled;
-
+        const task = admin.tasks.createAdhocTask(worldId, adhoc(childProfileId));
+        await task.settled;
+        await child.tasks.completeTask(worldId, task.result.taskId, { answer: null, talkFlag: false, tokens: 2 }).settled;
         const rewards = new Watch<Reward[]>((v, e) => child.rewards.observeUnopenedRewards(worldId, childProfileId, v, e));
-        await eventually(() => expect(rewards.value?.map((r) => r.id)).toEqual([taskId]));
+        await eventually(() => expect(rewards.value).toEqual([]));
         rewards.close();
-      });
-
-      it('is one reward when two devices of the same profile complete the same task', async () => {
-        const { admin, child, child2, worldId, childProfileId } = await setup();
-        const taskId = await adhocFor(admin, worldId, childProfileId);
-        const watch1 = new Watch<Reward[]>((v, e) => child.rewards.observeUnopenedRewards(worldId, childProfileId, v, e));
-        const watch2 = new Watch<Reward[]>((v, e) => child2.rewards.observeUnopenedRewards(worldId, childProfileId, v, e));
-        const tasks1 = new Watch<Task[]>((v, e) => child.tasks.observeTasks(worldId, childProfileId, v, e));
-        const tasks2 = new Watch<Task[]>((v, e) => child2.tasks.observeTasks(worldId, childProfileId, v, e));
-        await eventually(() => {
-          expect(tasks1.value).toHaveLength(1);
-          expect(tasks2.value).toHaveLength(1);
-        });
-
-        await child.tasks.completeTaskWithReward(worldId, taskId, { answer: null, talkFlag: false, rewardTier: 'mid' }).settled;
-        await rejectsWith(
-          child2.tasks.completeTaskWithReward(worldId, taskId, { answer: null, talkFlag: false, rewardTier: 'high' }),
-          'permission-denied',
-        );
-
-        await eventually(() => {
-          expect(tasks1.value?.[0]?.status).toBe('done');
-          expect(tasks2.value?.[0]?.status).toBe('done');
-          expect(watch1.value).toHaveLength(1);
-          expect(watch2.value).toHaveLength(1);
-          expect(watch1.value?.[0]?.tier).toBe('mid');
-          expect(watch2.value?.[0]?.tier).toBe('mid');
-        });
-        for (const watch of [watch1, watch2, tasks1, tasks2]) watch.close();
       });
 
       it('is readable by an admin, and refused to a child on another profile', async () => {
-        const { admin, child, worldId, childProfileId, adminProfileId } = await setup();
-        const taskId = await adhocFor(admin, worldId, childProfileId);
-        await child.tasks.completeTaskWithReward(worldId, taskId, { answer: null, talkFlag: false, rewardTier: 'low' }).settled;
+        const env = await setup();
+        const { admin, child, worldId, childProfileId, adminProfileId } = env;
+        const id = await legacyReward(env, childProfileId);
 
         const asAdmin = new Watch<Reward[]>((v, e) => admin.rewards.observeUnopenedRewards(worldId, childProfileId, v, e));
-        await eventually(() => expect(asAdmin.value?.map((r) => r.id)).toEqual([taskId]));
+        await eventually(() => expect(asAdmin.value?.map((r) => r.id)).toEqual([id]));
         asAdmin.close();
 
         const other = new Watch<Reward[]>((v, e) => child.rewards.observeUnopenedRewards(worldId, adminProfileId, v, e));
         await eventually(() => expect(other.error?.code).toBe('permission-denied'));
         other.close();
       });
-
-      it('refuses a tier that does not exist, before any write', async () => {
-        const { admin, child, worldId, childProfileId } = await setup();
-        const taskId = await adhocFor(admin, worldId, childProfileId);
-        await rejectsWith(
-          child.tasks.completeTaskWithReward(worldId, taskId, { answer: null, talkFlag: false, rewardTier: 'epic' as never }),
-          'invalid-argument',
-        );
-      });
     });
 
     describe('opening a reward', () => {
-      /** A child with one completed task, hence one unopened reward. */
-      async function withReward(tier: 'low' | 'mid' | 'high' = 'high') {
+      /** A child with one unopened reward from before 0.9. */
+      async function withReward(tier: Tier = 'high') {
         const env = await setup();
-        const task = env.admin.tasks.createAdhocTask(env.worldId, adhoc(env.childProfileId));
-        await task.settled;
-        const rewardId = task.result.taskId;
-        await env.child.tasks.completeTaskWithReward(env.worldId, rewardId, { answer: null, talkFlag: false, rewardTier: tier }).settled;
+        const rewardId = await legacyReward(env, env.childProfileId, tier);
         return { ...env, rewardId };
       }
 
@@ -585,10 +533,7 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
         const ids: string[] = [];
         for (let i = 0; i < count; i++) {
           now = START + 1000 * (i + 1);
-          const task = env.admin.tasks.createAdhocTask(env.worldId, adhoc(env.childProfileId, `Task ${i}`));
-          await task.settled;
-          const id = task.result.taskId;
-          await env.child.tasks.completeTaskWithReward(env.worldId, id, { answer: null, talkFlag: false, rewardTier: 'low' }).settled;
+          const id = await legacyReward(env, env.childProfileId);
           await env.child.rewards.openReward(env.worldId, id, { slot: `slot${i}` }).settled;
           ids.push(id);
         }
@@ -689,10 +634,7 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
     describe('nicknames', () => {
       async function withCollectible() {
         const env = await setup();
-        const task = env.admin.tasks.createAdhocTask(env.worldId, adhoc(env.childProfileId));
-        await task.settled;
-        const id = task.result.taskId;
-        await env.child.tasks.completeTaskWithReward(env.worldId, id, { answer: null, talkFlag: false, rewardTier: 'low' }).settled;
+        const id = await legacyReward(env, env.childProfileId);
         await env.child.rewards.openReward(env.worldId, id, { slot: 'slot0' }).settled;
         const owned = new Watch<Collectible[]>((v, e) => env.admin.collectibles.observeCollectibles(env.worldId, env.childProfileId, v, e));
         await eventually(() => expect(owned.value).toHaveLength(1));
@@ -738,11 +680,9 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
 
     describe('showcase', () => {
       /** Opens one collectible for the device's profile and moves it to the reserve at `at`. */
-      async function reserved(device: DataStore, adminDevice: DataStore, worldId: string, profileId: ProfileId, title: string, at: Millis) {
-        const task = adminDevice.tasks.createAdhocTask(worldId, adhoc(profileId, title));
-        await task.settled;
-        const id = task.result.taskId;
-        await device.tasks.completeTaskWithReward(worldId, id, { answer: null, talkFlag: false, rewardTier: 'low' }).settled;
+      async function reserved(device: DataStore, env: { seedLegacyReward: ContractDevices['seedLegacyReward']; worldId: string }, profileId: ProfileId, title: string, at: Millis) {
+        const { worldId } = env;
+        const id = await legacyReward(env, profileId);
         await device.rewards.openReward(worldId, id, { slot: `slot-${title}` }).settled;
         now = at;
         await device.collectibles.arrangeParty(worldId, profileId, { partyIds: [], toReserve: [id], fromReserve: [] }).settled;
@@ -750,10 +690,11 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
       }
 
       it('lists the reserve of every profile, newest first, on every device, without the owner', async () => {
-        const { admin, child, newcomer, worldId, adminProfileId, childProfileId } = await setup();
-        const a = await reserved(child, admin, worldId, childProfileId, 'a', START + 1000);
-        const b = await reserved(admin, admin, worldId, adminProfileId, 'b', START + 2000);
-        const c = await reserved(child, admin, worldId, childProfileId, 'c', START + 3000);
+        const env = await setup();
+        const { admin, child, newcomer, worldId, adminProfileId, childProfileId } = env;
+        const a = await reserved(child, env, childProfileId, 'a', START + 1000);
+        const b = await reserved(admin, env, adminProfileId, 'b', START + 2000);
+        const c = await reserved(child, env, childProfileId, 'c', START + 3000);
         for (const device of [admin, child, newcomer]) {
           const showcase = new Watch<ShowcaseItem[]>((v, e) => device.collectibles.observeShowcase(worldId, 30, v, e));
           await eventually(() => expect(showcase.value?.map((item) => item.id)).toEqual([c, b, a]));
@@ -767,9 +708,10 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
       });
 
       it('shows only the newest ones up to the limit, and keeps the others stored', async () => {
-        const { admin, child, worldId, childProfileId } = await setup();
+        const env = await setup();
+        const { admin, child, worldId, childProfileId } = env;
         const ids: string[] = [];
-        for (const [i, title] of ['a', 'b', 'c'].entries()) ids.push(await reserved(child, admin, worldId, childProfileId, title, START + 1000 * (i + 1)));
+        for (const [i, title] of ['a', 'b', 'c'].entries()) ids.push(await reserved(child, env, childProfileId, title, START + 1000 * (i + 1)));
         const showcase = new Watch<ShowcaseItem[]>((v, e) => admin.collectibles.observeShowcase(worldId, 2, v, e));
         await eventually(() => expect(showcase.value?.map((item) => item.id)).toEqual([ids[2], ids[1]]));
         const owned = new Watch<Collectible[]>((v, e) => child.collectibles.observeCollectibles(worldId, childProfileId, v, e));
@@ -779,9 +721,10 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
       });
 
       it('drops a collectible that goes back to the party, and shows a new nickname', async () => {
-        const { admin, child, worldId, childProfileId } = await setup();
-        const a = await reserved(child, admin, worldId, childProfileId, 'a', START + 1000);
-        const b = await reserved(child, admin, worldId, childProfileId, 'b', START + 2000);
+        const env = await setup();
+        const { admin, child, worldId, childProfileId } = env;
+        const a = await reserved(child, env, childProfileId, 'a', START + 1000);
+        const b = await reserved(child, env, childProfileId, 'b', START + 2000);
         const showcase = new Watch<ShowcaseItem[]>((v, e) => admin.collectibles.observeShowcase(worldId, 30, v, e));
         await eventually(() => expect(showcase.value).toHaveLength(2));
         await admin.collectibles.setNickname(worldId, a, 'Moderated').settled;
@@ -879,7 +822,7 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
 
         await rejectsWith(admin.tasks.setTalkFlag(worldId, taskId, true), 'permission-denied');
 
-        await child.tasks.completeTaskWithReward(worldId, taskId, { answer: null, talkFlag: false, rewardTier: 'mid' }).settled;
+        await child.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: false, tokens: 2 }).settled;
         await rejectsWith(child.tasks.setTalkFlag(worldId, taskId, true), 'permission-denied');
         await eventually(() => expect(watch.value?.[0]).toMatchObject({ status: 'done', talkFlag: false }));
         watch.close();
@@ -1097,7 +1040,7 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
           expect(watch.value?.[0]).toMatchObject({ status: 'open', talkFlag: true, createdAt: START });
         });
 
-        await child.tasks.completeTaskWithReward(worldId, task.id, { answer: null, talkFlag: true, rewardTier: 'mid' }).settled;
+        await child.tasks.completeTask(worldId, task.id, { answer: null, talkFlag: true, tokens: 2 }).settled;
         now += 1000;
         await child.tasks.createRecurringTasks(worldId, [task]).settled;
         await eventually(() => {
@@ -1290,7 +1233,7 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
       it('cannot be set on a task that is done', async () => {
         const { admin, child, worldId, childProfileId } = await setup();
         const taskId = await bigTask(admin, child, worldId, childProfileId);
-        await child.tasks.completeTaskWithReward(worldId, taskId, { answer: null, talkFlag: false, rewardTier: 'mid' }).settled;
+        await child.tasks.completeTask(worldId, taskId, { answer: null, talkFlag: false, tokens: 2 }).settled;
         await rejectsWith(child.tasks.setPlan(worldId, taskId, { date: '2026-10-25', trigger: 'after dinner' }), 'permission-denied');
       });
     });

@@ -29,6 +29,17 @@ afterAll(async () => {
   await Promise.all(services.map((s) => s.dispose()));
 });
 
+let seedEnv: RulesTestEnvironment;
+beforeAll(async () => {
+  seedEnv = await initializeTestEnvironment({
+    projectId: EMULATOR_PROJECT_ID,
+    firestore: { rules: readFileSync('firebase/firestore.rules', 'utf8') },
+  });
+});
+afterAll(async () => {
+  await seedEnv.cleanup();
+});
+
 runDataStoreContract('firestore', async ({ clock }) => {
   const admin = await connect(clock);
   const child = await connect(clock);
@@ -44,6 +55,19 @@ runDataStoreContract('firestore', async ({ clock }) => {
     setOnline: async (device, online) => {
       const { firestore } = byStore.get(device)!;
       await (online ? enableNetwork(firestore) : disableNetwork(firestore));
+    },
+    // What the 0.8 completion created; no operation does any more, so it is written past the rules.
+    seedLegacyReward: async ({ worldId, id, profileId, tier, weekKey, createdAt }) => {
+      await seedEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore() as unknown as Firestore, 'worlds', worldId, 'rewards', id), {
+          profileId,
+          weekKey,
+          tier,
+          openedAt: null,
+          schemaVersion: 1,
+          createdAt: Timestamp.fromMillis(createdAt),
+        });
+      });
     },
   };
 });

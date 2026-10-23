@@ -88,7 +88,7 @@
     "invite": {
       "low": "Perto da entrada, ainda há luz.",
       "mid": "Mais fundo, as tochas tremem.",
-      "high": "Mais fundo, mais escuro… e mais valioso."
+      "high": "No fundo da gruta, o maior tesouro espera por ti."
     },
     "background": {
       "image": "assets/vault/cave.svg"

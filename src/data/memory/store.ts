@@ -44,7 +44,6 @@ import { randomId, randomWorldId } from '../../core/random';
 import {
   DataStoreError,
   type CompleteTaskInput,
-  type CompleteTaskWithRewardInput,
   type CreateAdhocTaskInput,
   type CreateProfileInput,
   type CreateWorldInput,
@@ -525,46 +524,6 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
           };
         });
       },
-
-      completeTaskWithReward: (worldId, taskId, input: CompleteTaskWithRewardInput) =>
-        submit(undefined, (view, uid) => {
-          const ws = requireWorld(view, worldId);
-          const task = requireTask(view, worldId, taskId);
-          if (task.question !== null && input.answer !== 'yes') throw invalid('A task with a question is completed by answering yes');
-          if (task.question === null && input.answer !== null) throw invalid('A task without a question has no answer');
-          if (!(TIERS as readonly string[]).includes(input.rewardTier)) throw invalid(`Unknown reward tier: ${String(input.rewardTier)}`);
-          const doneAt = clock();
-          const completionWeek = weekKey(doneAt, ws.world.ruleset.timezone);
-          const reward: Reward = {
-            schemaVersion: SCHEMA_VERSION,
-            createdAt: doneAt,
-            id: taskId,
-            profileId: task.profileId,
-            weekKey: completionWeek,
-            tier: input.rewardTier,
-            openedAt: null,
-          };
-          return {
-            ops: [
-              {
-                worldId,
-                collection: 'tasks',
-                id: taskId,
-                patch: {
-                  status: 'done',
-                  doneAt,
-                  answer: input.answer,
-                  talkFlag: input.talkFlag,
-                  weekKey: completionWeek,
-                },
-              },
-              { worldId, collection: 'rewards', id: taskId, create: reward },
-            ],
-            check: (state) =>
-              checkOwnerOfOpenTask(state, worldId, taskId, uid) ??
-              (state.get(worldId)?.rewards.has(taskId) ? denied('A reward is never replaced') : null),
-          };
-        }),
 
       completeTask: (worldId, taskId, input: CompleteTaskInput) =>
         submit(undefined, (view, uid) => {

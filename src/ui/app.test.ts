@@ -603,9 +603,9 @@ describe('the board and ad hoc tasks', () => {
     child.submit();
     await child.see('Ler um livro');
 
-    // The task is for the child, of normal difficulty and without a question.
+    // The task is for the child, of the lowest difficulty (what a child invents never earns more) and without a question.
     const [stored] = [...backend.state.get(worldId)!.tasks.values()];
-    expect(stored).toMatchObject({ title: 'Ler um livro', level: 'mid', question: null, source: 'adhoc' });
+    expect(stored).toMatchObject({ title: 'Ler um livro', level: 'low', question: null, source: 'adhoc' });
     expect(stored?.profileId).toBe(stored?.createdBy);
   });
 
@@ -873,6 +873,14 @@ describe('when data cannot be loaded', () => {
   });
 });
 
+const state = (worldId: string) => backend.state.get(worldId)!;
+const profileSam = (worldId: string) => [...state(worldId).profiles.values()].find((p) => p.displayName === 'Sam')!;
+const profileNamed = (worldId: string, name: string) => [...state(worldId).profiles.values()].find((p) => p.displayName === name)!;
+/** The committed token balance of a profile. */
+const balanceOf = (worldId: string, name: string) => state(worldId).balances.get(profileNamed(worldId, name).id) ?? 0;
+/** Gives a profile a balance directly, before its screen is opened. */
+const giveTokens = (worldId: string, name: string, tokens: number) => void state(worldId).balances.set(profileNamed(worldId, name).id, tokens);
+
 describe('the check-in', () => {
   const lines = theme.character.lines;
   const bubble = (device: Awaited<ReturnType<typeof openDevice>>) => device.root.querySelector('.bubble')?.textContent ?? '';
@@ -892,10 +900,63 @@ describe('the check-in', () => {
     await child.notSee('Arrumar o quarto');
     expect(lines.congrats).toContain(bubble(child));
     expect(storedTask(worldId)).toMatchObject({ status: 'done', doneAt: now, weekKey: '2026-W43', answer: null, talkFlag: false });
-    // The reward went to the vault, and the same tap said so.
-    await child.see('Ganhaste um prémio! Foi para o cofre.');
-    const reward = [...backend.state.get(worldId)!.rewards.values()][0]!;
-    expect(reward).toMatchObject({ weekKey: '2026-W43', openedAt: null });
+    // A normal task earns 2 tokens: shown as icons, never as a number, and no reward is created.
+    expect(storedTask(worldId)).toMatchObject({ tokens: 2 });
+    expect(balanceOf(worldId, 'Sam')).toBe(2);
+    expect(backend.state.get(worldId)!.rewards.size).toBe(0);
+    const earned = child.root.querySelector('.earned')!;
+    expect(earned.querySelectorAll('.token-art')).toHaveLength(2);
+    expect(earned.getAttribute('aria-label')).toBe(`Ganhaste 2 ${theme.roles.token.plural}`);
+    expect(earned.textContent).not.toMatch(/\d/);
+  });
+
+  it('earns 1, 2 or 4 by the level of the task, and nothing on undo or on "no"', async () => {
+    const { admin, child, worldId } = await familyWithChild();
+    await createTask(admin, 'Difícil', 'Sam');
+    const task = [...state(worldId).tasks.values()][0]!;
+    state(worldId).tasks.set(task.id, { ...task, level: 'high' });
+    await child.click('button.place', 'Registo');
+    await child.click('button', 'Feito');
+    await child.click('button', 'Desfazer');
+    runTimers();
+    expect(balanceOf(worldId, 'Sam')).toBe(0);
+    await child.click('button', 'Feito');
+    runTimers();
+    await vi.waitFor(() => expect(balanceOf(worldId, 'Sam')).toBe(4));
+  });
+
+  it('gives a child’s own task 1 token', async () => {
+    const { child, worldId } = await familyWithChild();
+    await child.click('button.place', 'Quadro');
+    await child.click('button', 'Nova tarefa');
+    await child.type('O que é para fazer?', 'Ideia minha');
+    await child.enabled('Criar tarefa');
+    child.submit();
+    await child.see('As tuas tarefas');
+    await child.click('button', 'Voltar');
+    await child.click('button.place', 'Registo');
+    await child.click('button', 'Feito');
+    runTimers();
+    await vi.waitFor(() => expect(balanceOf(worldId, 'Sam')).toBe(1));
+  });
+
+  it('shows no balance on the map, the board, the check-in, the home or the adults’ view', async () => {
+    const { admin, child, worldId } = await familyWithChild();
+    giveTokens(worldId, 'Sam', 37);
+    giveTokens(worldId, 'Alex', 41);
+    const digits = (device: typeof child) => device.root.textContent!.replace(/\d{4}|\d+ ?(out|nov)\./g, '');
+    expect(child.root.textContent).not.toContain('37');
+    for (const place of ['Quadro', 'Registo', 'Casa']) {
+      await child.click('button.place', place);
+      await vi.waitFor(() => expect(child.find('button', 'Voltar')).toBeDefined());
+      expect(digits(child)).not.toContain('37');
+      await child.click('button', 'Voltar');
+    }
+    await admin.click('button', 'Gerir');
+    await admin.see('Tarefas por perfil');
+    await admin.click('button.chip', 'Sam');
+    expect(digits(admin)).not.toContain('37');
+    expect(digits(admin)).not.toContain('41');
   });
 
   it('shows the question, completes on yes, and on no leaves the task open with a friendly line', async () => {
@@ -946,7 +1007,8 @@ describe('the check-in', () => {
     runTimers();
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(storedTask(worldId)).toMatchObject({ status: 'open' });
-    expect(backend.state.get(worldId)!.rewards.size).toBe(0);
+    expect(balanceOf(worldId, 'Sam')).toBe(0);
+    expect(child.root.querySelector('.earned')).toBeNull();
     await child.see('Feito'); // the card is back
 
     await child.click('button', 'Feito');
@@ -969,7 +1031,7 @@ describe('the check-in', () => {
     document.dispatchEvent(new Event('visibilitychange'));
     Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
     await vi.waitFor(() => expect(done()).toBe(2));
-    expect(backend.state.get(worldId)!.rewards.size).toBe(2);
+    expect(balanceOf(worldId, 'Sam')).toBe(4);
   });
 
   it('writes a pending completion when the person leaves the check-in', async () => {
@@ -1007,151 +1069,225 @@ describe('the check-in', () => {
   });
 });
 
+/** Stores unopened rewards from before 0.9 for a profile, as the 0.8 completion left them. */
+function giveLegacyRewards(worldId: string, name: string, count: number, tier: Tier = 'mid') {
+  const profileId = profileNamed(worldId, name).id;
+  for (let i = 0; i < count; i++) {
+    const id = `legacy-${name}-${i}`;
+    state(worldId).rewards.set(id, { schemaVersion: 1, createdAt: now + i, id, profileId, weekKey: '2026-W43', tier, openedAt: null });
+  }
+}
+
 describe('the vault', () => {
-  it('lists the unopened rewards of the active profile only, with the art of their tier, grouped by week', async () => {
+  type Device = Awaited<ReturnType<typeof openDevice>>;
+  const tier = (device: Device, which: Tier) => device.find(`button.tier[data-tier="${which}"]`) as HTMLButtonElement;
+
+  /** A child with `tokens`, standing in the vault. */
+  async function childWithTokens(tokens: number) {
+    const family = await familyWithChild();
+    giveTokens(family.worldId, 'Sam', tokens);
+    await family.child.click('button.place', 'Cofre');
+    return family;
+  }
+
+  it('shows the balance at the top, with a text alternative, and the three tiers with their invite and price', async () => {
+    const { child } = await childWithTokens(12);
+    await vi.waitFor(() => expect(child.root.querySelector('.balance strong')?.textContent).toBe('12'));
+    expect(child.root.querySelector('.balance [role="img"]')?.getAttribute('aria-label')).toBe(`Tens 12 ${theme.roles.token.plural}`);
+    for (const [which, price] of [['low', '5'], ['mid', '12'], ['high', '25']] as const) {
+      const button = tier(child, which);
+      expect(button.querySelector('.invite')?.textContent).toBe(theme.vault.invite[which]);
+      expect(button.querySelector('.price')?.textContent?.endsWith(price)).toBe(true);
+      const art = theme.rewardArt[which];
+      expect(button.querySelector('.reward-art')?.textContent).toBe('emoji' in art ? art.emoji : '');
+    }
+  });
+
+  it('lays the tiers out on the theme’s background when it has spots, and stacks them when it has not', async () => {
+    const { child } = await childWithTokens(0);
+    await vi.waitFor(() => expect(tier(child, 'low')).toBeDefined());
+    const hasSpots = theme.vault.spots !== undefined;
+    expect(child.root.querySelector(hasSpots ? '.depth.placed' : '.depth.stacked')).not.toBeNull();
+    if (theme.vault.spots) expect(tier(child, 'high').style.top).toBe(`${theme.vault.spots.high.y}%`);
+  });
+
+  it('lets a tier be chosen when affordable, dims one that is not, and a tap on it does nothing', async () => {
+    const { child } = await childWithTokens(12);
+    await vi.waitFor(() => expect(tier(child, 'mid')).toBeDefined());
+    expect(tier(child, 'low').getAttribute('aria-disabled')).toBe('false');
+    expect(tier(child, 'mid').getAttribute('aria-disabled')).toBe('false');
+    expect(tier(child, 'high').getAttribute('aria-disabled')).toBe('true');
+    expect(tier(child, 'high').textContent).toContain('Ainda não tens');
+
+    tier(child, 'high').click();
+    expect(child.find('button.open-for')).toBeUndefined();
+    expect(tier(child, 'high').classList.contains('selected')).toBe(false);
+
+    tier(child, 'mid').click();
+    expect(child.find('button.open-for')?.textContent).toContain('Abrir por 12');
+    tier(child, 'low').click(); // another tier changes the choice
+    expect(child.find('button.open-for')?.textContent).toContain('Abrir por 5');
+    expect(tier(child, 'mid').classList.contains('selected')).toBe(false);
+    child.root.querySelector<HTMLElement>('.balance')!.click(); // anywhere else cancels it
+    expect(child.find('button.open-for')).toBeUndefined();
+  });
+
+  it('buys with "Abrir por 12": takes the price, reveals a collectible of that tier, pending, opened at once', async () => {
+    const { child, worldId } = await childWithTokens(12);
+    await vi.waitFor(() => expect(tier(child, 'mid')).toBeDefined());
+    tier(child, 'mid').click();
+    (child.find('button.open-for') as HTMLButtonElement).click();
+
+    await vi.waitFor(() => expect(state(worldId).collectibles.size).toBe(1));
+    expect(balanceOf(worldId, 'Sam')).toBe(0);
+    const collectible = [...state(worldId).collectibles.values()][0]!;
+    const reward = [...state(worldId).rewards.values()][0]!;
+    expect(collectible).toMatchObject({ tier: 'mid', reserveAt: null, id: reward.id });
+    expect(reward).toMatchObject({ price: 12, tier: 'mid' });
+    expect(reward.openedAt).not.toBeNull();
+    const entry = theme.catalog.slots.find((slot) => slot.slot === collectible.slot)!;
+    expect(entry.tier).toBe('mid');
+
+    await child.see('Saiu um cromo!');
+    await child.see(entry.name);
+    await vi.waitFor(() => expect(child.root.querySelector('.balance strong')?.textContent).toBe('0'));
+    expect(child.find('button.open-for')).toBeUndefined();
+    // Everything is dimmed now, and the new creature can be named at once.
+    expect(tier(child, 'low').getAttribute('aria-disabled')).toBe('true');
+    expect(child.find('.reveal button.name-tag', 'dá-lhe um nome')).toBeDefined();
+  });
+
+  it('sends the new collectible straight to the reserve with "let it go", and keeps it pending with "later"', async () => {
+    const { child, worldId } = await childWithTokens(10);
+    await vi.waitFor(() => expect(tier(child, 'low')).toBeDefined());
+    tier(child, 'low').click();
+    (child.find('button.open-for') as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(state(worldId).collectibles.size).toBe(1));
+    await child.click('button', 'Enviar para');
+    await vi.waitFor(() => expect([...state(worldId).collectibles.values()][0]!.reserveAt).toBe(now));
+    expect(profileSam(worldId).partyIds).toEqual([]);
+    await child.notSee('Saiu um cromo!');
+
+    tier(child, 'low').click();
+    (child.find('button.open-for') as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(state(worldId).collectibles.size).toBe(2));
+    await child.click('button', 'Mais tarde');
+    await child.see('Recentes');
+    expect([...state(worldId).collectibles.values()].filter((c) => c.reserveAt === null)).toHaveLength(1);
+  });
+
+  it('says the tokens were spent elsewhere when the server refuses, and loses nothing', async () => {
+    const { child, worldId } = await childWithTokens(25);
+    await vi.waitFor(() => expect(tier(child, 'high')).toBeDefined());
+    // Another device of the same profile spends the tokens first.
+    const other = await openDevice('child-device-2', { hash: `#/join/${worldId}` });
+    await other.click('button.profile', 'Sam');
+    await other.click('button.place', 'Cofre');
+    await vi.waitFor(() => expect(tier(other, 'high')).toBeDefined());
+
+    tier(child, 'high').click();
+    const buyHere = child.find('button.open-for') as HTMLButtonElement;
+    tier(other, 'high').click();
+    // Both press in the same moment: the first to reach the backend wins.
+    buyHere.click();
+    (other.find('button.open-for') as HTMLButtonElement).click();
+
+    // The second to reach the backend is refused: its reveal goes away and a line says why.
+    await vi.waitFor(() => expect(other.root.textContent).toContain('já tinham sido gastas noutro aparelho'));
+    expect(child.root.textContent).not.toContain('já tinham sido gastas');
+    expect(balanceOf(worldId, 'Sam')).toBe(0);
+    expect(state(worldId).collectibles.size).toBe(1);
+    await vi.waitFor(() => expect(other.root.querySelectorAll('.reveal')).toHaveLength(0));
+    expect(child.root.querySelectorAll('.reveal')).toHaveLength(1);
+  });
+
+  it('shows no balance in the vault of an adult who has none, only zero', async () => {
+    const { admin } = await familyWithChild();
+    await admin.click('button.place', 'Cofre');
+    await vi.waitFor(() => expect(admin.root.querySelector('.balance strong')?.textContent).toBe('0'));
+  });
+});
+
+describe('rewards found before 0.9', () => {
+  it('lists the rewards of the active profile only, under "Já encontrados", with no weeks and no counts', async () => {
     const { admin, child, worldId } = await familyWithChild();
-    await createTask(admin, 'Arrumar o quarto', 'Sam');
-    await admin.click('button', 'Voltar');
-    await createTask(admin, 'Regar as plantas', 'Sam');
-    await admin.click('button', 'Voltar');
-
-    await child.click('button.place', 'Registo');
-    await child.click('button', 'Feito');
-    runTimers();
-    await vi.waitFor(() => expect(backend.state.get(worldId)!.rewards.size).toBe(1));
-    now += 7 * 86_400_000; // the next week
-    await child.click('button', 'Feito');
-    runTimers();
-    await vi.waitFor(() => expect(backend.state.get(worldId)!.rewards.size).toBe(2));
-
-    await child.click('button', 'Voltar');
+    giveLegacyRewards(worldId, 'Sam', 2, 'high');
+    giveLegacyRewards(worldId, 'Alex', 1);
     await child.click('button.place', 'Cofre');
+    await child.see('Já encontrados');
     await vi.waitFor(() => expect(child.root.querySelectorAll('li.reward')).toHaveLength(2));
-    expect([...child.root.querySelectorAll('.vault-week h2')].map((el) => el.textContent)).toEqual(['Semana passada', 'Esta semana']);
+    expect(child.root.textContent).not.toMatch(/Semana|W\d|a partir de/);
     for (const item of child.root.querySelectorAll<HTMLElement>('li.reward')) {
       const art = theme.rewardArt[item.dataset.tier as Tier];
       expect(item.querySelector('.reward-art')?.textContent).toBe('emoji' in art ? art.emoji : '');
     }
-    // The adult's own vault holds none of the child's rewards.
+    // The adult's own vault holds only the adult's reward.
     await admin.click('button.place', 'Cofre');
-    await admin.see('Ainda não tens prémios para abrir.');
+    await vi.waitFor(() => expect(admin.root.querySelectorAll('li.reward')).toHaveLength(1));
   });
-});
 
-describe('opening rewards', () => {
-  const SUNDAY = Date.parse('2026-10-25T10:00:00Z');
-
-  /** A child with one reward earned on Tuesday, standing in the vault. */
-  async function childWithReward() {
-    const { admin, child, worldId } = await familyWithChild();
-    await createTask(admin, 'Arrumar o quarto', 'Sam');
-    await child.click('button.place', 'Registo');
-    await child.click('button', 'Feito');
-    runTimers();
-    await vi.waitFor(() => expect(backend.state.get(worldId)!.rewards.size).toBe(1));
-    await child.click('button', 'Voltar');
-    return { admin, child, worldId };
-  }
-
-  it('waits for the opening day with a calm line, and opens from Sunday with a reveal of the drawn tier', async () => {
-    const { child, worldId } = await childWithReward();
-
+  it('shows nothing about them when there are none', async () => {
+    const { child } = await familyWithChild();
     await child.click('button.place', 'Cofre');
-    await child.see('Abre a partir de domingo.');
-    expect(child.find('button', 'Abrir')).toBeUndefined();
+    await vi.waitFor(() => expect(child.root.querySelector('.balance')).not.toBeNull());
+    expect(child.root.textContent).not.toContain('Já encontrados');
+  });
 
-    now = SUNDAY;
-    await child.click('button', 'Voltar');
+  it('opens for free on a Wednesday, with a reveal of the reward’s tier', async () => {
+    const { child, worldId } = await familyWithChild();
+    giveLegacyRewards(worldId, 'Sam', 1, 'mid');
+    now = Date.parse('2026-10-21T10:00:00Z'); // Wednesday
     await child.click('button.place', 'Cofre');
     await child.click('button', 'Abrir');
-
-    const reward = [...backend.state.get(worldId)!.rewards.values()][0]!;
-    await vi.waitFor(() => expect(backend.state.get(worldId)!.collectibles.size).toBe(1));
-    const collectible = [...backend.state.get(worldId)!.collectibles.values()][0]!;
-    expect(collectible).toMatchObject({ tier: reward.tier, profileId: reward.profileId, obtainedAt: SUNDAY, reserveAt: null });
+    await vi.waitFor(() => expect(state(worldId).collectibles.size).toBe(1));
+    const collectible = [...state(worldId).collectibles.values()][0]!;
+    expect(collectible).toMatchObject({ tier: 'mid', obtainedAt: now, reserveAt: null });
+    expect(balanceOf(worldId, 'Sam')).toBe(0);
     const entry = theme.catalog.slots.find((slot) => slot.slot === collectible.slot)!;
-    expect(entry.tier).toBe(reward.tier);
-
-    await child.see(`Saiu um cromo!`);
+    await child.see('Saiu um cromo!');
     await child.see(entry.name);
-    await child.see(theme.tiers[reward.tier]);
     expect(child.root.querySelectorAll('li.reward')).toHaveLength(0);
-    // The moment to name a new creature: the tag is offered at once.
-    expect(child.find('.reveal button.name-tag', 'dá-lhe um nome')).toBeDefined();
-
-    // The new collectible is pending: "later" closes the reveal, and it waits among the recent ones.
     await child.click('button', 'Mais tarde');
     await child.see('Recentes');
-    await child.see(entry.name);
   });
 
-  it('offers "Abrir todos" only with two or more to open, and shows the reveals one after the other', async () => {
-    const { child, worldId } = await childWithRewards(2);
-    await vi.waitFor(() => expect(child.root.querySelectorAll('li.reward')).toHaveLength(2));
-    await child.click('button.primary', 'Abrir todos');
-    await vi.waitFor(() => expect(state(worldId).collectibles.size).toBe(2));
-    await vi.waitFor(() => expect(child.root.querySelectorAll('.reveal')).toHaveLength(2));
-    expect(child.find('button', 'Abrir todos')).toBeUndefined();
-  });
-
-  it('labels weeks as this week, last week, or the days, never as a week number', async () => {
+  it('offers "Abrir todos" only with two or more, and shows the reveals one after the other', async () => {
     const { child, worldId } = await childWithRewards(1);
-    await child.click('button', 'Voltar');
-    now = Date.parse('2026-11-18T10:00:00Z'); // three weeks later
-    await child.click('button.place', 'Cofre');
-    await child.see('19–25 out.');
-    expect(child.root.textContent).not.toMatch(/Semana \d|W\d/);
     expect(child.find('button', 'Abrir todos')).toBeUndefined();
-    expect(worldId).toBeTruthy();
-  });
-
-  it('opens a reward from a closed week at any time', async () => {
-    const { child, worldId } = await childWithReward();
-    now = Date.parse('2026-10-26T08:00:00Z'); // Monday of the next week
+    giveLegacyRewards(worldId, 'Sam', 4); // ids 0 to 3: the first is the one already there
+    await child.click('button', 'Voltar');
     await child.click('button.place', 'Cofre');
-    await child.click('button', 'Abrir');
-    await vi.waitFor(() => expect(backend.state.get(worldId)!.collectibles.size).toBe(1));
+    await vi.waitFor(() => expect(child.root.querySelectorAll('li.reward')).toHaveLength(4));
+    await child.click('button.primary', 'Abrir todos');
+    await vi.waitFor(() => expect(state(worldId).collectibles.size).toBe(4));
+    await vi.waitFor(() => expect(child.root.querySelectorAll('.reveal')).toHaveLength(4));
+    expect(child.find('button', 'Abrir todos')).toBeUndefined();
   });
 
   it('ends with one collectible when another device of the same profile opened the reward first', async () => {
-    const { child, worldId } = await childWithReward();
-    now = SUNDAY;
-    await child.click('button.place', 'Cofre');
+    const { child, worldId } = await childWithRewards(1);
     await child.see('Abrir');
 
     const second = await openDevice('child-device-2', { hash: `#/join/${worldId}` });
-    const profileId = [...backend.state.get(worldId)!.profiles.values()].find((p) => p.displayName === 'Sam')!.id;
+    const profileId = profileSam(worldId).id;
     await second.click('button.profile', 'Sam');
     await second.click('button.place', 'Cofre');
     await second.click('button', 'Abrir');
-    await vi.waitFor(() => expect(backend.state.get(worldId)!.collectibles.size).toBe(1));
-    const stored = [...backend.state.get(worldId)!.collectibles.values()][0]!;
-    expect(stored.profileId).toBe(profileId);
+    await vi.waitFor(() => expect(state(worldId).collectibles.size).toBe(1));
+    expect([...state(worldId).collectibles.values()][0]!.profileId).toBe(profileId);
 
     // The first device was still showing the reward: it leaves the list, and nothing is duplicated.
     await vi.waitFor(() => expect(child.find('button', 'Abrir')).toBeUndefined());
-    expect(backend.state.get(worldId)!.collectibles.size).toBe(1);
+    expect(state(worldId).collectibles.size).toBe(1);
   });
 });
 
 const SUNDAY = Date.parse('2026-10-25T10:00:00Z');
-const state = (worldId: string) => backend.state.get(worldId)!;
-const profileSam = (worldId: string) => [...state(worldId).profiles.values()].find((p) => p.displayName === 'Sam')!;
 
-/** A child who earned `count` rewards in a closed week, standing in the vault. */
+/** A child with `count` rewards from before 0.9, standing in the vault. */
 async function childWithRewards(count: number) {
   const { admin, child, worldId } = await familyWithChild();
-  for (let i = 0; i < count; i++) {
-    await createTask(admin, `Tarefa ${i}`, 'Sam');
-    await admin.click('button', 'Voltar');
-  }
-  await child.click('button.place', 'Registo');
-  for (let i = 0; i < count; i++) {
-    await child.click('button', 'Feito');
-    runTimers();
-    await vi.waitFor(() => expect(state(worldId).rewards.size).toBe(i + 1));
-  }
-  await child.click('button', 'Voltar');
+  giveLegacyRewards(worldId, 'Sam', count, 'low');
   now = SUNDAY;
   await child.click('button.place', 'Cofre');
   return { admin, child, worldId };
