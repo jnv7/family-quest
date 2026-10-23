@@ -4,7 +4,7 @@ Each release is one minor version, developed on its own `release/0.x` branch (`G
 
 The behaviour each release implements is specified in `SPEC.md`.
 
-**Last closed release: 0.8 — Usability** (2026-10-23, tag `v0.8`; [release notes](docs/release-notes/0.8.md)). **Current release:** none; the next one is 0.9 — Rewards that last ([plan](docs/plans/0.9.md)).
+**Last closed release: 0.9 — Rewards that last** (2026-10-23, tag `v0.9`; [release notes](docs/release-notes/0.9.md)). **Current release:** none; the next one is 0.10 — Settings and configuration (not yet planned).
 
 ## Release plan
 
@@ -173,6 +173,7 @@ Ideas that are outside the current release. They are neither implemented on own 
 | An admin can revoke a device (remove a member), for a leaked join code | Spec review, 2026-10-18 |
 | Device-bound admin rights with an admin recovery code, so a child picking an adult profile does not get admin rights (alternative B in ADR 0003) | Deferred by the product owner, 2026-10-18 |
 | Three identical collectibles make a "super" one, to give repeats a value; still to decide: how the three are kept (never deleted), which ones can take part, and the art (`docs/plans/0.9-product-brief.md` §7) | Product owner, 2026-10-23 |
+| Remove the 0.8 completion path from the rules (a task completed with no `tokens`, and its reward made from the task) once no device runs 0.8 (ADR 0008 §6) | Product owner, 2026-10-23 |
 | Weekly guaranteed minimum (`ruleset.guarantee`) | `SPEC.md` §13 |
 | Switching the theme of an existing world | `SPEC.md` §14 |
 | Family meter and paired tasks | `SPEC.md` §14 |

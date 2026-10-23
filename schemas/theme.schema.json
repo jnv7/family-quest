@@ -18,7 +18,9 @@
     "places",
     "homeVariants",
     "character",
-    "install"
+    "install",
+    "tokenArt",
+    "vault"
   ],
   "properties": {
     "$schema": {
@@ -51,7 +53,8 @@
         "reward",
         "collectible",
         "party",
-        "reserve"
+        "reserve",
+        "token"
       ],
       "properties": {
         "world": {
@@ -85,6 +88,9 @@
           "$ref": "#/$defs/noun"
         },
         "reserve": {
+          "$ref": "#/$defs/noun"
+        },
+        "token": {
           "$ref": "#/$defs/noun"
         }
       }
@@ -445,6 +451,76 @@
               "type": "number",
               "exclusiveMinimum": 0,
               "maximum": 100
+            }
+          }
+        }
+      }
+    },
+    "tokenArt": {
+      "description": "Art of one token, shown in the balance, the prices and the earned row.",
+      "$ref": "#/$defs/art"
+    },
+    "vault": {
+      "description": "How the vault shows the three tiers a person can open for tokens. Without background, aspectRatio and spots the engine stacks the tiers from the entrance (low) to the deep end (high); with them it places each tier on the background (SPEC.md §7).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "invite"
+      ],
+      "properties": {
+        "invite": {
+          "description": "One short line per tier that invites going deeper.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "low",
+            "mid",
+            "high"
+          ],
+          "properties": {
+            "low": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "mid": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "high": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            }
+          }
+        },
+        "background": {
+          "$ref": "#/$defs/art"
+        },
+        "aspectRatio": {
+          "description": "Width divided by height of the background.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "spots": {
+          "description": "Where each tier sits on the background, in percent.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "low",
+            "mid",
+            "high"
+          ],
+          "properties": {
+            "low": {
+              "$ref": "#/$defs/spot"
+            },
+            "mid": {
+              "$ref": "#/$defs/spot"
+            },
+            "high": {
+              "$ref": "#/$defs/spot"
             }
           }
         }

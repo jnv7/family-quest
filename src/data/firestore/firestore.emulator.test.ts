@@ -4,7 +4,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
-import { Timestamp, doc, setDoc, type Firestore } from 'firebase/firestore';
+import { Timestamp, disableNetwork, doc, enableNetwork, setDoc, type Firestore } from 'firebase/firestore';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createRandomInt } from '../../core/random';
 import { EMULATOR_PROJECT_ID } from './config';
@@ -29,12 +29,48 @@ afterAll(async () => {
   await Promise.all(services.map((s) => s.dispose()));
 });
 
-runDataStoreContract('firestore', async ({ clock }) => ({
-  admin: (await connect(clock)).store,
-  child: (await connect(clock)).store,
-  child2: (await connect(clock)).store,
-  newcomer: (await connect(clock)).store,
-}));
+let seedEnv: RulesTestEnvironment;
+beforeAll(async () => {
+  seedEnv = await initializeTestEnvironment({
+    projectId: EMULATOR_PROJECT_ID,
+    firestore: { rules: readFileSync('firebase/firestore.rules', 'utf8') },
+  });
+});
+afterAll(async () => {
+  await seedEnv.cleanup();
+});
+
+runDataStoreContract('firestore', async ({ clock }) => {
+  const admin = await connect(clock);
+  const child = await connect(clock);
+  const child2 = await connect(clock);
+  const newcomer = await connect(clock);
+  const byStore = new Map([admin, child, child2, newcomer].map((d) => [d.store, d.device]));
+  return {
+    admin: admin.store,
+    child: child.store,
+    child2: child2.store,
+    newcomer: newcomer.store,
+    // The device's cache stays, and its writes wait for the network (the offline case of ADR 0008).
+    setOnline: async (device, online) => {
+      const { firestore } = byStore.get(device)!;
+      await (online ? enableNetwork(firestore) : disableNetwork(firestore));
+    },
+    // What the 0.8 completion created; no operation does any more, so it is written past the rules.
+    seedLegacyReward: async ({ worldId, id, profileId, tier, weekKey, createdAt }) => {
+      await seedEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore() as unknown as Firestore, 'worlds', worldId, 'rewards', id), {
+          profileId,
+          weekKey,
+          tier,
+          openedAt: null,
+          schemaVersion: 1,
+          createdAt: Timestamp.fromMillis(createdAt),
+        });
+      });
+    },
+  };
+});
 
 describe('documents with an unknown schemaVersion', () => {
   let env: RulesTestEnvironment;

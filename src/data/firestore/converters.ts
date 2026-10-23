@@ -7,7 +7,7 @@
  * not know. It never coerces such a document.
  */
 import { Timestamp, type DocumentData, type DocumentSnapshot, type QueryDocumentSnapshot } from 'firebase/firestore';
-import { SCHEMA_VERSION, type Collectible, type Member, type Millis, type Profile, type Reward, type Task, type TaskDef, type World } from '../../core/model';
+import { DEFAULT_RULESET, SCHEMA_VERSION, type Collectible, type Member, type Millis, type Profile, type Reward, type Task, type TaskDef, type World } from '../../core/model';
 
 type Snapshot = DocumentSnapshot | QueryDocumentSnapshot;
 
@@ -36,7 +36,14 @@ export function encodeWorld(world: World): DocumentData {
 
 export function decodeWorld(snapshot: Snapshot): World | null {
   const data = readKnown(snapshot);
-  return data && ({ ...data, id: snapshot.id, createdAt: toMillis(data.createdAt) } as World);
+  if (!data) return null;
+  // A world stored before 0.9 has no token rules: it reads with the defaults. Its `openingDay` and `tierOdds` are ignored.
+  const ruleset = {
+    ...data.ruleset,
+    tokensPerLevel: data.ruleset?.tokensPerLevel ?? DEFAULT_RULESET.tokensPerLevel,
+    tokenPrices: data.ruleset?.tokenPrices ?? DEFAULT_RULESET.tokenPrices,
+  };
+  return { ...data, ruleset, id: snapshot.id, createdAt: toMillis(data.createdAt) } as World;
 }
 
 export function encodeMember(member: Member): DocumentData {
@@ -55,10 +62,13 @@ export function encodeProfile(profile: Profile): DocumentData {
 export function decodeProfile(snapshot: Snapshot): Profile | null {
   const data = readKnown(snapshot);
   // A profile written before symbols existed has no `symbol`: it reads as null (schemaVersion stays 1).
+  // The token balance and its reasons are not part of `Profile`: only `observeBalance` reads them (SPEC.md §2).
+  if (!data) return null;
+  const { tokens: _tokens, tokensFrom: _from, tokensFor: _for, ...profile } = data;
   return (
     data &&
     ({
-      ...data,
+      ...profile,
       id: snapshot.id,
       avatar: { ...data.avatar, symbol: data.avatar?.symbol ?? null },
       createdAt: toMillis(data.createdAt),
@@ -83,6 +93,7 @@ export function decodeTask(snapshot: Snapshot): Task | null {
       id: snapshot.id,
       createdAt: toMillis(data.createdAt),
       doneAt: data.doneAt === null ? null : toMillis(data.doneAt),
+      ...(data.retiredAt ? { retiredAt: toMillis(data.retiredAt) } : {}),
     } as Task)
   );
 }
@@ -154,9 +165,18 @@ export function encodeTaskCompletion(fields: {
   answer: Task['answer'];
   talkFlag: boolean;
   weekKey: string;
+  /** Present from 0.9: the tokens the completion earns. */
+  tokens?: number;
 }): DocumentData {
   return { status: 'done', ...fields, doneAt: toTimestamp(fields.doneAt) };
 }
+
+/** Fields written when a task is retired. */
+export const encodeTaskRetirement = (retiredAt: Millis, retiredBy: string): DocumentData => ({
+  status: 'retired',
+  retiredAt: toTimestamp(retiredAt),
+  retiredBy,
+});
 
 export function decodeAll<T>(docs: readonly QueryDocumentSnapshot[], decode: (snapshot: Snapshot) => T | null): T[] {
   return docs.flatMap((snapshot) => {

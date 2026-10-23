@@ -13,11 +13,20 @@ export interface WorldState {
   taskDefs: Map<string, TaskDef>;
   rewards: Map<string, Reward>;
   collectibles: Map<string, Collectible>;
+  /**
+   * Token balances by profile id (absent means 0). They live apart from `Profile`, which does not carry the
+   * balance (SPEC.md §2), and change only by increments applied to the committed value at commit time, like
+   * Firestore's `increment()` (docs/architecture.md §5).
+   */
+  balances: Map<string, number>;
 }
 
 export type MemoryState = Map<WorldId, WorldState>;
 
-/** One document write. `create` sets a whole document; `patch` merges fields into an existing one. */
+/**
+ * One document write. `create` sets a whole document; `patch` merges fields into an existing one;
+ * `increment` adds to a profile's token balance on the committed value, whatever the writer last saw.
+ */
 export type Op =
   | { worldId: WorldId; collection: 'world'; id: WorldId; create: World }
   | { worldId: WorldId; collection: 'world'; id: WorldId; patch: Partial<World> }
@@ -25,6 +34,10 @@ export type Op =
   | { worldId: WorldId; collection: 'members'; id: Uid; patch: Partial<Member> }
   | { worldId: WorldId; collection: 'profiles'; id: string; create: Profile }
   | { worldId: WorldId; collection: 'profiles'; id: string; patch: Partial<Profile> }
+  | { worldId: WorldId; collection: 'profiles'; id: string; increment: { tokens: number } }
+  /** Clears a profile's balance and party (restarting the universe). */
+  | { worldId: WorldId; collection: 'profiles'; id: string; reset: true }
+  | { worldId: WorldId; collection: 'tasks' | 'taskDefs' | 'rewards' | 'collectibles'; id: string; delete: true }
   | { worldId: WorldId; collection: 'tasks'; id: string; create: Task }
   | { worldId: WorldId; collection: 'tasks'; id: string; patch: Partial<Task> }
   | { worldId: WorldId; collection: 'taskDefs'; id: string; create: TaskDef }
@@ -63,6 +76,7 @@ export function applyOps(state: MemoryState, ops: readonly Op[]): void {
           taskDefs: new Map(),
           rewards: new Map(),
           collectibles: new Map(),
+          balances: new Map(),
         });
       } else {
         const existing = state.get(op.worldId);
@@ -72,6 +86,20 @@ export function applyOps(state: MemoryState, ops: readonly Op[]): void {
     }
     const world = state.get(op.worldId);
     if (!world) continue;
+    if ('reset' in op) {
+      world.balances.delete(op.id);
+      const profile = world.profiles.get(op.id);
+      if (profile) profile.partyIds = [];
+      continue;
+    }
+    if ('delete' in op) {
+      (world[op.collection] as Map<string, object>).delete(op.id);
+      continue;
+    }
+    if ('increment' in op) {
+      world.balances.set(op.id, (world.balances.get(op.id) ?? 0) + op.increment.tokens);
+      continue;
+    }
     const documents = world[op.collection] as Map<string, object>;
     if ('create' in op) {
       documents.set(op.id, structuredClone(op.create));

@@ -558,10 +558,6 @@ button.place[data-alert='soon']::before {
   max-height: 100%;
 }
 
-.reward.waiting {
-  opacity: 0.7;
-}
-
 .reward {
   position: relative;
   width: auto;
@@ -950,4 +946,184 @@ button.name-tag.unnamed {
     transition: none !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* The token icon beside a value in management (and, from 0.9.5, in the vault). */
+.token-art {
+  display: inline-block;
+  width: 1.25em;
+  height: 1.25em;
+  margin: 0 0.4em;
+  vertical-align: middle;
+  object-fit: contain;
+}
+
+/* Text for screen readers only. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The earned tokens after "done": a row of icons, never a number. */
+.earned {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.15rem;
+}
+
+/* The balance, at the top of the vault only. */
+.balance {
+  display: flex;
+  align-items: center;
+  font-size: 1.5rem;
+}
+
+.balance strong {
+  margin-left: 0.25rem;
+}
+
+/* The depth: three tiers to choose from, stacked, or placed on the theme's background. */
+.depth.stacked {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.depth.placed {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 1rem;
+}
+
+.depth-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  font-size: 6rem;
+  display: grid;
+  place-items: center;
+}
+
+.tier {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 3rem;
+  padding: 0.5rem 0.75rem;
+  border: 2px solid var(--line);
+  border-radius: 1rem;
+  text-align: left;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.tier.placed {
+  position: absolute;
+  background: color-mix(in srgb, Canvas 78%, transparent);
+}
+
+.tier .reward-art {
+  font-size: 2rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  object-fit: contain;
+}
+
+.tier .invite {
+  font-size: 0.9rem;
+}
+
+.tier .price {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+}
+
+.tier.selected {
+  transform: translateY(-0.25rem);
+  border-color: var(--accent);
+  box-shadow: 0 0.5rem 1rem color-mix(in srgb, currentColor 25%, transparent);
+}
+
+.tier.dimmed {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.open-for {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Retiring a task: a "⋯" at the card's far corner, a one-item menu, and a question in the card. */
+.task-card {
+  position: relative;
+}
+
+.task-corner {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+}
+
+.task-corner .more {
+  min-width: 3rem;
+  min-height: 3rem;
+  border: 0;
+  background: transparent;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.task-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 2;
+  min-width: 10rem;
+  padding: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: Canvas;
+  box-shadow: 0 0.5rem 1rem color-mix(in srgb, currentColor 20%, transparent);
+}
+
+.task-menu button {
+  width: 100%;
+  min-height: 3rem;
+  text-align: left;
+}
+
+.retire-confirm {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.task-card:has(.task-corner) .task-body {
+  padding-right: 3rem;
+}
+
+/* Restarting the universe: another colour, so it is never tapped by habit. */
+button.danger {
+  background: #b3261e;
+  border-color: #b3261e;
+  color: #fff;
+}
+
+button.danger:disabled {
+  opacity: 0.5;
+}
+
+.restart {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 2px solid #b3261e;
 }

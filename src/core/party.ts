@@ -5,7 +5,7 @@ import type { Collectible, Millis, Profile, Ruleset, TaskId } from './model';
 export type CollectibleState = 'party' | 'pending' | 'reserve';
 
 /** The party is the source of truth: a collectible whose id is in `partyIds` is in the party. */
-export function collectibleState(collectible: Collectible, partyIds: readonly TaskId[]): CollectibleState {
+export function collectibleState(collectible: Pick<Collectible, 'id' | 'reserveAt'>, partyIds: readonly TaskId[]): CollectibleState {
   if (partyIds.includes(collectible.id)) return 'party';
   return collectible.reserveAt === null ? 'pending' : 'reserve';
 }
@@ -43,7 +43,7 @@ const hasDuplicates = (ids: readonly string[]): boolean => new Set(ids).size !==
 
 /**
  * Checks a change before anything is written: every id is the profile's own, the party has no
- * repeats and fits `partySize`, and `toReserve` and `fromReserve` say exactly what the new party
+ * repeats and fits `partySize` (a party above a lowered size may only lose members), and `toReserve` and `fromReserve` say exactly what the new party
  * implies. Whoever leaves the party goes to the reserve; whoever joins from the reserve leaves it;
  * a pending collectible may also go to the reserve on its own.
  */
@@ -57,9 +57,10 @@ export function checkPartyChange(
   const everyId = [...change.partyIds, ...change.toReserve, ...change.fromReserve, ...profile.partyIds];
   if (everyId.some((id) => !ownedById.has(id))) return 'not-owned';
   if (hasDuplicates(change.partyIds) || hasDuplicates(change.toReserve) || hasDuplicates(change.fromReserve)) return 'duplicate';
-  if (change.partyIds.length > partySize) return 'too-many';
 
   const before = new Set(profile.partyIds);
+  // A party above a lowered size may lose members and be reordered, but nobody joins it (firestore.rules).
+  if (change.partyIds.length > partySize && change.partyIds.some((id) => !before.has(id))) return 'too-many';
   const after = new Set(change.partyIds);
   const toReserve = new Set(change.toReserve);
   const fromReserve = new Set(change.fromReserve);

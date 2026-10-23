@@ -4,7 +4,8 @@ rules_version = '2';
 //
 // Principles:
 // - Everything lives under worlds/{worldId}; only members of a world read it.
-// - Nothing is ever deleted.
+// - Nothing is ever deleted, except by an admin restarting the universe (ADR 0011): then the tasks,
+//   task definitions, rewards and collectibles go, and the profiles lose their balance and party.
 // - Every document carries schemaVersion == 1 and createdAt, which never change.
 // - "Owner" means the device whose member.profileId equals the document's profileId.
 // - "Admin" means a device whose active profile is a non-archived adult profile.
@@ -36,11 +37,11 @@ service cloud.firestore {
       function taskPath(taskId) {
         return /databases/$(database)/documents/worlds/$(worldId)/tasks/$(taskId);
       }
-      function rewardPath(taskId) {
-        return /databases/$(database)/documents/worlds/$(worldId)/rewards/$(taskId);
+      function rewardPath(rewardId) {
+        return /databases/$(database)/documents/worlds/$(worldId)/rewards/$(rewardId);
       }
-      function collectiblePath(taskId) {
-        return /databases/$(database)/documents/worlds/$(worldId)/collectibles/$(taskId);
+      function collectiblePath(rewardId) {
+        return /databases/$(database)/documents/worlds/$(worldId)/collectibles/$(rewardId);
       }
 
       function signedIn() {
@@ -169,8 +170,52 @@ service cloud.firestore {
             && data.kind in ['adult', 'child']
             && data.avatar is map
             && data.partyIds is list
-            && data.partyIds.size() <= getAfter(worldPath()).data.ruleset.partySize
             && data.archived is bool;
+        }
+        // The party fits partySize, except that a party above a lowered size may only lose members.
+        function validPartyChange() {
+          return !changed().hasAny(['partyIds'])
+            || newDoc().partyIds.size() <= getAfter(worldPath()).data.ruleset.partySize
+            || newDoc().partyIds.hasOnly(resource.data.partyIds);
+        }
+        function balanceBefore() {
+          return resource.data.get('tokens', 0);
+        }
+
+        // ADR 0008: tokens change only by increment(), in the batch that completes
+        // the task named in tokensFrom, and by exactly that task's tokens.
+        function earns() {
+          let taskId = newDoc().tokensFrom;
+          return isOwnerOf(profileId)
+            && changed().hasOnly(['tokens', 'tokensFrom'])
+            && taskId is string
+            && exists(taskPath(taskId))
+            && get(taskPath(taskId)).data.status == 'open'
+            && getAfter(taskPath(taskId)).data.status == 'done'
+            && getAfter(taskPath(taskId)).data.profileId == profileId
+            && newDoc().tokens == balanceBefore() + getAfter(taskPath(taskId)).data.tokens;
+        }
+        // ADR 0008: ... or in the batch that creates the reward named in tokensFor,
+        // by exactly its price, and never below zero. The balance is the server's,
+        // so two offline devices cannot spend the same tokens twice.
+        function spends() {
+          let rewardId = newDoc().tokensFor;
+          return isOwnerOf(profileId)
+            && changed().hasOnly(['tokens', 'tokensFor'])
+            && rewardId is string
+            && !exists(rewardPath(rewardId))
+            && existsAfter(rewardPath(rewardId))
+            && getAfter(rewardPath(rewardId)).data.profileId == profileId
+            && newDoc().tokens == balanceBefore() - getAfter(rewardPath(rewardId)).data.price
+            && newDoc().tokens >= 0;
+        }
+
+        // ADR 0011: an admin restarting the universe clears a profile's balance, its reasons and its party.
+        function restarts() {
+          return isAdmin()
+            && changed().hasOnly(['tokens', 'tokensFrom', 'tokensFor', 'partyIds'])
+            && !newDoc().keys().hasAny(['tokens', 'tokensFrom', 'tokensFor'])
+            && newDoc().partyIds.size() == 0;
         }
 
         allow read: if isMember();
@@ -185,11 +230,14 @@ service cloud.firestore {
           && validMetaOnCreate();
         // `kind` never changes and adult profiles are never archived, so every
         // world always keeps at least one adult profile, and therefore an admin.
-        allow update: if validProfile(newDoc()) && (
+        allow update: if validProfile(newDoc()) && validPartyChange() && (
             (isAdmin()
               && changed().hasOnly(['displayName', 'avatar', 'archived'])
               && (newDoc().archived == false || resource.data.kind == 'child'))
             || (isOwnerOf(profileId) && changed().hasOnly(['avatar', 'partyIds']))
+            || earns()
+            || spends()
+            || restarts()
           );
         allow delete: if false;
       }
@@ -217,7 +265,8 @@ service cloud.firestore {
         allow update: if isAdmin()
           && changed().hasOnly(['title', 'cadence', 'level', 'assignedTo', 'question', 'big', 'active'])
           && validTaskDef(newDoc());
-        allow delete: if false;
+        // Only when an admin restarts the universe (ADR 0011).
+        allow delete: if isAdmin();
       }
 
       // ---------------------------------------------------------------------
@@ -295,15 +344,39 @@ service cloud.firestore {
         // Only the owner completes, and only from open to done. If the task has
         // a question, completing requires answering yes.
         function ownerCompletes() {
+          let after = getAfter(profilePath(resource.data.profileId)).data;
           return isOwnerOf(resource.data.profileId)
             && resource.data.status == 'open'
             && newDoc().status == 'done'
-            && changed().hasOnly(['status', 'doneAt', 'answer', 'talkFlag', 'weekKey'])
+            && changed().hasOnly(['status', 'doneAt', 'answer', 'talkFlag', 'weekKey', 'tokens'])
             && newDoc().doneAt is timestamp
             && isWeekKey(newDoc().weekKey)
             && newDoc().talkFlag is bool
             && ((resource.data.question == null && newDoc().answer == null)
-              || (resource.data.question != null && newDoc().answer == 'yes'));
+              || (resource.data.question != null && newDoc().answer == 'yes'))
+            // The 0.8 shape (no tokens; its reward is checked by the rewards rule) is kept
+            // for writes queued before 0.9 (ADR 0008 §6). The 0.9 shape has tokens within
+            // range, added to the profile in the same batch.
+            && (!newDoc().keys().hasAny(['tokens'])
+              || (newDoc().tokens is int
+                && newDoc().tokens >= 1
+                && newDoc().tokens <= 10
+                && after.get('tokensFrom', null) == taskId
+                && after.tokens == get(profilePath(resource.data.profileId)).data.get('tokens', 0) + newDoc().tokens));
+        }
+
+        // ADR 0009: open to retired, by an admin, or by the owner on an ad hoc task
+        // they created for themselves. Nothing else changes with it.
+        function retires() {
+          return resource.data.status == 'open'
+            && newDoc().status == 'retired'
+            && changed().hasOnly(['status', 'retiredAt', 'retiredBy'])
+            && newDoc().retiredAt is timestamp
+            && newDoc().retiredBy == activeProfileId()
+            && (isAdmin()
+              || (isOwnerOf(resource.data.profileId)
+                && resource.data.source == 'adhoc'
+                && resource.data.createdBy == resource.data.profileId));
         }
 
         function ownerEditsOpen() {
@@ -325,41 +398,68 @@ service cloud.firestore {
 
         // Every branch requires an open task and excludes createdAt, so writing
         // a recurring task again can never reopen or replace an existing one.
-        allow update: if ownerCompletes() || ownerEditsOpen() || adminEditsOpen();
-        allow delete: if false;
+        allow update: if ownerCompletes() || ownerEditsOpen() || adminEditsOpen() || retires();
+        // Only when an admin restarts the universe (ADR 0011).
+        allow delete: if isAdmin();
       }
 
       // ---------------------------------------------------------------------
-      // rewards/{taskId}: created only in the batch that completes the task
+      // rewards/{rewardId}: from a completed task (before 0.9), or bought with tokens
 
-      match /rewards/{taskId} {
+      match /rewards/{rewardId} {
+        // From a task completed the 0.8 way, never together with tokens (ADR 0008 §6).
+        // Its id is the task's id.
+        function legacyReward() {
+          return isOwnerOf(newDoc().profileId)
+            && newDoc().keys().hasOnly(['profileId', 'weekKey', 'tier', 'openedAt', 'schemaVersion', 'createdAt'])
+            && newDoc().keys().hasAll(['profileId', 'weekKey', 'tier', 'openedAt', 'schemaVersion', 'createdAt'])
+            && validMetaOnCreate()
+            && isTier(newDoc().tier)
+            && newDoc().openedAt == null
+            && exists(taskPath(rewardId))
+            && get(taskPath(rewardId)).data.status == 'open'
+            && getAfter(taskPath(rewardId)).data.status == 'done'
+            && getAfter(taskPath(rewardId)).data.profileId == newDoc().profileId
+            && getAfter(taskPath(rewardId)).data.weekKey == newDoc().weekKey
+            && !getAfter(taskPath(rewardId)).data.keys().hasAny(['tokens']);
+        }
+        // ADR 0008 §4: bought with tokens, created opened, in the batch that spends its
+        // price and creates its collectible.
+        function boughtReward() {
+          return isOwnerOf(newDoc().profileId)
+            && newDoc().keys().hasOnly(['profileId', 'weekKey', 'tier', 'price', 'openedAt', 'schemaVersion', 'createdAt'])
+            && newDoc().keys().hasAll(['profileId', 'weekKey', 'tier', 'price', 'openedAt', 'schemaVersion', 'createdAt'])
+            && validMetaOnCreate()
+            && isTier(newDoc().tier)
+            && isWeekKey(newDoc().weekKey)
+            && newDoc().price is int
+            && newDoc().price >= 1
+            && newDoc().price <= 200
+            && newDoc().openedAt is timestamp
+            && getAfter(profilePath(newDoc().profileId)).data.get('tokensFor', null) == rewardId
+            && existsAfter(collectiblePath(rewardId));
+        }
+
         allow read: if isAdmin() || isOwnerOf(resource.data.profileId);
 
-        allow create: if isOwnerOf(newDoc().profileId)
-          && newDoc().keys().hasOnly(['profileId', 'weekKey', 'tier', 'openedAt', 'schemaVersion', 'createdAt'])
-          && newDoc().keys().hasAll(['profileId', 'weekKey', 'tier', 'openedAt', 'schemaVersion', 'createdAt'])
-          && validMetaOnCreate()
-          && isTier(newDoc().tier)
-          && newDoc().openedAt == null
-          && get(taskPath(taskId)).data.status == 'open'
-          && getAfter(taskPath(taskId)).data.status == 'done'
-          && getAfter(taskPath(taskId)).data.profileId == newDoc().profileId
-          && getAfter(taskPath(taskId)).data.weekKey == newDoc().weekKey;
+        allow create: if legacyReward() || boughtReward();
 
-        // Opened once, in the batch that creates its collectible.
+        // Opened once, in the batch that creates its collectible. A bought reward is
+        // created opened, so it is never updated.
         allow update: if isOwnerOf(resource.data.profileId)
           && resource.data.openedAt == null
           && changed().hasOnly(['openedAt'])
           && newDoc().openedAt is timestamp
-          && existsAfter(collectiblePath(taskId));
+          && existsAfter(collectiblePath(rewardId));
 
-        allow delete: if false;
+        // Only when an admin restarts the universe (ADR 0011).
+        allow delete: if isAdmin();
       }
 
       // ---------------------------------------------------------------------
-      // collectibles/{taskId}: created only in the batch that opens the reward
+      // collectibles/{rewardId}: created only in the batch that opens or buys the reward
 
-      match /collectibles/{taskId} {
+      match /collectibles/{rewardId} {
         function validNickname(data) {
           return optionalText(data.nickname, 30);
         }
@@ -377,19 +477,43 @@ service cloud.firestore {
           && newDoc().reserveAt == null
           && newDoc().obtainedAt is timestamp
           && isWeekKey(newDoc().obtainedWeekKey)
-          && get(rewardPath(taskId)).data.openedAt == null
-          && getAfter(rewardPath(taskId)).data.openedAt != null
-          && newDoc().tier == get(rewardPath(taskId)).data.tier
-          && newDoc().profileId == get(rewardPath(taskId)).data.profileId;
+          && (
+            // Legacy: opening a reward from before 0.9.
+            (exists(rewardPath(rewardId))
+              && get(rewardPath(rewardId)).data.openedAt == null
+              && getAfter(rewardPath(rewardId)).data.openedAt != null
+              && newDoc().tier == get(rewardPath(rewardId)).data.tier
+              && newDoc().profileId == get(rewardPath(rewardId)).data.profileId)
+            // Bought: the reward is created in this batch.
+            || (!exists(rewardPath(rewardId))
+              && existsAfter(rewardPath(rewardId))
+              && getAfter(rewardPath(rewardId)).data.keys().hasAny(['price'])
+              && newDoc().tier == getAfter(rewardPath(rewardId)).data.tier
+              && newDoc().profileId == getAfter(rewardPath(rewardId)).data.profileId)
+          );
+
+        // ADR 0010: anyone takes a collectible from the reserve into their own party. It changes
+        // owner and leaves the reserve, in the batch that puts its id in the taker's party.
+        function takes() {
+          return isMember()
+            && activeProfileId() != null
+            && resource.data.reserveAt != null
+            && changed().hasOnly(['profileId', 'reserveAt'])
+            && newDoc().profileId == activeProfileId()
+            && newDoc().reserveAt == null
+            && getAfter(profilePath(activeProfileId())).data.partyIds.hasAny([rewardId]);
+        }
 
         allow update: if validNickname(newDoc()) && (
             (isOwnerOf(resource.data.profileId)
               && changed().hasOnly(['nickname', 'reserveAt'])
               && (newDoc().reserveAt == null || newDoc().reserveAt is timestamp))
             || (isAdmin() && changed().hasOnly(['nickname']))
+            || takes()
           );
 
-        allow delete: if false;
+        // Only when an admin restarts the universe (ADR 0011).
+        allow delete: if isAdmin();
       }
     }
   }

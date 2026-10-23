@@ -12,8 +12,8 @@ import { screenBar } from '../bar';
  * The showcase: the latest collectibles that went to the reserve, from everyone (SPEC.md §6).
  * It shows art and name, and tapping one shows it larger with its tier name. It never shows the
  * owner, a date or a count (SPEC.md §2), and the store does not hand over the owner at all.
- * An admin can also rename any of them (moderation). A person can bring one of their own back
- * into the party from here (the item tells nobody else it is theirs); nothing here deletes.
+ * An admin can also rename any of them (moderation). Anyone can take one into their own party from here,
+ * whoever it came from, and it becomes theirs with its name (ADR 0010); nothing here deletes.
  */
 export const renderShowcase: WorldScreen = (ctx, root, { worldId }) => {
   const problem = h('div');
@@ -25,7 +25,7 @@ export const renderShowcase: WorldScreen = (ctx, root, { worldId }) => {
   let isAdmin = false;
   let selected: string | null = null;
   let profile: Profile | null = null;
-  /** The active profile's own collectibles, which is how an item of theirs is known to be theirs. */
+  /** The active profile's own collectibles: the party's members, which are who may leave when it is full. */
   let owned: Collectible[] | null = null;
   const controls = createPartyControls(ctx, worldId, () => (profile && ruleset && owned ? { profile, ruleset, owned } : null));
   const renamer = createRenamer(ctx, worldId, () => draw());
@@ -36,11 +36,8 @@ export const renderShowcase: WorldScreen = (ctx, root, { worldId }) => {
     draw();
   };
 
-  /** The choices to bring the item back into the party, when it is the active profile's own. */
-  const ownOf = (id: string): HTMLElement | null => {
-    const own = owned?.find((collectible) => collectible.id === id);
-    return own ? controls.choices(own) : null;
-  };
+  /** The choices to take the item into the party: anyone may, whoever it came from (ADR 0010). */
+  const takeChoices = (item: ShowcaseItem): HTMLElement | null => controls.choices(item, true);
 
   function draw(): void {
     if (items === null) return;
@@ -52,7 +49,7 @@ export const renderShowcase: WorldScreen = (ctx, root, { worldId }) => {
         entry ? artElement(ctx.theme, entry.art, 'reveal-art') : null,
         renamer.tag(shown, isAdmin),
         h('p', { class: 'reveal-tier' }, ctx.theme.tiers[shown.tier]),
-        ownOf(shown.id),
+        takeChoices(shown),
         h('button', { onClick: close }, ctx.text('showcase.close')),
       ];
       detail.replaceChildren(...parts.flatMap((part) => (part ? [part] : [])));

@@ -9,7 +9,10 @@
  */
 import {
   doc,
+  deleteField,
   getDoc,
+  getDocsFromServer,
+  increment,
   getDocFromCache,
   limit as limitTo,
   onSnapshot,
@@ -27,8 +30,9 @@ import { signInAnonymously, type Auth } from 'firebase/auth';
 import { weekKey } from '../../core/calendar';
 import { nicknameTooLong, normaliseNickname } from '../../core/collection';
 import { assertSymbolAllowed } from '../symbols';
-import { oddsProblem } from '../../core/draw';
 import { checkPartyChange } from '../../core/party';
+import { canRetire } from '../../core/tasks';
+import { isPartySize, isTokenAmount, isTokenPrice, tokenRulesProblem } from '../../core/tokens';
 import { taskDefProblem } from '../../core/taskDefs';
 import { assertPlanAllowed } from '../plan';
 import { newRecurringTaskProblem, settleRecurringWrites } from '../recurring';
@@ -45,6 +49,7 @@ import {
   type Profile,
   type RandomInt,
   type Reward,
+  type RewardId,
   type Task,
   type TaskDef,
   type Uid,
@@ -55,6 +60,7 @@ import {
 import { randomWorldId } from '../../core/random';
 import {
   DataStoreError,
+  type CompleteTaskInput,
   type DataStore,
   type Observer,
   type ObserverError,
@@ -79,6 +85,7 @@ import {
   encodeRewardOpening,
   encodeTask,
   encodeTaskCompletion,
+  encodeTaskRetirement,
   encodeTaskDef,
   encodeWorld,
 } from './converters';
@@ -105,6 +112,9 @@ export interface FirestoreStoreOptions {
   clock: Clock;
   randomInt: RandomInt;
 }
+
+/** Documents deleted per batch when restarting the universe (a batch holds at most 500 writes). */
+const RESTART_BATCH = 200;
 
 const invalid = (message: string) => new DataStoreError('invalid-argument', message);
 const denied = (message: string) => new DataStoreError('permission-denied', message);
@@ -258,19 +268,54 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
           (error) => onError?.(toDataStoreError(error)),
         ),
 
-      setTierOdds: (worldId, tierOdds) =>
-        write(undefined, async () => {
-          for (const level of TIERS) {
-            const problem = oddsProblem(tierOdds[level]);
-            if (problem) throw invalid(`The reward odds of level ${level} are not valid (${problem})`);
-          }
-          await updateDoc(worldDoc(db, worldId), { 'ruleset.tierOdds': tierOdds });
-        }),
-
       setShowcaseSize: (worldId, size) =>
         write(undefined, async () => {
           if (!isShowcaseSize(size)) throw invalid(`The showcase size must be a whole number from 1 to ${LIMITS.showcaseSizeMax}`);
           await updateDoc(worldDoc(db, worldId), { 'ruleset.showcaseSize': size });
+        }),
+
+      setTokenRules: (worldId, rules) =>
+        write(undefined, async () => {
+          const problem = tokenRulesProblem(rules);
+          if (problem) throw invalid(`The token rules are not valid (${problem})`);
+          await updateDoc(worldDoc(db, worldId), {
+            'ruleset.tokensPerLevel': rules.tokensPerLevel,
+            'ruleset.tokenPrices': rules.tokenPrices,
+          });
+        }),
+
+      setPartySize: (worldId, size) =>
+        write(undefined, async () => {
+          if (!isPartySize(size)) throw invalid(`The party size must be a whole number from 1 to ${LIMITS.partySizeMax}`);
+          await updateDoc(worldDoc(db, worldId), { 'ruleset.partySize': size });
+        }),
+
+      restartUniverse: (worldId) =>
+        write(undefined, async () => {
+          // The server is read, not the cache, so nothing left behind is missed; without a connection this fails.
+          const [tasks, taskDefs, rewards, collectibles, profiles] = await Promise.all([
+            getDocsFromServer(tasksCollection(db, worldId)),
+            getDocsFromServer(taskDefsCollection(db, worldId)),
+            getDocsFromServer(rewardsCollection(db, worldId)),
+            getDocsFromServer(collectiblesCollection(db, worldId)),
+            getDocsFromServer(profilesCollection(db, worldId)),
+          ]);
+          const refs = [tasks, taskDefs, rewards, collectibles].flatMap((snapshot) => snapshot.docs.map((d) => d.ref));
+          // Each batch is atomic, the whole is not: running it again deletes what is left.
+          for (let i = 0; i < refs.length; i += RESTART_BATCH) {
+            const batch = writeBatch(db);
+            for (const ref of refs.slice(i, i + RESTART_BATCH)) batch.delete(ref);
+            await batch.commit();
+          }
+          const batch = writeBatch(db);
+          for (const snapshot of profiles.docs) {
+            const data = snapshot.data();
+            const counted = data.tokens !== undefined || data.tokensFrom !== undefined || data.tokensFor !== undefined;
+            if (counted || (Array.isArray(data.partyIds) && data.partyIds.length > 0)) {
+              batch.update(snapshot.ref, { tokens: deleteField(), tokensFrom: deleteField(), tokensFor: deleteField(), partyIds: [] });
+            }
+          }
+          await batch.commit();
         }),
 
       createProfile(worldId, input) {
@@ -359,7 +404,7 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
         });
       },
 
-      completeTask: (worldId, taskId, input) => {
+      completeTask: (worldId, taskId, input: CompleteTaskInput) => {
         const doneAt = clock();
         return write(undefined, async () => {
           const [worldSnapshot, taskSnapshot] = await Promise.all([
@@ -371,25 +416,38 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
           if (!world || !task) throw new DataStoreError('not-found', `Task ${taskId} does not exist`);
           if (task.question !== null && input.answer !== 'yes') throw invalid('A task with a question is completed by answering yes');
           if (task.question === null && input.answer !== null) throw invalid('A task without a question has no answer');
-          if (!(TIERS as readonly string[]).includes(input.rewardTier)) throw invalid(`Unknown reward tier: ${String(input.rewardTier)}`);
-          const completionWeek = weekKey(doneAt, world.ruleset.timezone);
-          const reward: Reward = {
-            schemaVersion: SCHEMA_VERSION,
-            createdAt: doneAt,
-            id: taskId,
-            profileId: task.profileId,
-            weekKey: completionWeek,
-            tier: input.rewardTier,
-            openedAt: null,
-          };
-          // One batch: the rules accept the reward only together with the task moving to done.
+          if (!isTokenAmount(input.tokens)) throw invalid(`A task earns a whole number of tokens from 1 to ${LIMITS.tokensPerLevelMax}`);
+          // One batch: the rules accept the tokens only together with the task moving to done.
           const batch = writeBatch(db);
           batch.update(
             taskDoc(db, worldId, taskId),
-            encodeTaskCompletion({ doneAt, answer: input.answer, talkFlag: input.talkFlag, weekKey: completionWeek }),
+            encodeTaskCompletion({
+              doneAt,
+              answer: input.answer,
+              talkFlag: input.talkFlag,
+              weekKey: weekKey(doneAt, world.ruleset.timezone),
+              tokens: input.tokens,
+            }),
           );
-          batch.set(rewardDoc(db, worldId, taskId), encodeReward(reward));
+          batch.update(profileDoc(db, worldId, task.profileId), { tokens: increment(input.tokens), tokensFrom: taskId });
           await batch.commit();
+        });
+      },
+
+      retireTask: (worldId, taskId) => {
+        const retiredAt = clock();
+        return write(undefined, async () => {
+          const [taskSnapshot, memberSnapshot] = await Promise.all([
+            readDoc(taskDoc(db, worldId, taskId)),
+            readDoc(memberDoc(db, worldId, requireUid())),
+          ]);
+          const task = taskSnapshot.exists() ? decodeTask(taskSnapshot) : null;
+          if (!task) throw new DataStoreError('not-found', `Task ${taskId} does not exist`);
+          const member = memberSnapshot.exists() ? decodeMember(memberSnapshot) : null;
+          const profileSnapshot = member?.profileId ? await readDoc(profileDoc(db, worldId, member.profileId)) : null;
+          const active = profileSnapshot?.exists() ? decodeProfile(profileSnapshot) : null;
+          if (!active || !canRetire(task, active)) throw denied('This profile cannot retire this task');
+          await updateDoc(taskDoc(db, worldId, taskId), encodeTaskRetirement(retiredAt, active.id));
         });
       },
 
@@ -478,6 +536,66 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
         }),
     },
 
+    tokens: {
+      observeBalance: (worldId, profileId, onValue, onError) =>
+        onSnapshot(
+          profileDoc(db, worldId, profileId),
+          (snapshot) => onValue(snapshot.exists() ? ((snapshot.data()?.tokens as number | undefined) ?? 0) : 0),
+          (error) => onError?.(toDataStoreError(error)),
+        ),
+
+      buyReward(worldId, input) {
+        const rewardId: RewardId = doc(rewardsCollection(db, worldId)).id;
+        const boughtAt = clock();
+        return write({ rewardId }, async () => {
+          checkText('Slot', input.slot, LIMITS.slot);
+          if (!(TIERS as readonly string[]).includes(input.tier)) throw invalid(`Unknown reward tier: ${String(input.tier)}`);
+          if (!isTokenPrice(input.price)) throw invalid(`A price is a whole number from 1 to ${LIMITS.tokenPriceMax}`);
+          const [worldSnapshot, memberSnapshot] = await Promise.all([
+            readDoc(worldDoc(db, worldId)),
+            readDoc(memberDoc(db, worldId, requireUid())),
+          ]);
+          const world = worldSnapshot.exists() ? decodeWorld(worldSnapshot) : null;
+          const member = memberSnapshot.exists() ? decodeMember(memberSnapshot) : null;
+          if (!world) throw new DataStoreError('not-found', `World ${worldId} does not exist`);
+          if (!member?.profileId) throw denied('Choose a profile first');
+          const profileId = member.profileId;
+          const profileSnapshot = await readDoc(profileDoc(db, worldId, profileId));
+          const balance = profileSnapshot.exists() ? ((profileSnapshot.data()?.tokens as number | undefined) ?? 0) : 0;
+          if (balance < input.price) throw invalid('The balance does not cover the price');
+          const week = weekKey(boughtAt, world.ruleset.timezone);
+          const reward: Reward = {
+            schemaVersion: SCHEMA_VERSION,
+            createdAt: boughtAt,
+            id: rewardId,
+            profileId,
+            weekKey: week,
+            tier: input.tier,
+            openedAt: boughtAt,
+            price: input.price,
+          };
+          const collectible: Collectible = {
+            schemaVersion: SCHEMA_VERSION,
+            createdAt: boughtAt,
+            id: rewardId,
+            profileId,
+            slot: input.slot,
+            tier: input.tier,
+            nickname: null,
+            obtainedWeekKey: week,
+            obtainedAt: boughtAt,
+            reserveAt: null,
+          };
+          // One batch: the rules accept the reward only together with the price leaving the balance and its collectible.
+          const batch = writeBatch(db);
+          batch.update(profileDoc(db, worldId, profileId), { tokens: increment(-input.price), tokensFor: rewardId });
+          batch.set(rewardDoc(db, worldId, rewardId), encodeReward(reward));
+          batch.set(collectibleDoc(db, worldId, rewardId), encodeCollectible(collectible));
+          await batch.commit();
+        });
+      },
+    },
+
     rewards: {
       openReward(worldId, rewardId, input) {
         const openedAt = clock();
@@ -555,6 +673,51 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
           const batch = writeBatch(db);
           for (const id of change.toReserve) batch.update(collectibleDoc(db, worldId, id), encodeReserveAt(now));
           for (const id of change.fromReserve) batch.update(collectibleDoc(db, worldId, id), encodeReserveAt(null));
+          const same = profile.partyIds.length === change.partyIds.length && profile.partyIds.every((id, i) => id === change.partyIds[i]);
+          if (!same) batch.update(profileDoc(db, worldId, profileId), { partyIds: change.partyIds });
+          await batch.commit();
+        });
+      },
+
+      takeFromReserve(worldId, collectibleId, change) {
+        const now = clock();
+        return write(undefined, async () => {
+          if (!change.partyIds.includes(collectibleId) || !change.fromReserve.includes(collectibleId)) {
+            throw invalid('The taken collectible joins the party and leaves the reserve');
+          }
+          const ids = [...new Set([...change.partyIds, ...change.toReserve, ...change.fromReserve])];
+          const [worldSnapshot, memberSnapshot, ...collectibleSnapshots] = await Promise.all([
+            readDoc(worldDoc(db, worldId)),
+            readDoc(memberDoc(db, worldId, requireUid())),
+            ...ids.map((id) => readDoc(collectibleDoc(db, worldId, id))),
+          ]);
+          const world = worldSnapshot.exists() ? decodeWorld(worldSnapshot) : null;
+          const member = memberSnapshot.exists() ? decodeMember(memberSnapshot) : null;
+          if (!world) throw new DataStoreError('not-found', `World ${worldId} does not exist`);
+          if (!member?.profileId) throw denied('Choose a profile first');
+          const profileId = member.profileId;
+          const profileSnapshot = await readDoc(profileDoc(db, worldId, profileId));
+          const profile = profileSnapshot.exists() ? decodeProfile(profileSnapshot) : null;
+          if (!profile) throw new DataStoreError('not-found', `Profile ${profileId} does not exist`);
+          const current = await Promise.all(
+            profile.partyIds.filter((id) => !ids.includes(id)).map((id) => readDoc(collectibleDoc(db, worldId, id))),
+          );
+          const known = [...collectibleSnapshots, ...current].flatMap((snapshot) => {
+            const collectible = snapshot.exists() ? decodeCollectible(snapshot) : null;
+            return collectible ? [collectible] : [];
+          });
+          const taken = known.find((collectible) => collectible.id === collectibleId);
+          if (!taken) throw new DataStoreError('not-found', `Collectible ${collectibleId} does not exist`);
+          if (taken.reserveAt === null) throw denied('Only what is in the reserve can be taken');
+          // Once taken it is the profile's own, coming from the reserve.
+          const owned = known.filter((collectible) => collectible.profileId === profileId && collectible.id !== collectibleId).concat({ ...taken, profileId });
+          const problem = checkPartyChange(profile, owned, change, world.ruleset.partySize);
+          if (problem) throw invalid(`The party change is not valid (${problem})`);
+
+          const batch = writeBatch(db);
+          batch.update(collectibleDoc(db, worldId, collectibleId), { profileId, ...encodeReserveAt(null) });
+          for (const id of change.toReserve) batch.update(collectibleDoc(db, worldId, id), encodeReserveAt(now));
+          for (const id of change.fromReserve) if (id !== collectibleId) batch.update(collectibleDoc(db, worldId, id), encodeReserveAt(null));
           const same = profile.partyIds.length === change.partyIds.length && profile.partyIds.every((id, i) => id === change.partyIds[i]);
           if (!same) batch.update(profileDoc(db, worldId, profileId), { partyIds: change.partyIds });
           await batch.commit();

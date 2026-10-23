@@ -1,12 +1,13 @@
 import { displayName, nicknameTooLong, normaliseNickname } from '../core/collection';
 import { LIMITS, type Collectible, type Profile, type Ruleset, type TaskId, type WorldId } from '../core/model';
 import { collectibleState } from '../core/party';
+import { DataStoreError } from '../data/DataStore';
 import type { CatalogSlot } from '../theme/types';
 import type { AppContext } from './context';
 import { artElement } from './art';
 import { h } from './dom';
 
-type Deps = Pick<AppContext, 'store' | 'theme' | 'text' | 'settle'>;
+type Deps = Pick<AppContext, 'store' | 'theme' | 'text' | 'settle' | 'notify'>;
 
 /** What the party controls need to know; null while the data has not arrived. */
 export interface PartyState {
@@ -49,6 +50,15 @@ export function createPartyControls(ctx: Deps, worldId: WorldId, state: () => Pa
     ctx.settle(ctx.store.collectibles.arrangeParty(worldId, profile.id, { partyIds, toReserve, fromReserve }).settled);
   };
 
+  /** Takes a collectible from the reserve into the party, whoever owned it (ADR 0010). */
+  const take = (takenId: TaskId, partyIds: TaskId[], toReserve: TaskId[], fromReserve: TaskId[]) => {
+    ctx.store.collectibles.takeFromReserve(worldId, takenId, { partyIds, toReserve, fromReserve }).settled.catch((error: unknown) => {
+      // Someone took it first: the server refused, and the screen already shows the reserve as it is.
+      if (error instanceof DataStoreError && error.code === 'permission-denied') ctx.notify('notice.tookFirst');
+      else ctx.settle(Promise.reject(error));
+    });
+  };
+
   return {
     /** Sends a collectible to the reserve, whether it is in the party or pending. */
     toReserve(collectible: Collectible): void {
@@ -60,17 +70,22 @@ export function createPartyControls(ctx: Deps, worldId: WorldId, state: () => Pa
 
     /**
      * What can be done with a pending or reserved collectible: join the party, or, when it is
-     * full, choose who leaves it. Null for a collectible already in the party.
+     * full, choose who leaves it. Null for a collectible already in the party. With `taking`, the collectible
+     * is one in the reserve that may belong to someone else, and the person takes it (ADR 0010).
      */
-    choices(collectible: Collectible): HTMLElement | null {
+    choices(collectible: Pick<Collectible, 'id' | 'reserveAt'>, taking = false): HTMLElement | null {
       const current = state();
       if (!current || collectibleState(collectible, current.profile.partyIds) === 'party') return null;
       const { profile, ruleset, owned } = current;
       const party = profile.partyIds;
       const fromReserve = collectible.reserveAt === null ? [] : [collectible.id];
+      const join = (partyIds: TaskId[], toReserve: TaskId[]) =>
+        taking ? take(collectible.id, partyIds, toReserve, fromReserve) : arrange(profile, partyIds, toReserve, fromReserve);
+      // A party above a lowered size can only lose members: nobody joins until it is back within the size.
+      if (party.length > ruleset.partySize) return h('div', { class: 'choices' }, h('p', {}, ctx.text('party.overFull')));
       if (party.length < ruleset.partySize) {
         return h('div', { class: 'choices' },
-          h('button', { class: 'primary', onClick: () => arrange(profile, [...party, collectible.id], [], fromReserve) }, ctx.text(collectible.reserveAt === null ? 'party.join' : 'party.bringBack')),
+          h('button', { class: 'primary', onClick: () => join([...party, collectible.id], []) }, ctx.text(collectible.reserveAt === null ? 'party.join' : 'party.bringBack')),
         );
       }
       const byId = new Map(owned.map((c) => [c.id, c]));
@@ -83,7 +98,7 @@ export function createPartyControls(ctx: Deps, worldId: WorldId, state: () => Pa
           return [
             h('button', {
               class: 'swap',
-              onClick: () => arrange(profile, party.map((id) => (id === memberId ? collectible.id : id)), [memberId], fromReserve),
+              onClick: () => join(party.map((id) => (id === memberId ? collectible.id : id)), [memberId]),
             }, artElement(ctx.theme, entry.art, 'swap-art'), ctx.text('party.swap', { name: nameOf(ctx, member) })),
           ];
         }),

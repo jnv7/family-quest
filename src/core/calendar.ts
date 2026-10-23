@@ -118,16 +118,3 @@ export function lastDayOfPeriod(cadence: Cadence, key: PeriodKey): DateKey {
       throw new Error(`Unknown cadence: ${String(cadence)}`);
   }
 }
-
-/** The Monday and the Sunday of an ISO week, inclusive. */
-export function weekRange(key: WeekKey): { start: DateKey; end: DateKey } {
-  const end = lastDayOfPeriod('weekly', key);
-  return { start: addDays(end, -6), end };
-}
-
-/** How a week relates to now: this week, the one before, or any other. Children do not know ISO week numbers. */
-export function weekRelation(key: WeekKey, now: Millis, timeZone: string): 'this' | 'last' | 'other' {
-  if (key === weekKey(now, timeZone)) return 'this';
-  const sameTimeLastWeek = Date.parse(`${addDays(dateKey(now, timeZone), -7)}T12:00:00Z`);
-  return key === weekKey(sameTimeLastWeek, timeZone) ? 'last' : 'other';
-}

@@ -45,8 +45,8 @@
       "gender": "m"
     },
     "collectible": {
-      "singular": "bicho",
-      "plural": "bichos",
+      "singular": "marujo",
+      "plural": "marujos",
       "gender": "m"
     },
     "party": {
@@ -57,6 +57,11 @@
     "reserve": {
       "singular": "taberna",
       "plural": "tabernas",
+      "gender": "f"
+    },
+    "token": {
+      "singular": "tocha",
+      "plural": "tochas",
       "gender": "f"
     }
   },
@@ -74,6 +79,40 @@
     },
     "high": {
       "image": "assets/rewards/high.svg"
+    }
+  },
+  "tokenArt": {
+    "emoji": "🔥"
+  },
+  "vault": {
+    "invite": {
+      "low": "Perto da entrada, ainda há luz.",
+      "mid": "Mais fundo, as tochas tremem.",
+      "high": "No fundo da gruta, o maior tesouro espera por ti."
+    },
+    "background": {
+      "image": "assets/vault/cave.svg"
+    },
+    "aspectRatio": 1,
+    "spots": {
+      "low": {
+        "x": 12,
+        "y": 6,
+        "width": 76,
+        "height": 27
+      },
+      "mid": {
+        "x": 12,
+        "y": 36,
+        "width": 76,
+        "height": 27
+      },
+      "high": {
+        "x": 12,
+        "y": 66,
+        "width": 76,
+        "height": 27
+      }
     }
   },
   "profileSymbols": [

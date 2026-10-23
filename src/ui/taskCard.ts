@@ -17,6 +17,8 @@ export interface TaskCardOptions {
   action?: Child;
   /** Anything that belongs under the title, such as the plan form of a big task. */
   below?: Child[];
+  /** Something at the card's far corner, such as the retire button; never next to the action. */
+  corner?: Child;
   /** A task the person has not seen yet: it carries a "novo" marker (never a number). */
   isNew?: boolean;
   className?: string;
@@ -27,7 +29,7 @@ export interface TaskCardOptions {
  * the title, large, then chips for how it repeats, its plan and whether it has a question, with
  * the action first. The order of the cards comes from `sortForBoard`, never from the screen.
  */
-export function taskCard(ctx: AppContext, { task, def, timeZone, action, below = [], isNew = false, className = '' }: TaskCardOptions): HTMLLIElement {
+export function taskCard(ctx: AppContext, { task, def, timeZone, action, below = [], corner, isNew = false, className = '' }: TaskCardOptions): HTMLLIElement {
   const due = timeZone === null ? null : taskPlanAlert(task, ctx.clock(), timeZone);
   const chips = [
     isNew && h('span', { class: 'tag new' }, ctx.text('card.new')),
@@ -35,6 +37,7 @@ export function taskCard(ctx: AppContext, { task, def, timeZone, action, below =
     task.plan && h('span', { class: 'tag plan' }, `${dayLabel(task.plan.date)} · ${task.plan.trigger}`),
   ].filter(Boolean) as HTMLElement[];
   return h('li', { class: `task-card ${due ? `planned-${due} ` : ''}${className}`.trim(), 'data-task-id': task.id },
+    corner,
     action && h('div', { class: 'task-actions' }, action),
     h('div', { class: 'task-body' },
       h('span', { class: 'task-title' }, task.title),

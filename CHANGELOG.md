@@ -6,6 +6,95 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.9.11] — 2026-10-23
+
+### Added
+
+- **Restarting the universe** (ADR 0011, the product owner's request): the last thing in management is a button in another colour. It tells what will go and that it cannot be undone, and asks the person to type "REINICIAR" before the final button works. It deletes every task, task definition, reward and collectible, and clears every profile's tokens and party; the profiles, devices and `ruleset` stay. `worlds.restartUniverse` (both adapters, with the contract suite) is the only operation that deletes; the rules allow it to an admin only, with new rules tests. This breaks "nothing is deleted" on purpose, and `CLAUDE.md`, `CONTRIBUTING.md` and `SPEC.md` say so. **The product owner must publish the rules** (`firebase deploy --only firestore:rules`).
+
+## [0.9.10] — 2026-10-23
+
+### Changed
+
+- The `party` on the home is now a grid of small buttons, each with a collectible's art and name, like the `showcase`. Tapping one opens its card, with the name tag (tap to rename), its tier and the actions: send it to the reserve, or close. The pending ones keep their cards.
+
+## [0.9.9] — 2026-10-23
+
+### Changed (ADR 0010, the product owner's decision)
+
+- Anyone can take a collectible from the reserve into their own party, whoever it came from or named. Taking changes its owner and keeps its name. `collectibles.takeFromReserve` (both adapters, with the contract suite) is one batch; a collectible someone took first is `permission-denied`, and the screen says "Alguém foi mais rápido.". The `showcase` detail offers the same choices as the vault (join, or who leaves when the party is full), and still shows nobody's owner. **The product owner must publish the rules** (`firebase deploy --only firestore:rules`) before devices can take. New rules tests cover the taking, the refusals and the race.
+
+## [0.9.8] — 2026-10-23
+
+### Changed (the product owner's first try of 0.9)
+
+- The pirate theme calls the collectible a `marujo` (it was `bicho`); `marujo` and `marujos` join the words the theme-leak lint forbids outside `src/themes/`.
+- The cave picture in the vault is shorter (square instead of 9:16), and the rewards found before 0.9 now come under it.
+- A completion the server refuses (the task returns to the list) now says "Isto não ficou guardado…" instead of failing silently, and takes back the token icons it had shown.
+
+## [0.9.7] — 2026-10-23
+
+Release candidate. No new behaviour.
+
+### Changed
+
+- `SPEC.md` was checked against the code, section by section for the vault, the tokens, retiring and management, and `docs/architecture.md` describes the balance, the adapters, the vault and retiring. The pirate catalogue has 8 collectibles per tier, and `validate-theme` passes for the three themes.
+- What remains is for the product owner: two real phones of one profile in airplane mode (both buy with the same tokens, and each completes a different task), and a real family week with tokens.
+
+## [0.9.6] — 2026-10-23
+
+### Added
+
+- Retiring an open task (ADR 0009). A task card has a "⋯" button at its far corner, shown only when the active profile may retire it (`canRetire`: an adult any open task, a child only an ad hoc task made for themselves). It opens a menu with "Retirar tarefa"; choosing it asks once in the card ("Retirar? Não volta a aparecer."), and confirming calls `retireTask`. The card leaves through the observers. It is in the check-in (own tasks) and in the adults' view (any open task of a profile), never on the board and never next to "Feito", so it adds no tap to completing a task.
+- Retired tasks are hidden everywhere (the lists only read open tasks, and the adults' view's finished list reads only done ones). A retired recurring task is not generated again for its period and the next period creates its task as usual; one created today and retired still counts for a child's daily limit. Tests cover each.
+
+## [0.9.5] — 2026-10-23
+
+### Changed
+
+- **The switch to tokens.** Completing a task earns tokens by its level (1, 2 and 4 by default), computed by `tokensFor` and written with `completeTask`; no reward is created. After "Feito" the check-in shows the tokens as a row of icons, with the number only in its text alternative for screen readers. Undo and "Não" still write nothing. A child's own task is now `low`, so it earns 1.
+- **The vault is rewritten.** From top to bottom: the balance of the active profile (the one place a count is shown), "Já encontrados" (rewards from before 0.9, which open for free on any day, with "Abrir todos" for two or more), the depth, what has just been revealed, and the recent ones. The depth shows the three tiers as the theme lays them out, each with its art, invite line and price. A tier the balance covers can be chosen (it rises a little) and bought with "Abrir por N"; one it does not cover is dimmed and does nothing. The reveal offers the party controls (with who leaves when it is full, and a line when it is above its size), "Enviar para" the reserve, and "Mais tarde". When the server refuses a purchase because the tokens were spent on another device, the reveal goes away and a line says so.
+- The weekly opening of rewards is gone: the vault no longer groups by week or waits for an opening day.
+
+### Removed
+
+- `completeTaskWithReward`, `drawTier`, `tierOddsFor`, `oddsProblem`, `canOpen`, `weekRange`, `weekRelation`, and `openingDay` and `tierOdds` from `Ruleset` (stored worlds keep them; nothing reads them). The contract suite now stores a reward from before 0.9 through a seed hook of each adapter, since nothing creates one.
+
+## [0.9.4] — 2026-10-23
+
+### Added
+
+- Management has a "Recompensas" section (`src/ui/screens/tokenRules.ts`): six whole-number fields, the tokens each task level earns and the price of each tier, each beside the token icon. Saving runs `tokenRulesProblem` and says in one line what is wrong ("Os preços têm de subir: baixo < médio < alto."). It writes only the world's `tokensPerLevel` and `tokenPrices`, so it changes what is earned or bought from then on.
+- Management has a party size field (1–10) beside the reserve size (`src/ui/screens/partySize.ts`). Lowering it takes nobody out of a party: a party above the size shows `party.overFull` when something tries to join, and can still lose members.
+
+### Removed
+
+- The reward odds section (`odds.ts`) and `worlds.setTierOdds`, with their tests. The stored `tierOdds` keep their last values, so completion draws as before until 0.9.5.
+
+## [0.9.3] — 2026-10-23
+
+### Added
+
+- The theme package for tokens, with no visible change in the app yet. The schema (`schemas/theme.schema.json`) and `src/theme/types.ts` gain the `token` role (singular, plural and gender, so `{@token}`, `{@token.plural}` and the other forms work), `tokenArt`, and `vault`: an `invite` line per tier, and optionally a `background` with its `aspectRatio` and one `spot` per tier. `validate-theme` checks the three parts of the depth come together, lie within the background and do not overlap (`scripts/theme-vault.ts`); a vault background is budgeted like the map.
+- Pirate theme: `tocha`/`tochas` (f) with 🔥, the three spots from the cave mouth to its deep end on a new SVG background made for this repository (MIT, in `credits.json`), invite texts, and 12 new collectibles (4 per tier, 8 per tier in all). Minimal themes: `moeda`/`moedas` 🪙 and `grão`/`grãos` 🌾, with the tiers stacked.
+- `lint:theme-leak` also reports `tocha`, `tochas`, `torch` and `torches` outside `src/themes/`, with a test.
+
+## [0.9.2] — 2026-10-23
+
+### Added
+
+- Domain for tokens and retiring, with no visible change: `src/core/tokens.ts` (`tokensFor`, `priceOf`, `canAfford`, `tokenRulesProblem`, `isPartySize`), `canRetire` in `src/core/tasks.ts`, `Ruleset.tokensPerLevel` (1/2/4) and `tokenPrices` (5/12/25), `Task.tokens`, `retiredAt`, `retiredBy`, status `retired`, `Reward.price`, and the limits `tokensPerLevelMax`, `tokenPriceMax` and `partySizeMax`. `checkPartyChange` reports `too-many` only when someone joins a party above the size.
+- `DataStore`: `tasks.completeTask` (tokens, one batch with `increment()` on the profile), `tasks.retireTask`, `tokens.observeBalance` and `tokens.buyReward` (one batch: price, bought reward created opened, collectible), `worlds.setTokenRules` and `worlds.setPartySize`, in both adapters. The 0.8 completion is kept as `completeTaskWithReward`, which the check-in still calls.
+- The memory adapter applies balances as server-side increments and has `setOnline` (tests only): an offline device sees its own writes on the state it left, and its batches commit in order when it returns. The Firestore decoders accept retired tasks, fill in the token rules of worlds stored before 0.9, and leave the balance out of `Profile`.
+- Contract tests for earning, buying, the refused double spend of two offline devices of one profile (the exit criterion), the sum of two offline completions, retiring, and the new management values; the Firestore emulator suite runs them with `disableNetwork` and `enableNetwork`.
+
+## [0.9.1] — 2026-10-23
+
+### Changed
+
+- `firebase/firestore.rules` for tokens and retiring (ADR 0008 and 0009), with no change in `src/`, so the app behaves as 0.8. A profile's `tokens` change only by `increment()` in the batch that completes the task named in `tokensFrom` (by that task's `tokens`, 1–10) or creates the reward named in `tokensFor` (by its `price`, 1–200), and never below 0. A reward may now be bought (created opened, with a `price`, together with its collectible). A task may move from `open` to `retired`, by an admin or by the owner on an ad hoc task they made for themselves. The party size is checked only when `partyIds` changes, and a party above a lowered size may only lose members. The 0.8 completion path is kept, and never together with tokens.
+- New rules tests for earning, the 0.8 path, spending (including a double spend), the party above a lowered size and retiring. **The product owner must publish the rules** (`firebase deploy --only firestore:rules`) before 0.9.5 is pushed.
+
 ## [0.8.10] — 2026-10-22
 
 ### Added

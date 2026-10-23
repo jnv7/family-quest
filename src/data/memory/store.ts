@@ -7,8 +7,9 @@
  * observers show the server state again.
  */
 import { weekKey } from '../../core/calendar';
-import { oddsProblem } from '../../core/draw';
 import { checkPartyChange } from '../../core/party';
+import { canRetire } from '../../core/tasks';
+import { isPartySize, isTokenAmount, isTokenPrice, tokenRulesProblem } from '../../core/tokens';
 import { taskDefProblem } from '../../core/taskDefs';
 import { assertPlanAllowed } from '../plan';
 import { newRecurringTaskProblem, settleRecurringWrites } from '../recurring';
@@ -29,6 +30,7 @@ import {
   type ProfileId,
   type RandomInt,
   type Reward,
+  type RewardId,
   type Task,
   type TaskDef,
   type TaskDefId,
@@ -102,12 +104,27 @@ function canReadTasksOf(access: Access, profileId: ProfileId): boolean {
   return access.isAdmin || access.member.profileId === profileId;
 }
 
-export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOptions): DataStore {
+/** A memory device. `setOnline` is for tests only: it plays a device that loses and regains its connection. */
+export interface MemoryDataStore extends DataStore {
+  /**
+   * While offline the device sees the committed state as it was when it went offline, plus its own writes,
+   * and its batches are held. Back online they are committed in order, each accepted or refused on its own.
+   */
+  setOnline(online: boolean): void;
+}
+
+export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOptions): MemoryDataStore {
   const { clock, randomInt } = options;
   let signedInUid: Uid | null = null;
 
   /** Writes applied locally and not yet accepted or refused by the backend. */
   const pending = new Set<Batch>();
+
+  let online = true;
+  /** The committed state when the device went offline. */
+  let frozen: MemoryState | null = null;
+  /** Commits of batches made while offline, in order. */
+  const held: Array<() => void> = [];
 
   const requireUid = (): Uid => {
     if (signedInUid === null) throw new DataStoreError('unavailable', 'The device is not signed in');
@@ -116,7 +133,7 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
 
   /** Committed state with this device's pending writes on top. */
   function localView(): MemoryState {
-    const view = structuredClone(backend.state);
+    const view = structuredClone(online || frozen === null ? backend.state : frozen);
     for (const batch of pending) applyOps(view, batch.ops);
     return view;
   }
@@ -213,13 +230,15 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
     pending.add(batch);
     scheduleFlush();
     const settled = new Promise<void>((resolve, reject) => {
-      queueMicrotask(() => {
+      const run = () => {
         pending.delete(batch);
         const refusal = backend.commit(batch);
         scheduleFlush();
         if (refusal) reject(refusal);
         else resolve();
-      });
+      };
+      if (online) queueMicrotask(run);
+      else held.push(run);
     });
     return { result, settled };
   }
@@ -244,6 +263,18 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
   // The store
 
   return {
+    setOnline(value) {
+      if (value === online) return;
+      online = value;
+      if (!value) {
+        frozen = structuredClone(backend.state);
+        return;
+      }
+      frozen = null;
+      for (const run of held.splice(0)) run();
+      scheduleFlush();
+    },
+
     session: {
       async signIn() {
         signedInUid = options.uid;
@@ -319,20 +350,6 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
       observeProfiles: (worldId, onValue, onError) =>
         observeAsMember(worldId, ({ ws }) => ({ value: [...ws.profiles.values()] }), onValue, onError),
 
-      setTierOdds: (worldId, tierOdds) =>
-        submit(undefined, (view, uid) => {
-          const ws = requireWorld(view, worldId);
-          for (const level of TIERS) {
-            const problem = oddsProblem(tierOdds[level]);
-            if (problem) throw invalid(`The reward odds of level ${level} are not valid (${problem})`);
-          }
-          const ruleset = { ...ws.world.ruleset, tierOdds: structuredClone(tierOdds) };
-          return {
-            ops: [{ worldId, collection: 'world', id: worldId, patch: { ruleset } }],
-            check: (state) => (accessOf(state, worldId, uid)?.isAdmin ? null : denied('Only an admin changes the reward odds')),
-          };
-        }),
-
       setShowcaseSize: (worldId, size) =>
         submit(undefined, (view, uid) => {
           const ws = requireWorld(view, worldId);
@@ -341,6 +358,50 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
           return {
             ops: [{ worldId, collection: 'world', id: worldId, patch: { ruleset } }],
             check: (state) => (accessOf(state, worldId, uid)?.isAdmin ? null : denied('Only an admin changes the showcase size')),
+          };
+        }),
+
+      setTokenRules: (worldId, rules) =>
+        submit(undefined, (view, uid) => {
+          const ws = requireWorld(view, worldId);
+          const problem = tokenRulesProblem(rules);
+          if (problem) throw invalid(`The token rules are not valid (${problem})`);
+          const ruleset = {
+            ...ws.world.ruleset,
+            tokensPerLevel: structuredClone(rules.tokensPerLevel),
+            tokenPrices: structuredClone(rules.tokenPrices),
+          };
+          return {
+            ops: [{ worldId, collection: 'world', id: worldId, patch: { ruleset } }],
+            check: (state) => (accessOf(state, worldId, uid)?.isAdmin ? null : denied('Only an admin changes the token rules')),
+          };
+        }),
+
+      setPartySize: (worldId, size) =>
+        submit(undefined, (view, uid) => {
+          const ws = requireWorld(view, worldId);
+          if (!isPartySize(size)) throw invalid(`The party size must be a whole number from 1 to ${LIMITS.partySizeMax}`);
+          const ruleset = { ...ws.world.ruleset, partySize: size };
+          return {
+            ops: [{ worldId, collection: 'world', id: worldId, patch: { ruleset } }],
+            check: (state) => (accessOf(state, worldId, uid)?.isAdmin ? null : denied('Only an admin changes the party size')),
+          };
+        }),
+
+      restartUniverse: (worldId) =>
+        submit(undefined, (view, uid) => {
+          if (!online) throw new DataStoreError('unavailable', 'Restarting needs a connection');
+          const ws = requireWorld(view, worldId);
+          const ops: Op[] = [
+            ...[...ws.tasks.keys()].map((id): Op => ({ worldId, collection: 'tasks', id, delete: true })),
+            ...[...ws.taskDefs.keys()].map((id): Op => ({ worldId, collection: 'taskDefs', id, delete: true })),
+            ...[...ws.rewards.keys()].map((id): Op => ({ worldId, collection: 'rewards', id, delete: true })),
+            ...[...ws.collectibles.keys()].map((id): Op => ({ worldId, collection: 'collectibles', id, delete: true })),
+            ...[...ws.profiles.keys()].map((id): Op => ({ worldId, collection: 'profiles', id, reset: true })),
+          ];
+          return {
+            ops,
+            check: (state) => (accessOf(state, worldId, uid)?.isAdmin ? null : denied('Only an admin restarts the universe')),
           };
         }),
 
@@ -487,18 +548,8 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
           const task = requireTask(view, worldId, taskId);
           if (task.question !== null && input.answer !== 'yes') throw invalid('A task with a question is completed by answering yes');
           if (task.question === null && input.answer !== null) throw invalid('A task without a question has no answer');
-          if (!(TIERS as readonly string[]).includes(input.rewardTier)) throw invalid(`Unknown reward tier: ${String(input.rewardTier)}`);
+          if (!isTokenAmount(input.tokens)) throw invalid(`A task earns a whole number of tokens from 1 to ${LIMITS.tokensPerLevelMax}`);
           const doneAt = clock();
-          const completionWeek = weekKey(doneAt, ws.world.ruleset.timezone);
-          const reward: Reward = {
-            schemaVersion: SCHEMA_VERSION,
-            createdAt: doneAt,
-            id: taskId,
-            profileId: task.profileId,
-            weekKey: completionWeek,
-            tier: input.rewardTier,
-            openedAt: null,
-          };
           return {
             ops: [
               {
@@ -510,14 +561,40 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
                   doneAt,
                   answer: input.answer,
                   talkFlag: input.talkFlag,
-                  weekKey: completionWeek,
+                  weekKey: weekKey(doneAt, ws.world.ruleset.timezone),
+                  tokens: input.tokens,
                 },
               },
-              { worldId, collection: 'rewards', id: taskId, create: reward },
+              { worldId, collection: 'profiles', id: task.profileId, increment: { tokens: input.tokens } },
             ],
-            check: (state) =>
-              checkOwnerOfOpenTask(state, worldId, taskId, uid) ??
-              (state.get(worldId)?.rewards.has(taskId) ? denied('A reward is never replaced') : null),
+            check: (state) => checkOwnerOfOpenTask(state, worldId, taskId, uid),
+          };
+        }),
+
+      retireTask: (worldId, taskId) =>
+        submit(undefined, (view, uid) => {
+          const task = requireTask(view, worldId, taskId);
+          const { active } = requireAccess(view, worldId, uid);
+          if (!active || !canRetire(task, active)) throw denied('This profile cannot retire this task');
+          return {
+            ops: [
+              {
+                worldId,
+                collection: 'tasks',
+                id: taskId,
+                patch: { status: 'retired', retiredAt: clock(), retiredBy: active.id },
+              },
+            ],
+            check: (state) => {
+              const access = accessOf(state, worldId, uid);
+              if (!access) return denied('Not a member of this world');
+              const current = access.ws.tasks.get(taskId);
+              if (!current) return notFound(`Task ${taskId} does not exist`);
+              if (!access.active || access.active.id !== active.id || !canRetire(current, access.active)) {
+                return denied('This profile cannot retire this task');
+              }
+              return null;
+            },
           };
         }),
 
@@ -621,6 +698,45 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
           };
         }),
 
+      takeFromReserve: (worldId, collectibleId, change) =>
+        submit(undefined, (view, uid) => {
+          const ws = requireWorld(view, worldId);
+          const { member } = requireAccess(view, worldId, uid);
+          const profile = member.profileId === null ? undefined : ws.profiles.get(member.profileId);
+          if (!profile) throw denied('Choose a profile first');
+          const taken = ws.collectibles.get(collectibleId);
+          if (!taken) throw notFound(`Collectible ${collectibleId} does not exist`);
+          if (taken.reserveAt === null) throw denied('Only what is in the reserve can be taken');
+          if (!change.partyIds.includes(collectibleId) || !change.fromReserve.includes(collectibleId)) {
+            throw invalid('The taken collectible joins the party and leaves the reserve');
+          }
+          // Once taken it is the profile's own, coming from the reserve.
+          const owned = [...ws.collectibles.values()].filter((c) => c.profileId === profile.id).concat({ ...taken, profileId: profile.id });
+          const problem = checkPartyChange(profile, owned, change, ws.world.ruleset.partySize);
+          if (problem) throw invalid(`The party change is not valid (${problem})`);
+          const now = clock();
+          const ops: Op[] = [
+            { worldId, collection: 'collectibles', id: collectibleId, patch: { profileId: profile.id, reserveAt: null } },
+            ...change.toReserve.map((id): Op => ({ worldId, collection: 'collectibles', id, patch: { reserveAt: now } })),
+            ...change.fromReserve.filter((id) => id !== collectibleId).map((id): Op => ({ worldId, collection: 'collectibles', id, patch: { reserveAt: null } })),
+          ];
+          if (!sameIds(profile.partyIds, change.partyIds)) {
+            ops.push({ worldId, collection: 'profiles', id: profile.id, patch: { partyIds: [...change.partyIds] } });
+          }
+          return {
+            ops,
+            check: (state) => {
+              const access = accessOf(state, worldId, uid);
+              if (!access) return denied('Not a member of this world');
+              if (access.member.profileId !== profile.id) return denied('Only the active profile takes');
+              if (access.ws.collectibles.get(collectibleId)?.reserveAt == null) return denied('Someone took it first');
+              const others = [...change.toReserve, ...change.fromReserve.filter((id) => id !== collectibleId)];
+              if (others.some((id) => access.ws.collectibles.get(id)?.profileId !== profile.id)) return denied('A collectible is the owner’s to move');
+              return null;
+            },
+          };
+        }),
+
       setNickname: (worldId, collectibleId, nickname) =>
         submit(undefined, (view, uid) => {
           const value = nickname === null ? null : normaliseNickname(nickname);
@@ -665,6 +781,64 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
           onValue,
           onError,
         ),
+    },
+
+    tokens: {
+      observeBalance: (worldId, profileId, onValue, onError) =>
+        observeAsMember(worldId, ({ ws }) => ({ value: ws.balances.get(profileId) ?? 0 }), onValue, onError),
+
+      buyReward(worldId, input) {
+        const rewardId: RewardId = autoId();
+        return submit({ rewardId }, (view, uid) => {
+          checkText('Slot', input.slot, LIMITS.slot);
+          if (!(TIERS as readonly string[]).includes(input.tier)) throw invalid(`Unknown reward tier: ${String(input.tier)}`);
+          if (!isTokenPrice(input.price)) throw invalid(`A price is a whole number from 1 to ${LIMITS.tokenPriceMax}`);
+          const ws = requireWorld(view, worldId);
+          const { active } = requireAccess(view, worldId, uid);
+          if (!active) throw denied('Choose a profile first');
+          if ((ws.balances.get(active.id) ?? 0) < input.price) throw invalid('The balance does not cover the price');
+          const profileId = active.id;
+          const boughtAt = clock();
+          const week = weekKey(boughtAt, ws.world.ruleset.timezone);
+          const reward: Reward = {
+            schemaVersion: SCHEMA_VERSION,
+            createdAt: boughtAt,
+            id: rewardId,
+            profileId,
+            weekKey: week,
+            tier: input.tier,
+            openedAt: boughtAt,
+            price: input.price,
+          };
+          const collectible: Collectible = {
+            schemaVersion: SCHEMA_VERSION,
+            createdAt: boughtAt,
+            id: rewardId,
+            profileId,
+            slot: input.slot,
+            tier: input.tier,
+            nickname: null,
+            obtainedWeekKey: week,
+            obtainedAt: boughtAt,
+            reserveAt: null,
+          };
+          return {
+            ops: [
+              { worldId, collection: 'profiles', id: profileId, increment: { tokens: -input.price } },
+              { worldId, collection: 'rewards', id: rewardId, create: reward },
+              { worldId, collection: 'collectibles', id: rewardId, create: collectible },
+            ],
+            check: (state) => {
+              const access = accessOf(state, worldId, uid);
+              if (!access) return denied('Not a member of this world');
+              if (access.member.profileId !== profileId) return denied('Only the owner spends tokens');
+              if (access.ws.rewards.has(rewardId) || access.ws.collectibles.has(rewardId)) return denied('A reward is never replaced');
+              if ((access.ws.balances.get(profileId) ?? 0) < input.price) return denied('The tokens were already spent');
+              return null;
+            },
+          };
+        });
+      },
     },
 
     rewards: {

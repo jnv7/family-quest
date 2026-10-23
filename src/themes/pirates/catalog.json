@@ -34,6 +34,38 @@
       }
     },
     {
+      "slot": "shell",
+      "tier": "low",
+      "name": "Concha Cantora",
+      "art": {
+        "emoji": "🐚"
+      }
+    },
+    {
+      "slot": "shrimp",
+      "tier": "low",
+      "name": "Camarão Saltitão",
+      "art": {
+        "emoji": "🦐"
+      }
+    },
+    {
+      "slot": "clownfish",
+      "tier": "low",
+      "name": "Peixe-palhaço Vaidoso",
+      "art": {
+        "emoji": "🐠"
+      }
+    },
+    {
+      "slot": "lobster",
+      "tier": "low",
+      "name": "Lagosta Resmungona",
+      "art": {
+        "emoji": "🦞"
+      }
+    },
+    {
       "slot": "parrot",
       "tier": "mid",
       "name": "Papagaio Tagarela",
@@ -66,6 +98,38 @@
       }
     },
     {
+      "slot": "dolphin",
+      "tier": "mid",
+      "name": "Golfinho Acrobata",
+      "art": {
+        "emoji": "🐬"
+      }
+    },
+    {
+      "slot": "seal",
+      "tier": "mid",
+      "name": "Foca Preguiçosa",
+      "art": {
+        "emoji": "🦭"
+      }
+    },
+    {
+      "slot": "shark",
+      "tier": "mid",
+      "name": "Tubarão Envergonhado",
+      "art": {
+        "emoji": "🦈"
+      }
+    },
+    {
+      "slot": "crocodile",
+      "tier": "mid",
+      "name": "Crocodilo Sorridente",
+      "art": {
+        "emoji": "🐊"
+      }
+    },
+    {
       "slot": "kraken",
       "tier": "high",
       "name": "Kraken Bonzinho",
@@ -95,6 +159,38 @@
       "name": "Sereia do Farol",
       "art": {
         "emoji": "🧜‍♀️"
+      }
+    },
+    {
+      "slot": "sea-dragon",
+      "tier": "high",
+      "name": "Dragão das Marés",
+      "art": {
+        "emoji": "🐉"
+      }
+    },
+    {
+      "slot": "genie",
+      "tier": "high",
+      "name": "Génio da Garrafa",
+      "art": {
+        "emoji": "🧞"
+      }
+    },
+    {
+      "slot": "sea-unicorn",
+      "tier": "high",
+      "name": "Unicórnio do Mar",
+      "art": {
+        "emoji": "🦄"
+      }
+    },
+    {
+      "slot": "eagle",
+      "tier": "high",
+      "name": "Águia do Mastro",
+      "art": {
+        "emoji": "🦅"
       }
     }
   ]
