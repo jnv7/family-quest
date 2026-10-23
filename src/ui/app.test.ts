@@ -1645,32 +1645,95 @@ describe('moorings and symbols', () => {
   });
 });
 
-describe('the reward odds', () => {
-  const worldOdds = (worldId: string) => backend.state.get(worldId)!.world.ruleset.tierOdds;
-  /** The odds form is the one with a fieldset per task level. */
-  const oddsForm = (device: Awaited<ReturnType<typeof openDevice>>) =>
-    [...device.root.querySelectorAll('form')].find((form) => form.querySelector('fieldset'))!;
-  const oddsInputs = (device: Awaited<ReturnType<typeof openDevice>>) =>
-    [...oddsForm(device).querySelectorAll<HTMLInputElement>('input')];
-  const submitLast = (device: Awaited<ReturnType<typeof openDevice>>) =>
-    oddsForm(device).dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+describe('the token rules', () => {
+  const rulesOf = (worldId: string) => backend.state.get(worldId)!.world.ruleset;
+  type Device = Awaited<ReturnType<typeof openDevice>>;
+  /** The token rules form is the one with a fieldset: six inputs, three amounts then three prices. */
+  const rulesForm = (device: Device) => [...device.root.querySelectorAll('form')].find((form) => form.querySelector('fieldset'))!;
+  const inputs = (device: Device) => [...rulesForm(device).querySelectorAll<HTMLInputElement>('input')];
+  const submit = (device: Device) => rulesForm(device).dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+  const fill = (device: Device, values: number[]) => inputs(device).forEach((input, i) => (input.value = String(values[i])));
 
-  it('shows the odds of the world, saves new ones, and refuses a row that does not sum to 100', async () => {
+  it('shows the rules of the world, saves new ones, and refuses prices that do not rise or values out of range', async () => {
     const { admin, worldId } = await familyWithChild();
     await admin.click('button', 'Gerir');
-    await admin.see('Probabilidades dos prémios');
-    await vi.waitFor(() => expect(oddsInputs(admin).map((input) => input.value).slice(0, 3)).toEqual(['80', '17', '3']));
+    await admin.see('Recompensas');
+    await vi.waitFor(() => expect(inputs(admin).map((input) => input.value)).toEqual(['1', '2', '4', '5', '12', '25']));
 
-    const fields = oddsInputs(admin);
-    [fields[0]!.value, fields[1]!.value, fields[2]!.value] = ['70', '25', '5'];
-    submitLast(admin);
-    await vi.waitFor(() => expect(worldOdds(worldId).low).toEqual({ low: 70, mid: 25, high: 5 }));
-    expect(worldOdds(worldId).high).toEqual({ low: 45, mid: 35, high: 20 });
+    fill(admin, [2, 3, 5, 6, 10, 30]);
+    submit(admin);
+    await vi.waitFor(() => expect(rulesOf(worldId).tokensPerLevel).toEqual({ low: 2, mid: 3, high: 5 }));
+    expect(rulesOf(worldId).tokenPrices).toEqual({ low: 6, mid: 10, high: 30 });
 
-    fields[0]!.value = '10';
-    submitLast(admin);
-    await admin.see('somam 100');
-    expect(worldOdds(worldId).low).toEqual({ low: 70, mid: 25, high: 5 });
+    fill(admin, [2, 3, 5, 5, 5, 25]);
+    submit(admin);
+    await admin.see('Os preços têm de subir');
+    expect(rulesOf(worldId).tokenPrices).toEqual({ low: 6, mid: 10, high: 30 });
+
+    fill(admin, [0, 3, 5, 6, 10, 30]);
+    submit(admin);
+    await admin.see('de 1 a 10');
+    fill(admin, [2, 3, 11, 6, 10, 30]);
+    submit(admin);
+    await admin.see('de 1 a 10');
+    expect(rulesOf(worldId).tokensPerLevel).toEqual({ low: 2, mid: 3, high: 5 });
+  });
+
+  it('shows the token icon beside every value and the themed noun in the explanation', async () => {
+    const { admin } = await familyWithChild();
+    await admin.click('button', 'Gerir');
+    await admin.see('Recompensas');
+    expect(rulesForm(admin).querySelectorAll('.token-art')).toHaveLength(6);
+    await admin.see(theme.roles.token.plural);
+  });
+});
+
+describe('the size of the party', () => {
+  it('is saved by an admin and refuses 0 and 11', async () => {
+    const { admin, worldId } = await familyWithChild();
+    await admin.click('button', 'Gerir');
+    const input = () => [...admin.root.querySelectorAll('label')].find((l) => l.textContent?.includes('Tamanho'))!.querySelector('input')!;
+    const form = () => input().closest('form')!;
+    await vi.waitFor(() => expect(input().value).toBe('5'));
+    for (const bad of ['0', '11']) {
+      input().value = bad;
+      form().dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+      await admin.see('de 1 a 10');
+      expect(backend.state.get(worldId)!.world.ruleset.partySize).toBe(5);
+    }
+    input().value = '2';
+    form().dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    await vi.waitFor(() => expect(backend.state.get(worldId)!.world.ruleset.partySize).toBe(2));
+  });
+
+  it('lowered below a party of 3: the party keeps all three, nobody joins, and one can still leave', async () => {
+    const { admin, child, worldId } = await childWithRewards(4);
+    await openAll(child, worldId, 4);
+    const recent = () => [...child.root.querySelectorAll<HTMLButtonElement>('.recent-card button.primary')];
+    for (let i = 0; i < 3; i++) {
+      await vi.waitFor(() => expect(recent().length).toBeGreaterThan(0));
+      recent()[0]!.click();
+      await vi.waitFor(() => expect(profileSam(worldId).partyIds).toHaveLength(i + 1));
+    }
+
+    await admin.click('button', 'Gerir');
+    const input = () => [...admin.root.querySelectorAll('label')].find((l) => l.textContent?.includes('Tamanho'))!.querySelector('input')!;
+    await vi.waitFor(() => expect(input().value).toBe('5'));
+    input().value = '2';
+    input().closest('form')!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    await vi.waitFor(() => expect(state(worldId).world.ruleset.partySize).toBe(2));
+
+    // The party keeps its three, and the fourth cannot join.
+    expect(profileSam(worldId).partyIds).toHaveLength(3);
+    await child.see('acima do limite');
+    expect(child.find('button', 'Pôr na')).toBeUndefined();
+    expect(profileSam(worldId).partyIds).toHaveLength(3);
+
+    // Leaving is still possible, from the home.
+    await child.click('button', 'Voltar');
+    await child.click('button.place', 'Casa');
+    await child.click('button', 'Enviar para');
+    await vi.waitFor(() => expect(profileSam(worldId).partyIds).toHaveLength(2));
   });
 });
 

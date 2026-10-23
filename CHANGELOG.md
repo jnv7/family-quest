@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.9.4] — 2026-10-23
+
+### Added
+
+- Management has a "Recompensas" section (`src/ui/screens/tokenRules.ts`): six whole-number fields, the tokens each task level earns and the price of each tier, each beside the token icon. Saving runs `tokenRulesProblem` and says in one line what is wrong ("Os preços têm de subir: baixo < médio < alto."). It writes only the world's `tokensPerLevel` and `tokenPrices`, so it changes what is earned or bought from then on.
+- Management has a party size field (1–10) beside the reserve size (`src/ui/screens/partySize.ts`). Lowering it takes nobody out of a party: a party above the size shows `party.overFull` when something tries to join, and can still lose members.
+
+### Removed
+
+- The reward odds section (`odds.ts`) and `worlds.setTierOdds`, with their tests. The stored `tierOdds` keep their last values, so completion draws as before until 0.9.5.
+
 ## [0.9.3] — 2026-10-23
 
 ### Added

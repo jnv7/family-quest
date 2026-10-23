@@ -7,7 +7,6 @@
  * observers show the server state again.
  */
 import { weekKey } from '../../core/calendar';
-import { oddsProblem } from '../../core/draw';
 import { checkPartyChange } from '../../core/party';
 import { canRetire } from '../../core/tasks';
 import { isPartySize, isTokenAmount, isTokenPrice, tokenRulesProblem } from '../../core/tokens';
@@ -351,20 +350,6 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
 
       observeProfiles: (worldId, onValue, onError) =>
         observeAsMember(worldId, ({ ws }) => ({ value: [...ws.profiles.values()] }), onValue, onError),
-
-      setTierOdds: (worldId, tierOdds) =>
-        submit(undefined, (view, uid) => {
-          const ws = requireWorld(view, worldId);
-          for (const level of TIERS) {
-            const problem = oddsProblem(tierOdds[level]);
-            if (problem) throw invalid(`The reward odds of level ${level} are not valid (${problem})`);
-          }
-          const ruleset = { ...ws.world.ruleset, tierOdds: structuredClone(tierOdds) };
-          return {
-            ops: [{ worldId, collection: 'world', id: worldId, patch: { ruleset } }],
-            check: (state) => (accessOf(state, worldId, uid)?.isAdmin ? null : denied('Only an admin changes the reward odds')),
-          };
-        }),
 
       setShowcaseSize: (worldId, size) =>
         submit(undefined, (view, uid) => {

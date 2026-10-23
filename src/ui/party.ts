@@ -68,6 +68,8 @@ export function createPartyControls(ctx: Deps, worldId: WorldId, state: () => Pa
       const { profile, ruleset, owned } = current;
       const party = profile.partyIds;
       const fromReserve = collectible.reserveAt === null ? [] : [collectible.id];
+      // A party above a lowered size can only lose members: nobody joins until it is back within the size.
+      if (party.length > ruleset.partySize) return h('div', { class: 'choices' }, h('p', {}, ctx.text('party.overFull')));
       if (party.length < ruleset.partySize) {
         return h('div', { class: 'choices' },
           h('button', { class: 'primary', onClick: () => arrange(profile, [...party, collectible.id], [], fromReserve) }, ctx.text(collectible.reserveAt === null ? 'party.join' : 'party.bringBack')),

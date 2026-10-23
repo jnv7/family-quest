@@ -951,3 +951,13 @@ button.name-tag.unnamed {
     scroll-behavior: auto !important;
   }
 }
+
+/* The token icon beside a value in management (and, from 0.9.5, in the vault). */
+.token-art {
+  display: inline-block;
+  width: 1.25em;
+  height: 1.25em;
+  margin: 0 0.4em;
+  vertical-align: middle;
+  object-fit: contain;
+}

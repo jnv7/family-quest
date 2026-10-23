@@ -2,13 +2,14 @@ import { LIMITS, type ProfileKind } from '../../core/model';
 import type { WorldScreen } from '../context';
 import { h } from '../dom';
 import { observeSelf } from '../self';
-import { createOddsSection } from './odds';
+import { createPartySizeSection } from './partySize';
 import { createProfileTasksSection } from './profileTasks';
 import { createShowcaseSizeSection } from './showcaseSize';
 import { createTaskDefsSection } from './taskDefs';
+import { createTokenRulesSection } from './tokenRules';
 import { screenBar } from '../bar';
 
-/** Management, for admins only (SPEC.md §7.8): profiles, recurring task definitions and the reward odds. */
+/** Management, for admins only (SPEC.md §7.8): profiles, recurring task definitions, the token rules and the sizes of the party and the reserve. */
 export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
   const list = h('ul', { class: 'rows' });
 
@@ -37,7 +38,8 @@ export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
 
   const recurring = createTaskDefsSection(ctx, worldId);
   const profileTasks = createProfileTasksSection(ctx, worldId);
-  const odds = createOddsSection(ctx, worldId);
+  const tokenRules = createTokenRulesSection(ctx, worldId);
+  const partySize = createPartySizeSection(ctx, worldId);
   const reserveSize = createShowcaseSizeSection(ctx, worldId);
 
   root.append(
@@ -52,7 +54,8 @@ export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
     form,
     profileTasks.element,
     recurring.element,
-    odds.element,
+    tokenRules.element,
+    partySize.element,
     reserveSize.element,
   );
 
@@ -78,7 +81,8 @@ export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
   return () => {
     stopSelf();
     recurring.dispose();
-    odds.dispose();
+    tokenRules.dispose();
+    partySize.dispose();
     profileTasks.dispose();
     reserveSize.dispose();
   };

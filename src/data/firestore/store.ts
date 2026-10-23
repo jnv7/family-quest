@@ -28,7 +28,6 @@ import { signInAnonymously, type Auth } from 'firebase/auth';
 import { weekKey } from '../../core/calendar';
 import { nicknameTooLong, normaliseNickname } from '../../core/collection';
 import { assertSymbolAllowed } from '../symbols';
-import { oddsProblem } from '../../core/draw';
 import { checkPartyChange } from '../../core/party';
 import { canRetire } from '../../core/tasks';
 import { isPartySize, isTokenAmount, isTokenPrice, tokenRulesProblem } from '../../core/tokens';
@@ -264,15 +263,6 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
           (snapshot) => onValue(decodeAll(snapshot.docs, decodeProfile)),
           (error) => onError?.(toDataStoreError(error)),
         ),
-
-      setTierOdds: (worldId, tierOdds) =>
-        write(undefined, async () => {
-          for (const level of TIERS) {
-            const problem = oddsProblem(tierOdds[level]);
-            if (problem) throw invalid(`The reward odds of level ${level} are not valid (${problem})`);
-          }
-          await updateDoc(worldDoc(db, worldId), { 'ruleset.tierOdds': tierOdds });
-        }),
 
       setShowcaseSize: (worldId, size) =>
         write(undefined, async () => {

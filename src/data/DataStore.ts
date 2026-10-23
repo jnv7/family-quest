@@ -179,12 +179,6 @@ export interface WorldStore {
   observeProfiles(worldId: WorldId, onValue: Observer<Profile[]>, onError?: ObserverError): Unsubscribe;
 
   /**
-   * Admin only. Replaces the reward odds of the world. Every row must pass `oddsProblem`
-   * (integers summing to 100), or the call is `invalid-argument` before any write.
-   */
-  setTierOdds(worldId: WorldId, tierOdds: Ruleset['tierOdds']): Write;
-
-  /**
    * Admin only. Replaces the tokens a task earns per level and the price of a reward per tier. `tokenRulesProblem`
    * first (`invalid-argument`, before any write). Writes only `ruleset.tokensPerLevel` and `ruleset.tokenPrices`.
    */
