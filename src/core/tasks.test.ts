@@ -69,6 +69,18 @@ describe('adhocCreatedForSelfToday', () => {
   });
 });
 
+describe('the daily limit and retired tasks', () => {
+  it('still counts a task created today and retired, so retiring is not a way around the limit', () => {
+    const tasks = [
+      task({ createdAt: NOW, status: 'retired', retiredAt: NOW, retiredBy: 'kid' }),
+      task({ createdAt: NOW }),
+      task({ createdAt: NOW }),
+    ];
+    expect(adhocCreatedForSelfToday('kid', tasks, NOW, TZ)).toBe(3);
+    expect(adhocPermission({ creator: kid, targetProfileId: 'kid', creatorTasks: tasks, now: NOW, ruleset })).toBe('limit-reached');
+  });
+});
+
 describe('adhocPermission', () => {
   const check = (over: object) =>
     adhocPermission({ creator: kid, targetProfileId: 'kid', creatorTasks: [], now: NOW, ruleset, ...over });

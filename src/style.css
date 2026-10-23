@@ -1061,3 +1061,52 @@ button.name-tag.unnamed {
   align-items: center;
   justify-content: center;
 }
+
+/* Retiring a task: a "⋯" at the card's far corner, a one-item menu, and a question in the card. */
+.task-card {
+  position: relative;
+}
+
+.task-corner {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+}
+
+.task-corner .more {
+  min-width: 3rem;
+  min-height: 3rem;
+  border: 0;
+  background: transparent;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.task-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 2;
+  min-width: 10rem;
+  padding: 0.25rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: Canvas;
+  box-shadow: 0 0.5rem 1rem color-mix(in srgb, currentColor 20%, transparent);
+}
+
+.task-menu button {
+  width: 100%;
+  min-height: 3rem;
+  text-align: left;
+}
+
+.retire-confirm {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.task-card:has(.task-corner) .task-body {
+  padding-right: 3rem;
+}

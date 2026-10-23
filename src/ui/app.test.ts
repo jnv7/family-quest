@@ -809,7 +809,8 @@ describe('the adults’ view of the family', () => {
     await admin.click('button.chip', 'Sam');
     await admin.see('Feitas nos últimos dias');
     await vi.waitFor(() => expect(admin.root.querySelectorAll('li.task-card')).toHaveLength(1)); // one still open
-    expect(admin.root.querySelector('li.task-card button')).toBeNull(); // read-only
+    expect(admin.root.querySelector('li.task-card .task-actions')).toBeNull(); // nothing to complete here
+    expect([...admin.root.querySelectorAll('li.task-card button')].map((b) => b.className)).toEqual(['more']); // only the retire menu
     expect(admin.root.textContent).not.toContain('Regar as plantas');
     const doneItems = [...admin.root.querySelectorAll('ul.rows li:not(.task-card)')].filter((li) => li.querySelector('small'));
     expect(doneItems.some((li) => li.textContent?.includes('20 de outubro'))).toBe(true);
@@ -1077,6 +1078,103 @@ function giveLegacyRewards(worldId: string, name: string, count: number, tier: T
     state(worldId).rewards.set(id, { schemaVersion: 1, createdAt: now + i, id, profileId, weekKey: '2026-W43', tier, openedAt: null });
   }
 }
+
+describe('retiring a task', () => {
+  const more = (device: Device) => device.root.querySelectorAll('li.task-card .more');
+  const taskNamed = (worldId: string, title: string) => [...state(worldId).tasks.values()].find((t) => t.title === title)!;
+
+  it('shows "⋯" to a child only on an ad hoc task they made for themselves', async () => {
+    const { admin, child } = await familyWithChild();
+    await createTask(admin, 'Dada pelos pais', 'Sam');
+    await child.click('button.place', 'Quadro');
+    await child.click('button', 'Nova tarefa');
+    await child.type('O que é para fazer?', 'Ideia minha');
+    await child.enabled('Criar tarefa');
+    child.submit();
+    await child.see('As tuas tarefas');
+    await child.click('button', 'Voltar');
+    await child.click('button.place', 'Registo');
+    await child.see('Ideia minha');
+    await child.see('Dada pelos pais');
+    expect(child.find('li.task-card', 'Ideia minha')!.querySelector('.more')).not.toBeNull();
+    expect(child.find('li.task-card', 'Dada pelos pais')!.querySelector('.more')).toBeNull();
+    // Never next to "done", and not on the board.
+    expect(child.find('li.task-card', 'Ideia minha')!.querySelector('.task-actions .more')).toBeNull();
+    await child.click('button', 'Voltar');
+    await child.click('button.place', 'Quadro');
+    await child.see('Ideia minha');
+    expect(more(child)).toHaveLength(0);
+  });
+
+  it('asks once, then retires: the card leaves, nothing is earned, and it stays stored', async () => {
+    const { admin, child, worldId } = await familyWithChild();
+    await createTask(admin, 'Por engano', 'Sam');
+    await child.click('button.place', 'Registo');
+    await child.see('Por engano');
+    expect(more(child)).toHaveLength(0); // an adult gave it: the child cannot retire it
+
+    await admin.click('button', 'Voltar');
+    await admin.click('button', 'Gerir');
+    await admin.see('Tarefas por perfil');
+    await admin.click('button.chip', 'Sam');
+    await admin.see('Por engano');
+    await admin.click('li.task-card .more', '');
+    await admin.click('button[role="menuitem"]', 'Retirar tarefa');
+    await admin.see('Retirar? Não volta a aparecer.');
+    await admin.click('button', 'Cancelar');
+    expect(taskNamed(worldId, 'Por engano').status).toBe('open');
+
+    await admin.click('li.task-card .more', '');
+    await admin.click('button[role="menuitem"]', 'Retirar tarefa');
+    await admin.click('button.primary', 'Retirar');
+    await vi.waitFor(() => expect(taskNamed(worldId, 'Por engano')).toMatchObject({ status: 'retired', retiredAt: now, retiredBy: profileNamed(worldId, 'Alex').id }));
+    expect(taskNamed(worldId, 'Por engano').tokens).toBeUndefined();
+    await vi.waitFor(() => expect(admin.root.querySelectorAll('li.task-card')).toHaveLength(0));
+    await vi.waitFor(() => expect(child.root.textContent).not.toContain('Por engano'));
+    // It is not in "done in the last days" either.
+    expect(admin.root.textContent).not.toContain('Por engano');
+  });
+
+  it('lets an adult retire their own task from the check-in', async () => {
+    const { admin, worldId } = await familyWithChild();
+    await createTask(admin, 'Minha', 'Alex');
+    await admin.click('button', 'Voltar');
+    await admin.click('button.place', 'Registo');
+    await admin.see('Minha');
+    await admin.click('li.task-card .more', '');
+    await admin.click('button[role="menuitem"]', 'Retirar tarefa');
+    await admin.click('button.primary', 'Retirar');
+    await vi.waitFor(() => expect(taskNamed(worldId, 'Minha').status).toBe('retired'));
+    await admin.notSee('Minha');
+  });
+
+  it('does not bring a retired daily task back today, and brings the next one tomorrow', async () => {
+    const { admin, worldId } = await familyWithChild();
+    await addRecurring(admin, 'Regar');
+    const tasks = () => [...state(worldId).tasks.values()].filter((t) => t.title === 'Regar' && t.profileId === profileNamed(worldId, 'Alex').id);
+    const reopen = async () => {
+      const device = await openDevice('admin-device', { savedWorld: worldId });
+      await device.click('button.place', 'Registo');
+      return device;
+    };
+    const first = await reopen();
+    await first.see('Regar');
+    await first.click('li.task-card .more', '');
+    await first.click('button[role="menuitem"]', 'Retirar tarefa');
+    await first.click('button.primary', 'Retirar');
+    await vi.waitFor(() => expect(tasks()[0]!.status).toBe('retired'));
+
+    const sameDay = await reopen();
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    expect(tasks()).toHaveLength(1);
+    expect(sameDay.root.textContent).not.toContain('Regar');
+
+    now += 24 * 3_600_000;
+    const nextDay = await reopen();
+    await nextDay.see('Regar');
+    expect(tasks().map((t) => t.status).sort()).toEqual(['open', 'retired']);
+  });
+});
 
 describe('the vault', () => {
   type Device = Awaited<ReturnType<typeof openDevice>>;

@@ -10,6 +10,8 @@ import { observeWithRetry } from '../observe';
 import { observeSelf } from '../self';
 import { taskCard } from '../taskCard';
 import { screenBar } from '../bar';
+import { createRetireControl } from '../retire';
+import type { Profile } from '../../core/model';
 
 const UNDO_MS = 4000;
 
@@ -48,6 +50,8 @@ export const renderCheckin: WorldScreen = (ctx, root, { worldId }) => {
   let tasks: Task[] | null = null;
   let defs = new Map<string, TaskDef>();
   let seenBefore: number | null = null;
+  let self: Profile | null = null;
+  const retire = createRetireControl(ctx, worldId, () => show());
   const isNew = (task: Task) => isNewTask(task, defs, seenBefore);
 
   const say = (kind: keyof typeof character.lines) => {
@@ -116,12 +120,15 @@ export const renderCheckin: WorldScreen = (ctx, root, { worldId }) => {
               }
             },
           }, ctx.text('checkin.done'));
+    const retiring = retire.parts(task, self);
     return taskCard(ctx, {
       task,
       def: task.defId === null ? undefined : defs.get(task.defId),
       timeZone,
       action,
+      corner: retiring?.corner,
       below: [
+        retiring?.below,
         waiting && h('p', { class: 'message', role: 'status' }, ctx.text('checkin.doneNow')),
         asked &&
           h('div', { class: 'ask' },
@@ -179,6 +186,7 @@ export const renderCheckin: WorldScreen = (ctx, root, { worldId }) => {
     ctx.store.taskDefs.observeTaskDefs(worldId, (value) => ((defs = new Map(value.map((d) => [d.id, d]))), show()), onError),
   );
   const stopSelf = observeSelf(ctx, worldId, ({ profile }) => {
+    self = profile;
     if (!profile) {
       ctx.go({ name: 'profiles' }, { replace: true });
       return;

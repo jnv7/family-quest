@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.9.6] — 2026-10-23
+
+### Added
+
+- Retiring an open task (ADR 0009). A task card has a "⋯" button at its far corner, shown only when the active profile may retire it (`canRetire`: an adult any open task, a child only an ad hoc task made for themselves). It opens a menu with "Retirar tarefa"; choosing it asks once in the card ("Retirar? Não volta a aparecer."), and confirming calls `retireTask`. The card leaves through the observers. It is in the check-in (own tasks) and in the adults' view (any open task of a profile), never on the board and never next to "Feito", so it adds no tap to completing a task.
+- Retired tasks are hidden everywhere (the lists only read open tasks, and the adults' view's finished list reads only done ones). A retired recurring task is not generated again for its period and the next period creates its task as usual; one created today and retired still counts for a child's daily limit. Tests cover each.
+
 ## [0.9.5] — 2026-10-23
 
 ### Changed

@@ -59,11 +59,12 @@ export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
     reserveSize.element,
   );
 
-  const stopSelf = observeSelf(ctx, worldId, ({ profiles, isAdmin }) => {
+  const stopSelf = observeSelf(ctx, worldId, ({ profiles, profile, isAdmin }) => {
     if (!isAdmin) {
       ctx.go({ name: 'map' }, { replace: true });
       return;
     }
+    profileTasks.setActive(profile);
     profileTasks.setProfiles(profiles);
     list.replaceChildren(
       ...profiles.map((profile) =>
