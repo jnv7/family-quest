@@ -35,6 +35,9 @@ export type Op =
   | { worldId: WorldId; collection: 'profiles'; id: string; create: Profile }
   | { worldId: WorldId; collection: 'profiles'; id: string; patch: Partial<Profile> }
   | { worldId: WorldId; collection: 'profiles'; id: string; increment: { tokens: number } }
+  /** Clears a profile's balance and party (restarting the universe). */
+  | { worldId: WorldId; collection: 'profiles'; id: string; reset: true }
+  | { worldId: WorldId; collection: 'tasks' | 'taskDefs' | 'rewards' | 'collectibles'; id: string; delete: true }
   | { worldId: WorldId; collection: 'tasks'; id: string; create: Task }
   | { worldId: WorldId; collection: 'tasks'; id: string; patch: Partial<Task> }
   | { worldId: WorldId; collection: 'taskDefs'; id: string; create: TaskDef }
@@ -83,6 +86,16 @@ export function applyOps(state: MemoryState, ops: readonly Op[]): void {
     }
     const world = state.get(op.worldId);
     if (!world) continue;
+    if ('reset' in op) {
+      world.balances.delete(op.id);
+      const profile = world.profiles.get(op.id);
+      if (profile) profile.partyIds = [];
+      continue;
+    }
+    if ('delete' in op) {
+      (world[op.collection] as Map<string, object>).delete(op.id);
+      continue;
+    }
     if ('increment' in op) {
       world.balances.set(op.id, (world.balances.get(op.id) ?? 0) + op.increment.tokens);
       continue;

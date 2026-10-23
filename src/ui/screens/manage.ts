@@ -4,6 +4,7 @@ import { h } from '../dom';
 import { observeSelf } from '../self';
 import { createPartySizeSection } from './partySize';
 import { createProfileTasksSection } from './profileTasks';
+import { createRestartSection } from './restart';
 import { createShowcaseSizeSection } from './showcaseSize';
 import { createTaskDefsSection } from './taskDefs';
 import { createTokenRulesSection } from './tokenRules';
@@ -57,6 +58,7 @@ export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
     tokenRules.element,
     partySize.element,
     reserveSize.element,
+    createRestartSection(ctx, worldId),
   );
 
   const stopSelf = observeSelf(ctx, worldId, ({ profiles, profile, isAdmin }) => {

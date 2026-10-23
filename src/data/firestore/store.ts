@@ -9,7 +9,9 @@
  */
 import {
   doc,
+  deleteField,
   getDoc,
+  getDocsFromServer,
   increment,
   getDocFromCache,
   limit as limitTo,
@@ -110,6 +112,9 @@ export interface FirestoreStoreOptions {
   clock: Clock;
   randomInt: RandomInt;
 }
+
+/** Documents deleted per batch when restarting the universe (a batch holds at most 500 writes). */
+const RESTART_BATCH = 200;
 
 const invalid = (message: string) => new DataStoreError('invalid-argument', message);
 const denied = (message: string) => new DataStoreError('permission-denied', message);
@@ -283,6 +288,34 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
         write(undefined, async () => {
           if (!isPartySize(size)) throw invalid(`The party size must be a whole number from 1 to ${LIMITS.partySizeMax}`);
           await updateDoc(worldDoc(db, worldId), { 'ruleset.partySize': size });
+        }),
+
+      restartUniverse: (worldId) =>
+        write(undefined, async () => {
+          // The server is read, not the cache, so nothing left behind is missed; without a connection this fails.
+          const [tasks, taskDefs, rewards, collectibles, profiles] = await Promise.all([
+            getDocsFromServer(tasksCollection(db, worldId)),
+            getDocsFromServer(taskDefsCollection(db, worldId)),
+            getDocsFromServer(rewardsCollection(db, worldId)),
+            getDocsFromServer(collectiblesCollection(db, worldId)),
+            getDocsFromServer(profilesCollection(db, worldId)),
+          ]);
+          const refs = [tasks, taskDefs, rewards, collectibles].flatMap((snapshot) => snapshot.docs.map((d) => d.ref));
+          // Each batch is atomic, the whole is not: running it again deletes what is left.
+          for (let i = 0; i < refs.length; i += RESTART_BATCH) {
+            const batch = writeBatch(db);
+            for (const ref of refs.slice(i, i + RESTART_BATCH)) batch.delete(ref);
+            await batch.commit();
+          }
+          const batch = writeBatch(db);
+          for (const snapshot of profiles.docs) {
+            const data = snapshot.data();
+            const counted = data.tokens !== undefined || data.tokensFrom !== undefined || data.tokensFor !== undefined;
+            if (counted || (Array.isArray(data.partyIds) && data.partyIds.length > 0)) {
+              batch.update(snapshot.ref, { tokens: deleteField(), tokensFrom: deleteField(), tokensFor: deleteField(), partyIds: [] });
+            }
+          }
+          await batch.commit();
         }),
 
       createProfile(worldId, input) {

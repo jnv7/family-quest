@@ -188,6 +188,14 @@ export interface WorldStore {
    */
   setShowcaseSize(worldId: WorldId, size: number): Write;
 
+  /**
+   * Admin only (ADR 0011). Restarts the universe: deletes every task, task definition, reward and collectible of the
+   * world, and clears every profile's token balance and party. The profiles, the devices and the `ruleset` stay.
+   * The one operation that deletes. It needs a connection (`unavailable` without one) and cannot be undone; running
+   * it again after a failure finishes the job.
+   */
+  restartUniverse(worldId: WorldId): Write;
+
   /** Admin only. */
   createProfile(worldId: WorldId, input: CreateProfileInput): Write<{ profileId: ProfileId }>;
   /** Admin only, and only child profiles. Profiles are never deleted. */

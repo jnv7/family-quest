@@ -1967,6 +1967,61 @@ describe('the token rules', () => {
   });
 });
 
+describe('restarting the universe', () => {
+  const danger = (device: Device, text: string) => device.find('button.danger', text) as HTMLButtonElement | undefined;
+  const typeWord = (device: Device, value: string) => {
+    const input = [...device.root.querySelectorAll('label')].find((l) => l.textContent?.includes('Para continuar'))!.querySelector('input')!;
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+  };
+
+  it('asks twice, deletes what was earned and created, and keeps the profiles', async () => {
+    const { admin, worldId } = await familyWithChild();
+    await addRecurring(admin, 'Regar');
+    await createTask(admin, 'Arrumar', 'Sam');
+    await admin.click('button', 'Voltar');
+    giveTokens(worldId, 'Sam', 7);
+    giveLegacyRewards(worldId, 'Sam', 2);
+    expect(state(worldId).tasks.size).toBeGreaterThan(0);
+    expect(state(worldId).taskDefs.size).toBe(1);
+
+    await admin.click('button', 'Gerir');
+    const last = () => [...admin.root.querySelectorAll('section')].at(-1)!;
+    await vi.waitFor(() => expect(danger(admin, 'Reiniciar')).toBeDefined()); // the last thing in management
+    expect(last().contains(danger(admin, 'Reiniciar')!)).toBe(true);
+    danger(admin, 'Reiniciar')!.click();
+    await admin.see('Não se pode desfazer');
+    expect(danger(admin, 'Reiniciar agora')!.disabled).toBe(true);
+    typeWord(admin, 'reiniciar mal');
+    expect(danger(admin, 'Reiniciar agora')!.disabled).toBe(true);
+    expect(state(worldId).tasks.size).toBeGreaterThan(0); // nothing yet
+
+    typeWord(admin, ' reiniciar ');
+    expect(danger(admin, 'Reiniciar agora')!.disabled).toBe(false);
+    admin.root.querySelector<HTMLFormElement>('form.restart-confirm')!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+
+    await vi.waitFor(() => expect(state(worldId).tasks.size).toBe(0));
+    expect(state(worldId).taskDefs.size).toBe(0);
+    expect(state(worldId).rewards.size).toBe(0);
+    expect(state(worldId).collectibles.size).toBe(0);
+    expect(balanceOf(worldId, 'Sam')).toBe(0);
+    expect(state(worldId).profiles.size).toBe(2);
+    await admin.see('Tudo recomeçou do zero.');
+  });
+
+  it('can be cancelled, and a child never sees it', async () => {
+    const { admin, child, worldId } = await familyWithChild();
+    giveLegacyRewards(worldId, 'Sam', 1);
+    await admin.click('button', 'Gerir');
+    await vi.waitFor(() => expect(danger(admin, 'Reiniciar')).toBeDefined());
+    danger(admin, 'Reiniciar')!.click();
+    await admin.click('button', 'Cancelar');
+    await vi.waitFor(() => expect(admin.root.querySelector('form.restart-confirm')!.hasAttribute('hidden')).toBe(true));
+    expect(state(worldId).rewards.size).toBe(1);
+    expect(child.find('button.danger')).toBeUndefined();
+  });
+});
+
 describe('the size of the party', () => {
   it('is saved by an admin and refuses 0 and 11', async () => {
     const { admin, worldId } = await familyWithChild();

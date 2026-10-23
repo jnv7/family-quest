@@ -4,7 +4,8 @@ rules_version = '2';
 //
 // Principles:
 // - Everything lives under worlds/{worldId}; only members of a world read it.
-// - Nothing is ever deleted.
+// - Nothing is ever deleted, except by an admin restarting the universe (ADR 0011): then the tasks,
+//   task definitions, rewards and collectibles go, and the profiles lose their balance and party.
 // - Every document carries schemaVersion == 1 and createdAt, which never change.
 // - "Owner" means the device whose member.profileId equals the document's profileId.
 // - "Admin" means a device whose active profile is a non-archived adult profile.
@@ -209,6 +210,14 @@ service cloud.firestore {
             && newDoc().tokens >= 0;
         }
 
+        // ADR 0011: an admin restarting the universe clears a profile's balance, its reasons and its party.
+        function restarts() {
+          return isAdmin()
+            && changed().hasOnly(['tokens', 'tokensFrom', 'tokensFor', 'partyIds'])
+            && !newDoc().keys().hasAny(['tokens', 'tokensFrom', 'tokensFor'])
+            && newDoc().partyIds.size() == 0;
+        }
+
         allow read: if isMember();
         // An admin creates profiles; the world's creator creates its own adult
         // profile in the batch that creates the world.
@@ -228,6 +237,7 @@ service cloud.firestore {
             || (isOwnerOf(profileId) && changed().hasOnly(['avatar', 'partyIds']))
             || earns()
             || spends()
+            || restarts()
           );
         allow delete: if false;
       }
@@ -255,7 +265,8 @@ service cloud.firestore {
         allow update: if isAdmin()
           && changed().hasOnly(['title', 'cadence', 'level', 'assignedTo', 'question', 'big', 'active'])
           && validTaskDef(newDoc());
-        allow delete: if false;
+        // Only when an admin restarts the universe (ADR 0011).
+        allow delete: if isAdmin();
       }
 
       // ---------------------------------------------------------------------
@@ -388,7 +399,8 @@ service cloud.firestore {
         // Every branch requires an open task and excludes createdAt, so writing
         // a recurring task again can never reopen or replace an existing one.
         allow update: if ownerCompletes() || ownerEditsOpen() || adminEditsOpen() || retires();
-        allow delete: if false;
+        // Only when an admin restarts the universe (ADR 0011).
+        allow delete: if isAdmin();
       }
 
       // ---------------------------------------------------------------------
@@ -440,7 +452,8 @@ service cloud.firestore {
           && newDoc().openedAt is timestamp
           && existsAfter(collectiblePath(rewardId));
 
-        allow delete: if false;
+        // Only when an admin restarts the universe (ADR 0011).
+        allow delete: if isAdmin();
       }
 
       // ---------------------------------------------------------------------
@@ -499,7 +512,8 @@ service cloud.firestore {
             || takes()
           );
 
-        allow delete: if false;
+        // Only when an admin restarts the universe (ADR 0011).
+        allow delete: if isAdmin();
       }
     }
   }

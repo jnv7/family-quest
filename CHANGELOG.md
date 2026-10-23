@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.9.11] — 2026-10-23
+
+### Added
+
+- **Restarting the universe** (ADR 0011, the product owner's request): the last thing in management is a button in another colour. It tells what will go and that it cannot be undone, and asks the person to type "REINICIAR" before the final button works. It deletes every task, task definition, reward and collectible, and clears every profile's tokens and party; the profiles, devices and `ruleset` stay. `worlds.restartUniverse` (both adapters, with the contract suite) is the only operation that deletes; the rules allow it to an admin only, with new rules tests. This breaks "nothing is deleted" on purpose, and `CLAUDE.md`, `CONTRIBUTING.md` and `SPEC.md` say so. **The product owner must publish the rules** (`firebase deploy --only firestore:rules`).
+
 ## [0.9.10] — 2026-10-23
 
 ### Changed

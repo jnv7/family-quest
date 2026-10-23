@@ -18,7 +18,7 @@ Project-specific engineering conduct. The generic rules are in `GOVERNANCE.md`, 
 - **Theme independence:** no theme vocabulary outside `src/themes/`. Code uses the neutral glossary in `SPEC.md` §3.
 - **Dates and weeks** are always computed in `Europe/Lisbon`.
 - **Offline:** no Firestore transactions for anything that must work offline. Use `writeBatch` with deterministic ids (`SPEC.md` §10).
-- **Deletions:** nothing that a user earned is ever deleted, and no document type is deletable.
+- **Deletions:** nothing that a user earned is ever deleted, and no document type is deletable, with one exception: an admin restarting the universe (ADR 0011) deletes the tasks, task definitions, rewards and collectibles, and clears the profiles' balance and party. No other code deletes.
 - **No secrets** in the repository. The `firebaseConfig` and the Firebase project id are public by design; security lives in the Firestore rules.
 
 ## Testing policy

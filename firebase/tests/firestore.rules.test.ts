@@ -12,6 +12,7 @@ import {
 import {
   Timestamp,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -24,7 +25,7 @@ import {
   writeBatch,
   type Firestore,
 } from 'firebase/firestore';
-import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 const W = 'world0000000000000000000001'; // 27 chars, valid world id
 const now = Timestamp.fromMillis(Date.UTC(2026, 9, 18, 12));
@@ -427,8 +428,9 @@ describe('completing tasks', () => {
     await assertFails(updateDoc(doc(as(CHILD), p('tasks', 'tChildBig')), { big: false }));
   });
 
-  it('nobody deletes a task', async () => {
-    await assertFails(deleteDoc(doc(as(ADMIN), p('tasks', 'tChildOpen'))));
+  it('only an admin deletes a task (restarting the universe)', async () => {
+    await assertFails(deleteDoc(doc(as(CHILD), p('tasks', 'tChildOpen'))));
+    await assertSucceeds(deleteDoc(doc(as(ADMIN), p('tasks', 'tChildOpen'))));
   });
 });
 
@@ -507,7 +509,7 @@ describe('collectibles', () => {
     await assertSucceeds(updateDoc(doc(db, p('collectibles', 'tChildDone')), { nickname: 'Nick', reserveAt: now }));
     await assertFails(updateDoc(doc(db, p('collectibles', 'tChildDone')), { tier: 'high' }));
     await assertFails(setDoc(doc(db, p('collectibles', 'tChildDone')), { ...collectible, slot: 'slot-02' }));
-    await assertFails(deleteDoc(doc(as(ADMIN), p('collectibles', 'tChildDone'))));
+    await assertFails(deleteDoc(doc(as(CHILD), p('collectibles', 'tChildDone')))); // only an admin, restarting
   });
 
   it('every member reads collectibles (showcase); an admin edits only the nickname', async () => {
@@ -920,5 +922,41 @@ describe('taking a collectible from the reserve (ADR 0010)', () => {
     await seedDoc(p('profiles', 'pChild'), profile('Child', 'child', { partyIds: ['a', 'b', 'c', 'd', 'e'] }));
     await assertFails(take(CHILD, 'pChild', 'cReserve', {}, ['a', 'b', 'c', 'd', 'e', 'cReserve']));
     await assertSucceeds(take(CHILD, 'pChild', 'cReserve', {}, ['a', 'b', 'c', 'd', 'cReserve']));
+  });
+});
+
+describe('restarting the universe (ADR 0011)', () => {
+  beforeEach(async () => {
+    await seedDoc(p('profiles', 'pChild'), profile('Child', 'child', { tokens: 7, tokensFrom: 'tChildDone', partyIds: ['c1'] }));
+    await seedDoc(p('collectibles', 'c1'), {
+      profileId: 'pChild', slot: 'slot-01', tier: 'mid', nickname: null, obtainedWeekKey: '2026-W42', obtainedAt: now, reserveAt: null, ...meta,
+    });
+  });
+
+  it('lets an admin delete tasks, definitions, rewards and collectibles, and nobody else', async () => {
+    for (const path of [p('tasks', 'tChildOpen'), p('taskDefs', 'defDaily'), p('rewards', 'tChildDone'), p('collectibles', 'c1')]) {
+      await assertFails(deleteDoc(doc(as(CHILD), path)));
+      await assertFails(deleteDoc(doc(as(FRESH), path)));
+      await assertFails(deleteDoc(doc(as(STRANGER), path)));
+      await assertSucceeds(deleteDoc(doc(as(ADMIN), path)));
+    }
+  });
+
+  it('never lets anyone delete a world, a member or a profile', async () => {
+    await assertFails(deleteDoc(doc(as(ADMIN), p())));
+    await assertFails(deleteDoc(doc(as(ADMIN), p('members', CHILD))));
+    await assertFails(deleteDoc(doc(as(ADMIN), p('profiles', 'pChild'))));
+  });
+
+  it('lets an admin clear a profile’s balance, its reasons and its party, and nothing else', async () => {
+    const clear = { tokens: deleteField(), tokensFrom: deleteField(), tokensFor: deleteField(), partyIds: [] };
+    await assertFails(updateDoc(doc(as(CHILD), p('profiles', 'pChild')), clear));
+    await assertFails(updateDoc(doc(as(ADMIN), p('profiles', 'pChild')), { ...clear, displayName: 'Renamed' }));
+    await assertFails(updateDoc(doc(as(ADMIN), p('profiles', 'pChild')), { ...clear, tokens: 5 }));
+    await assertFails(updateDoc(doc(as(ADMIN), p('profiles', 'pChild')), { ...clear, partyIds: ['c1'] }));
+    await assertFails(updateDoc(doc(as(ADMIN), p('profiles', 'pChild')), { tokens: 99 }));
+    await assertSucceeds(updateDoc(doc(as(ADMIN), p('profiles', 'pChild')), clear));
+    const after = await assertSucceeds(getDoc(doc(as(ADMIN), p('profiles', 'pChild'))));
+    expect(after.data()).not.toHaveProperty('tokens');
   });
 });

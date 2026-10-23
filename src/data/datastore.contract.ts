@@ -828,6 +828,84 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
       });
     });
 
+    describe('restarting the universe (ADR 0011)', () => {
+      /** A family with some of everything: a definition, tasks, a balance, rewards, collectibles and a party. */
+      async function busyFamily() {
+        const env = await setup();
+        const { admin, child, worldId, childProfileId } = env;
+        await admin.taskDefs.createTaskDef(worldId, { title: 'Daily', cadence: 'daily', level: 'low', assignedTo: [], question: null, big: false }).settled;
+        const open = admin.tasks.createAdhocTask(worldId, adhoc(childProfileId, 'Open one'));
+        await open.settled;
+        const done = admin.tasks.createAdhocTask(worldId, adhoc(childProfileId, 'Done one'));
+        await done.settled;
+        await child.tasks.completeTask(worldId, done.result.taskId, { answer: null, talkFlag: false, tokens: 10 }).settled;
+        const bought = child.tokens.buyReward(worldId, { tier: 'low', price: 5, slot: 'slot-a' });
+        await bought.settled;
+        const legacy = await legacyReward(env, childProfileId);
+        await child.rewards.openReward(worldId, legacy, { slot: 'slot-b' }).settled;
+        await child.collectibles.arrangeParty(worldId, childProfileId, { partyIds: [bought.result.rewardId], toReserve: [], fromReserve: [] }).settled;
+        return env;
+      }
+
+      it('deletes what was earned and created, keeps the profiles, and starts everyone at zero', async () => {
+        const env = await busyFamily();
+        const { admin, child, worldId, childProfileId } = env;
+        const before = new Watch<Profile[]>((v, e) => admin.worlds.observeProfiles(worldId, v, e));
+        const profileCount = (await before.current()).length;
+
+        await admin.worlds.restartUniverse(worldId).settled;
+
+        const tasks = new Watch<Task[]>((v, e) => admin.tasks.observeTasks(worldId, childProfileId, v, e));
+        const defs = new Watch<TaskDef[]>((v, e) => admin.taskDefs.observeTaskDefs(worldId, v, e));
+        const owned = new Watch<Collectible[]>((v, e) => child.collectibles.observeCollectibles(worldId, childProfileId, v, e));
+        const rewards = new Watch<Reward[]>((v, e) => admin.rewards.observeUnopenedRewards(worldId, childProfileId, v, e));
+        const balance = new Watch<number>((v, e) => child.tokens.observeBalance(worldId, childProfileId, v, e));
+        const showcase = new Watch<ShowcaseItem[]>((v, e) => child.collectibles.observeShowcase(worldId, 30, v, e));
+        await eventually(() => {
+          expect(tasks.value).toEqual([]);
+          expect(defs.value).toEqual([]);
+          expect(owned.value).toEqual([]);
+          expect(rewards.value).toEqual([]);
+          expect(balance.value).toBe(0);
+          expect(showcase.value).toEqual([]);
+        });
+        const profiles = new Watch<Profile[]>((v, e) => admin.worlds.observeProfiles(worldId, v, e));
+        await eventually(() => {
+          expect(profiles.value).toHaveLength(profileCount);
+          expect(profiles.value?.find((p) => p.id === childProfileId)).toMatchObject({ displayName: 'Sam', kind: 'child', partyIds: [] });
+        });
+        // The devices keep their profiles, and the ruleset stays.
+        expect((await child.worlds.getMembership(worldId))?.profileId).toBe(childProfileId);
+        const world = new Watch<World>((v, e) => child.worlds.observeWorld(worldId, v, e));
+        await eventually(() => expect(world.value?.ruleset).toEqual(DEFAULT_RULESET));
+        for (const watch of [before, tasks, defs, owned, rewards, balance, showcase, profiles, world]) watch.close();
+      });
+
+      it('lets the new universe start: tasks can be made and tokens earned again, and a second restart is harmless', async () => {
+        const { admin, child, worldId, childProfileId } = await busyFamily();
+        await admin.worlds.restartUniverse(worldId).settled;
+        await admin.worlds.restartUniverse(worldId).settled;
+        const task = admin.tasks.createAdhocTask(worldId, adhoc(childProfileId, 'Fresh'));
+        await task.settled;
+        await child.tasks.completeTask(worldId, task.result.taskId, { answer: null, talkFlag: false, tokens: 2 }).settled;
+        const balance = new Watch<number>((v, e) => child.tokens.observeBalance(worldId, childProfileId, v, e));
+        await eventually(() => expect(balance.value).toBe(2));
+        balance.close();
+      });
+
+      it('is refused to a child and to a device with no profile, and changes nothing', async () => {
+        const { admin, child, newcomer, worldId, childProfileId } = await busyFamily();
+        await rejectsWith(child.worlds.restartUniverse(worldId), 'permission-denied');
+        await rejectsWith(newcomer.worlds.restartUniverse(worldId), 'permission-denied');
+        const balance = new Watch<number>((v, e) => child.tokens.observeBalance(worldId, childProfileId, v, e));
+        await eventually(() => expect(balance.value).toBe(5));
+        const defs = new Watch<TaskDef[]>((v, e) => admin.taskDefs.observeTaskDefs(worldId, v, e));
+        await eventually(() => expect(defs.value).toHaveLength(1));
+        balance.close();
+        defs.close();
+      });
+    });
+
     describe('profile symbols', () => {
       const profilesOf = (device: DataStore, worldId: string) => new Watch<Profile[]>((v, e) => device.worlds.observeProfiles(worldId, v, e));
       const symbolOf = (watch: Watch<Profile[]>, id: string) => watch.value?.find((p) => p.id === id)?.avatar.symbol;

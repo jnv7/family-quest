@@ -23,7 +23,7 @@ A PWA for a family of adults and children. Each person has tasks (daily, weekly,
 - **No friction.** Completing a task takes at most 2 taps from the map; a task with a verification question takes a third, to answer it (product owner, 2026-10-21). Alerts are visual (a speech bubble with dots appears on a place of the map, as if it wanted to say something), with no scolding text and no push notifications. **[decided]**
 - **No comparison.** No screen shows counts, rankings or who owns a collectible to other people. **[decided]**
   - **One deliberate exception: your own balance** (product owner, 2026-10-23; from 0.9). The active profile's own token balance is shown as a number at the top of the `vault`, and nowhere else. It is never shown to anyone else, nor in the adults' view. **[decided]**
-- **Nothing earned is lost.** Rewards and collectibles are never deleted. No document in the system is deletable. Spending tokens deletes nothing: every token earned is recorded on its done task, and every token spent on the reward it bought (ADR 0008). **[decided]**
+- **Nothing earned is lost.** Rewards and collectibles are never deleted. No document in the system is deletable, except when an admin restarts the universe (section 6, ADR 0011), the one deliberate and irreversible exception. Spending tokens deletes nothing: every token earned is recorded on its done task, and every token spent on the reward it bought (ADR 0008). **[decided]**
   - **One deliberate exception in reach, not in data** (product owner, 2026-10-21): a collectible that drops out of the `showcase` "leaves for another island". It stays stored, but it can no longer be seen or brought back (section 6). **[decided]**
   - **Retiring a task** (from 0.9) hides an open task that earned nothing. It is a status change, not a deletion (section 6).
 - **Public repository data:** code and art only. No family data. **[decided]**
@@ -158,7 +158,7 @@ A reward and its collectible share one id. **[decided]**
 - the *owner* of a document is the device whose `members/{uid}.profileId` equals the document's `profileId`;
 - an *admin* is a device whose active profile is a non-archived adult profile.
 
-**Firestore rules** (file `firebase/firestore.rules`, tested in the emulator). Nothing can be deleted, in any collection.
+**Firestore rules** (file `firebase/firestore.rules`, tested in the emulator). Nothing can be deleted, in any collection, except by an admin restarting the universe (section 6): then `tasks`, `taskDefs`, `rewards` and `collectibles` are deletable by an admin, and an admin may clear a profile's `tokens`, `tokensFrom`, `tokensFor` and `partyIds` (and nothing else). Worlds, members and profiles are never deletable.
 
 | Collection | Read | Write |
 | --- | --- | --- |
@@ -213,6 +213,8 @@ Tokens are earned only by completing: "no" to the question, "undo" within the 4 
 **Verification question.** If the task has a `question`, "done" comes first, and only then the `checkin` character asks it: after "done" the card shows the character's small portrait with the question in a speech bubble, and "yes" and "no" inside the bubble (from 0.8). **[decided]** (product owner, 2026-10-21) Answering "yes" completes the task, so a task with a question takes three taps from the map (the place, "done", "yes"); one without takes two. On "no", the task stays open, the character says a friendly themed line, and no failure is recorded. **[decided]**
 
 **"I think I did better".** **[decided]** (product owner, 2026-10-21) This is no longer a button. The `checkin` shows a static line before the list of tasks ("if you think you did a task better than expected, talk to your parents"), so the conversation happens out loud. The `talkFlag` field and its store operation remain in the data, but the interface does not set it, so it stays `false`. There are no points, states or multipliers.
+
+**Restarting the universe** (from 0.9). **[decided]** (product owner, 2026-10-23, ADR 0011) The last thing in management is a button, in another colour, that restarts the universe. It is for admins only. It deletes every task (open, done and retired), every task definition, every reward (so the purchase history) and every collectible of the world, and clears every profile's token balance and party. The profiles, their symbols, the devices and the `ruleset` stay. It first says what will go and that it cannot be undone, then asks the person to type a word before the final button works. It needs a connection and says so without one. It is the one place in the game that deletes. Afterwards everyone starts at zero, and the recurring tasks are gone with their definitions.
 
 **Retiring a task** (from 0.9). **[decided]** (product owner, 2026-10-21: a "delete task" button in the `checkin`) An open task can be retired:
 
@@ -396,7 +398,7 @@ firebase.json   Firebase CLI configuration (at the root, where the CLI expects i
   - from 0.9: tokens are earned only in the batch that completes the task, by its `tokens`; a purchase above the balance, the same tokens spent twice, and a device spending another profile's tokens are refused; only the allowed people retire, and a retired task never changes again;
   - `rewards` and `collectibles` are never replaced;
   - only an `admin` writes `taskDefs`;
-  - nothing can be deleted.
+  - nothing can be deleted, except by an admin restarting the universe (the rules tests cover each collection).
 - **`npm run lint:theme-leak`:** fails if it finds theme vocabulary anywhere in `src/`, `firebase/`, `schemas/` or `.github/` outside `src/themes/`. Documentation is not scanned. The forbidden terms are listed per theme in `scripts/theme-leak-terms.json` (for the pirate theme, for example: baú, bicho, marujo, pirata, farol, papagaio, tripulação, gruta, chest, crew, parrot, lighthouse, pirate, treasure).
 - **Two real devices** in releases 0.2, 0.5, 0.6 and 0.9, including airplane mode (in 0.9: two phones of one profile spending the same tokens).
 - **Second minimal theme** (emoji and text) working without touching code or data, in 0.2.

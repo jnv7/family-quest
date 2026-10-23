@@ -388,6 +388,23 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
           };
         }),
 
+      restartUniverse: (worldId) =>
+        submit(undefined, (view, uid) => {
+          if (!online) throw new DataStoreError('unavailable', 'Restarting needs a connection');
+          const ws = requireWorld(view, worldId);
+          const ops: Op[] = [
+            ...[...ws.tasks.keys()].map((id): Op => ({ worldId, collection: 'tasks', id, delete: true })),
+            ...[...ws.taskDefs.keys()].map((id): Op => ({ worldId, collection: 'taskDefs', id, delete: true })),
+            ...[...ws.rewards.keys()].map((id): Op => ({ worldId, collection: 'rewards', id, delete: true })),
+            ...[...ws.collectibles.keys()].map((id): Op => ({ worldId, collection: 'collectibles', id, delete: true })),
+            ...[...ws.profiles.keys()].map((id): Op => ({ worldId, collection: 'profiles', id, reset: true })),
+          ];
+          return {
+            ops,
+            check: (state) => (accessOf(state, worldId, uid)?.isAdmin ? null : denied('Only an admin restarts the universe')),
+          };
+        }),
+
       createProfile(worldId, input: CreateProfileInput) {
         const profileId = autoId();
         return submit({ profileId }, (view, uid) => {
