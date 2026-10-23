@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 960" role="img" aria-label="Uma gruta que desce da entrada até ao fundo">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 540" role="img" aria-label="Uma gruta que desce da entrada até ao fundo">
   <defs>
     <linearGradient id="depth" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#6f5a46"/>
@@ -14,32 +14,34 @@
       <stop offset="1" stop-color="#ffb347" stop-opacity="0"/>
     </radialGradient>
   </defs>
-  <rect width="540" height="960" fill="url(#depth)"/>
-  <ellipse cx="270" cy="0" rx="300" ry="260" fill="url(#mouth)"/>
-  <path d="M0 0H540V70C490 120 470 90 430 140C390 190 340 130 270 175C200 130 150 190 110 140C70 90 50 120 0 70Z" fill="#2b2230"/>
-  <path d="M0 330C60 360 70 420 40 470C20 520 60 560 0 610Z" fill="#241c2b"/>
-  <path d="M540 380C480 410 470 470 500 520C520 570 480 610 540 660Z" fill="#241c2b"/>
-  <path d="M0 640C70 670 90 740 50 790C30 840 70 880 0 920Z" fill="#150f22"/>
-  <path d="M540 700C470 730 450 790 490 840C510 890 470 920 540 960Z" fill="#150f22"/>
-  <g fill="#1d1626">
-    <path d="M120 150L140 235L160 150Z"/>
-    <path d="M230 170L250 270L275 170Z"/>
-    <path d="M330 165L355 245L380 160Z"/>
-    <path d="M60 380L72 430L90 380Z"/>
-    <path d="M440 410L458 470L475 405Z"/>
+  <rect width="540" height="540" fill="url(#depth)"/>
+  <g transform="scale(1 0.5625)">
+    <ellipse cx="270" cy="0" rx="300" ry="260" fill="url(#mouth)"/>
+    <path d="M0 0H540V70C490 120 470 90 430 140C390 190 340 130 270 175C200 130 150 190 110 140C70 90 50 120 0 70Z" fill="#2b2230"/>
+    <path d="M0 330C60 360 70 420 40 470C20 520 60 560 0 610Z" fill="#241c2b"/>
+    <path d="M540 380C480 410 470 470 500 520C520 570 480 610 540 660Z" fill="#241c2b"/>
+    <path d="M0 640C70 670 90 740 50 790C30 840 70 880 0 920Z" fill="#150f22"/>
+    <path d="M540 700C470 730 450 790 490 840C510 890 470 920 540 960Z" fill="#150f22"/>
+    <g fill="#1d1626">
+      <path d="M120 150L140 235L160 150Z"/>
+      <path d="M230 170L250 270L275 170Z"/>
+      <path d="M330 165L355 245L380 160Z"/>
+      <path d="M60 380L72 430L90 380Z"/>
+      <path d="M440 410L458 470L475 405Z"/>
+    </g>
   </g>
   <g>
-    <ellipse cx="62" cy="560" rx="60" ry="70" fill="url(#glow)"/>
-    <path d="M62 585c-10-12-12-26-4-40c2 8 8 12 12 14c-2-10 2-20 10-26c0 20 12 26 2 52z" fill="#ff8a1f"/>
-    <rect x="58" y="585" width="8" height="40" rx="3" fill="#4a3322"/>
-    <ellipse cx="478" cy="560" rx="60" ry="70" fill="url(#glow)"/>
-    <path d="M478 585c-10-12-12-26-4-40c2 8 8 12 12 14c-2-10 2-20 10-26c0 20 12 26 2 52z" fill="#ff8a1f"/>
-    <rect x="474" y="585" width="8" height="40" rx="3" fill="#4a3322"/>
+    <ellipse cx="34" cy="250" rx="46" ry="52" fill="url(#glow)"/>
+    <path d="M34 270c-9-10-10-22-3-34c2 7 7 10 10 12c-2-9 2-17 9-22c0 17 10 22 2 44z" fill="#ff8a1f"/>
+    <rect x="30" y="270" width="7" height="30" rx="3" fill="#4a3322"/>
+    <ellipse cx="506" cy="250" rx="46" ry="52" fill="url(#glow)"/>
+    <path d="M506 270c-9-10-10-22-3-34c2 7 7 10 10 12c-2-9 2-17 9-22c0 17 10 22 2 44z" fill="#ff8a1f"/>
+    <rect x="502" y="270" width="7" height="30" rx="3" fill="#4a3322"/>
   </g>
   <g fill="#f4d35e" opacity="0.55">
-    <circle cx="150" cy="900" r="5"/>
-    <circle cx="395" cy="925" r="4"/>
-    <circle cx="270" cy="940" r="6"/>
-    <circle cx="205" cy="930" r="3"/>
+    <circle cx="40" cy="505" r="5"/>
+    <circle cx="500" cy="520" r="4"/>
+    <circle cx="270" cy="528" r="5"/>
+    <circle cx="180" cy="522" r="3"/>
   </g>
 </svg>

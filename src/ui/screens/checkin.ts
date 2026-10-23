@@ -9,6 +9,7 @@ import { pickLine } from '../lines';
 import { observeWithRetry } from '../observe';
 import { observeSelf } from '../self';
 import { taskCard } from '../taskCard';
+import { DataStoreError } from '../../data/DataStore';
 import { screenBar } from '../bar';
 import { createRetireControl } from '../retire';
 import type { Profile } from '../../core/model';
@@ -72,7 +73,15 @@ export const renderCheckin: WorldScreen = (ctx, root, { worldId }) => {
       if (!entry) return;
       entry.cancel();
       pending.delete(task.id);
-      ctx.settle(ctx.store.tasks.completeTask(worldId, task.id, { answer, talkFlag: task.talkFlag, tokens }).settled);
+      // A refusal puts the task back in the list; say so, instead of leaving the person to wonder.
+      ctx.store.tasks.completeTask(worldId, task.id, { answer, talkFlag: task.talkFlag, tokens }).settled.catch((error: unknown) => {
+        if (error instanceof DataStoreError && error.code === 'permission-denied') {
+          earned = Math.max(0, earned - tokens);
+          showEarned();
+          ctx.notify('notice.refused');
+        }
+        ctx.settle(Promise.reject(error));
+      });
     };
     pending.set(task.id, { run, cancel: ctx.later(run, UNDO_MS), tokens });
     say('congrats');

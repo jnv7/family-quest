@@ -45,7 +45,7 @@ These names are the only ones allowed in code, ids, collections and rules. The t
 | `showcase` | The latest collectibles moved to the reserve | Bar |
 | `reward` | What is opened in the `vault`; it has a `tier` and yields one collectible. From 0.9 it is bought with tokens; before 0.9 a completed task produced one | Baú |
 | `token` | Unit earned by completing a task and spent in the `vault` (from 0.9) | Tocha |
-| `collectible` | What comes out of a reward | Bicho |
+| `collectible` | What comes out of a reward | Marujo |
 | `party` | The collectibles (`partySize`, 5 by default) that accompany a profile | Tripulação |
 | `reserve` | Collectibles that are not in the `party` | Ilha |
 | `tier` | Rarity: `low`, `mid`, `high` | Baixo, médio, alto |
@@ -292,10 +292,10 @@ The pirate theme declares moorings for children only, at the pier. Adults keep t
 5. **`home`.** The active profile with the theme's look for its kind (`homeVariants`), with the profile's symbol on its sail (the symbol is the avatar for now), a button under it to choose the symbol, its `party` and its pending collectibles; there is no reserve list. Each collectible in the `party` can be renamed (the nickname is trimmed, empty clears it, at most 30 characters). A `party` member is sent away, to the `showcase`, in one tap with no confirmation, because nothing is lost; a pending collectible joins the `party`, and with a full `party` the screen asks who leaves. No counts and no comparisons. The `party` list has a short line saying what it is. The owner chooses or changes the profile's symbol with the button under the boat, which opens a panel with the theme's suggestions first and then the animals and plants, with large squares, and a way to clear it; the chosen emoji goes onto the sail at once. An adult's symbol also shows on the big ship at the pier of the map, where the theme gives a place for it (`symbolAt` on the place). Where the theme does not place the symbol over its art, it is shown next to the name. The layered avatar (0.8) is not started.
 6. **`vault`** (from 0.9). **[decided]** (product owner, 2026-10-23)
    - **The balance** of the active profile is at the top, as the token icon and a number: the only place it is shown (section 2).
-   - **Rewards already found** (from before 0.9) come next, if any, each with its tier art, opening for free.
    - **The depth:** the three tiers are three spots, from the entrance (`low`) to the deep end (`high`), each with its reward art, the theme's line inviting the person to go deeper, and its price. Their placement, art and wording are theme data (section 8); the engine only knows three tiers, ordered `low` to `high`.
      - A tier the person cannot afford is dimmed, still shows its price, and does nothing when tapped.
      - Tapping an affordable tier selects it and shows "open for N" (with the token icon). Tapping that spends the tokens and opens the reward. Tapping elsewhere cancels.
+   - **Rewards already found** (from before 0.9) come under the depth, if any, each with its tier art, opening for free.
    - **After opening** the collectible is shown, and its owner chooses:
      - join the `party` (with a full `party`, the screen asks who leaves, and that one goes to the reserve); the name tag can be set right there;
      - let it go, straight to the reserve (the `showcase`);
@@ -397,7 +397,7 @@ firebase.json   Firebase CLI configuration (at the root, where the CLI expects i
   - `rewards` and `collectibles` are never replaced;
   - only an `admin` writes `taskDefs`;
   - nothing can be deleted.
-- **`npm run lint:theme-leak`:** fails if it finds theme vocabulary anywhere in `src/`, `firebase/`, `schemas/` or `.github/` outside `src/themes/`. Documentation is not scanned. The forbidden terms are listed per theme in `scripts/theme-leak-terms.json` (for the pirate theme, for example: baú, bicho, pirata, farol, papagaio, tripulação, gruta, chest, crew, parrot, lighthouse, pirate, treasure).
+- **`npm run lint:theme-leak`:** fails if it finds theme vocabulary anywhere in `src/`, `firebase/`, `schemas/` or `.github/` outside `src/themes/`. Documentation is not scanned. The forbidden terms are listed per theme in `scripts/theme-leak-terms.json` (for the pirate theme, for example: baú, bicho, marujo, pirata, farol, papagaio, tripulação, gruta, chest, crew, parrot, lighthouse, pirate, treasure).
 - **Two real devices** in releases 0.2, 0.5, 0.6 and 0.9, including airplane mode (in 0.9: two phones of one profile spending the same tokens).
 - **Second minimal theme** (emoji and text) working without touching code or data, in 0.2.
 

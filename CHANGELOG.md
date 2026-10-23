@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.9.8] — 2026-10-23
+
+### Changed (the product owner's first try of 0.9)
+
+- The pirate theme calls the collectible a `marujo` (it was `bicho`); `marujo` and `marujos` join the words the theme-leak lint forbids outside `src/themes/`.
+- The cave picture in the vault is shorter (square instead of 9:16), and the rewards found before 0.9 now come under it.
+- A completion the server refuses (the task returns to the list) now says "Isto não ficou guardado…" instead of failing silently, and takes back the token icons it had shown.
+
 ## [0.9.7] — 2026-10-23
 
 Release candidate. No new behaviour.

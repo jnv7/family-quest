@@ -14,8 +14,8 @@ import { screenBar } from '../bar';
 
 /**
  * The vault (SPEC.md §7.6). From top to bottom: the balance of the active profile, which is the one place
- * a count is shown (SPEC.md §2); the rewards found before 0.9, which open for free; the depth, where the
- * three tiers wait for tokens; what has just been revealed; and the recent collectibles. Choosing an
+ * a count is shown (SPEC.md §2); the depth, where the three tiers wait for tokens; the rewards found before
+ * 0.9, which open for free, under it; what has just been revealed; and the recent collectibles. Choosing an
  * affordable tier and tapping "open for N" buys a reward, already opened (ADR 0008). A collectible is
  * pending until its owner decides: join the party, send it to the reserve, or leave it for later. Nothing
  * here is compared with anyone else, and nothing can be deleted.
@@ -229,8 +229,8 @@ export const renderVault: WorldScreen = (ctx, root, { worldId }) => {
     screenBar(ctx, { title: ctx.text('vault.title'), back: { name: 'map' } }),
     problem,
     balanceBox,
-    found,
     depth,
+    found,
     reveals,
     recent,
   );
