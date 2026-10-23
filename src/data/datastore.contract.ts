@@ -908,6 +908,15 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
       const balanceOf = (device: DataStore, worldId: string, profileId: ProfileId) =>
         new Watch<number>((v, e) => device.tokens.observeBalance(worldId, profileId, v, e));
 
+      /** What the app has observed before a device loses its connection: the world and the profile's tasks. */
+      async function warm(device: DataStore, worldId: string, profileId: ProfileId) {
+        const world = new Watch<World>((v, e) => device.worlds.observeWorld(worldId, v, e));
+        const tasks = new Watch<Task[]>((v, e) => device.tasks.observeTasks(worldId, profileId, v, e));
+        await world.current();
+        await tasks.current();
+        return [world, tasks];
+      }
+
       it('completing earns the tokens given, with no reward', async () => {
         const { child, worldId, childProfileId } = await setup();
         const balance = balanceOf(child, worldId, childProfileId);
@@ -1008,6 +1017,7 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
           expect(first.value).toBe(25);
           expect(second.value).toBe(25);
         });
+        const warmed = [...(await warm(child, worldId, childProfileId)), ...(await warm(child2, worldId, childProfileId))];
 
         await setOnline(child, false);
         await setOnline(child2, false);
@@ -1033,7 +1043,7 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
           expect(secondCollectibles.value).toHaveLength(1);
         });
         expect(secondCollectibles.value?.[0]?.id).toBe(firstPurchase.result.rewardId);
-        for (const watch of [first, second, firstCollectibles, secondCollectibles]) watch.close();
+        for (const watch of [first, second, firstCollectibles, secondCollectibles, ...warmed]) watch.close();
       });
 
       it('two devices offline, each completing a different task, end with the sum of both', async () => {
@@ -1046,6 +1056,7 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
         const second = balanceOf(child2, worldId, childProfileId);
         await first.current();
         await second.current();
+        const warmed = [...(await warm(child, worldId, childProfileId)), ...(await warm(child2, worldId, childProfileId))];
 
         await setOnline(child, false);
         await setOnline(child2, false);
@@ -1067,6 +1078,7 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
         tasks.close();
         first.close();
         second.close();
+        for (const watch of warmed) watch.close();
       });
     });
 
