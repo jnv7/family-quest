@@ -120,6 +120,7 @@
     "level.mid": "Normal",
     "level.high": "Difícil",
     "notice.refused": "Isto não ficou guardado. Se voltar a acontecer, avisa quem gere a app.",
+    "notice.tookFirst": "Alguém foi mais rápido.",
     "notice.taskCreated": "Tarefa criada.",
     "error.load": "Não foi possível carregar. Verifica a ligação e tenta de novo.",
     "task.more": "Mais opções da tarefa",

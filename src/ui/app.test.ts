@@ -1598,14 +1598,8 @@ describe('the showcase', () => {
     await child.click('button', 'Fechar');
   });
 
-  it('lets a person bring one of their own back into the party from here, and nobody else', async () => {
-    const { admin, child, worldId } = await reserveOfTheChild();
-    await admin.click('button.place', 'Vitrina');
-    await vi.waitFor(() => expect(items(admin)).toHaveLength(2));
-    (items(admin)[0] as HTMLElement).click();
-    await admin.see('Fechar');
-    expect(admin.find('button', 'Trazer de volta')).toBeUndefined(); // not Alex's
-
+  it('lets a person bring one of their own back into the party from here', async () => {
+    const { child, worldId } = await reserveOfTheChild();
     await child.click('button.place', 'Vitrina');
     await vi.waitFor(() => expect(items(child)).toHaveLength(2));
     (items(child)[0] as HTMLElement).click();
@@ -1615,6 +1609,37 @@ describe('the showcase', () => {
     expect(state(worldId).collectibles.get(id)!.reserveAt).toBeNull();
     await vi.waitFor(() => expect(items(child)).toHaveLength(1)); // it left the showcase
     expect(state(worldId).collectibles.size).toBe(2); // nothing deleted
+  });
+
+  it('lets anyone take one into their own party, whoever it came from: it changes owner and keeps its name', async () => {
+    const { admin, worldId } = await reserveOfTheChild();
+    const [named] = [...state(worldId).collectibles.values()];
+    state(worldId).collectibles.set(named!.id, { ...named!, nickname: 'Batizado' });
+    await admin.click('button.place', 'Vitrina');
+    await vi.waitFor(() => expect(items(admin)).toHaveLength(2));
+    const item = items(admin).find((el) => el.textContent?.includes('Batizado')) as HTMLElement;
+    item.click();
+    await admin.click('button.primary', 'Trazer de volta');
+    const alex = profileNamed(worldId, 'Alex');
+    await vi.waitFor(() => expect(profileNamed(worldId, 'Alex').partyIds).toEqual([named!.id]));
+    expect(state(worldId).collectibles.get(named!.id)).toMatchObject({ profileId: alex.id, reserveAt: null, nickname: 'Batizado' });
+    await vi.waitFor(() => expect(items(admin)).toHaveLength(1));
+    expect(admin.root.textContent).not.toMatch(/Sam/); // still no owner shown
+  });
+
+  it('says someone was faster when another person took it first', async () => {
+    const { admin, child, worldId } = await reserveOfTheChild();
+    await admin.click('button.place', 'Vitrina');
+    await child.click('button.place', 'Vitrina');
+    await vi.waitFor(() => expect(items(admin)).toHaveLength(2));
+    await vi.waitFor(() => expect(items(child)).toHaveLength(2));
+    (items(admin)[0] as HTMLElement).click();
+    (items(child)[0] as HTMLElement).click();
+    await admin.click('button.primary', 'Trazer de volta');
+    child.find('button.primary', 'Trazer de volta')!.click();
+    await vi.waitFor(() => expect(document.body.textContent).toContain('Alguém foi mais rápido.'));
+    expect(profileNamed(worldId, 'Alex').partyIds).toHaveLength(1);
+    expect(profileSam(worldId).partyIds).toHaveLength(0);
   });
 
   it('lets an admin rename an item, and not a child', async () => {

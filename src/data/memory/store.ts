@@ -681,6 +681,45 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
           };
         }),
 
+      takeFromReserve: (worldId, collectibleId, change) =>
+        submit(undefined, (view, uid) => {
+          const ws = requireWorld(view, worldId);
+          const { member } = requireAccess(view, worldId, uid);
+          const profile = member.profileId === null ? undefined : ws.profiles.get(member.profileId);
+          if (!profile) throw denied('Choose a profile first');
+          const taken = ws.collectibles.get(collectibleId);
+          if (!taken) throw notFound(`Collectible ${collectibleId} does not exist`);
+          if (taken.reserveAt === null) throw denied('Only what is in the reserve can be taken');
+          if (!change.partyIds.includes(collectibleId) || !change.fromReserve.includes(collectibleId)) {
+            throw invalid('The taken collectible joins the party and leaves the reserve');
+          }
+          // Once taken it is the profile's own, coming from the reserve.
+          const owned = [...ws.collectibles.values()].filter((c) => c.profileId === profile.id).concat({ ...taken, profileId: profile.id });
+          const problem = checkPartyChange(profile, owned, change, ws.world.ruleset.partySize);
+          if (problem) throw invalid(`The party change is not valid (${problem})`);
+          const now = clock();
+          const ops: Op[] = [
+            { worldId, collection: 'collectibles', id: collectibleId, patch: { profileId: profile.id, reserveAt: null } },
+            ...change.toReserve.map((id): Op => ({ worldId, collection: 'collectibles', id, patch: { reserveAt: now } })),
+            ...change.fromReserve.filter((id) => id !== collectibleId).map((id): Op => ({ worldId, collection: 'collectibles', id, patch: { reserveAt: null } })),
+          ];
+          if (!sameIds(profile.partyIds, change.partyIds)) {
+            ops.push({ worldId, collection: 'profiles', id: profile.id, patch: { partyIds: [...change.partyIds] } });
+          }
+          return {
+            ops,
+            check: (state) => {
+              const access = accessOf(state, worldId, uid);
+              if (!access) return denied('Not a member of this world');
+              if (access.member.profileId !== profile.id) return denied('Only the active profile takes');
+              if (access.ws.collectibles.get(collectibleId)?.reserveAt == null) return denied('Someone took it first');
+              const others = [...change.toReserve, ...change.fromReserve.filter((id) => id !== collectibleId)];
+              if (others.some((id) => access.ws.collectibles.get(id)?.profileId !== profile.id)) return denied('A collectible is the owner’s to move');
+              return null;
+            },
+          };
+        }),
+
       setNickname: (worldId, collectibleId, nickname) =>
         submit(undefined, (view, uid) => {
           const value = nickname === null ? null : normaliseNickname(nickname);

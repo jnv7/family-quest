@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.9.9] — 2026-10-23
+
+### Changed (ADR 0010, the product owner's decision)
+
+- Anyone can take a collectible from the reserve into their own party, whoever it came from or named. Taking changes its owner and keeps its name. `collectibles.takeFromReserve` (both adapters, with the contract suite) is one batch; a collectible someone took first is `permission-denied`, and the screen says "Alguém foi mais rápido.". The `showcase` detail offers the same choices as the vault (join, or who leaves when the party is full), and still shows nobody's owner. **The product owner must publish the rules** (`firebase deploy --only firestore:rules`) before devices can take. New rules tests cover the taking, the refusals and the race.
+
 ## [0.9.8] — 2026-10-23
 
 ### Changed (the product owner's first try of 0.9)

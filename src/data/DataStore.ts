@@ -327,6 +327,16 @@ export interface CollectibleStore {
   arrangeParty(worldId: WorldId, profileId: ProfileId, change: PartyChange): Write;
 
   /**
+   * ADR 0010: the active profile takes a collectible from the reserve, whoever owned it. One batch: the collectible's
+   * `profileId` becomes the active profile's and `reserveAt` becomes null (its name stays), and the profile gets
+   * `change.partyIds`, which must contain it; `change.fromReserve` must contain it too. The rest of `change` is as
+   * in `arrangeParty` (who leaves a full party goes to the reserve). Checked with `checkPartyChange` first
+   * (`invalid-argument`). A collectible that is no longer in the reserve, because someone took it first, is
+   * `permission-denied` and nothing changes.
+   */
+  takeFromReserve(worldId: WorldId, collectibleId: TaskId, change: PartyChange): Write;
+
+  /**
    * Sets or clears a collectible's nickname (SPEC.md §4). The text is trimmed; empty means null;
    * longer than `LIMITS.nickname` is `invalid-argument` before any write. Owner, or an admin
    * (moderation: the showcase shows nicknames to everyone).

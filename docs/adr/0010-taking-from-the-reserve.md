@@ -1,6 +1,6 @@
 # 0010 — Anyone can take a collectible from the reserve
 
-- **Status:** Proposed (waiting for the product owner)
+- **Status:** Accepted (product owner, 2026-10-23)
 - **Date:** 2026-10-23
 - **Decided by:** product owner (the behaviour, 2026-10-23: "anyone can take any collectible from the reserve, even if it came from, and was even named by, someone else"). The data and rules design below is the developer's proposal.
 - **Refines:** `SPEC.md` §4 (collectible), §5, §6 (party and reserve) and §7 (showcase). Replaces "a person can bring back only their own".

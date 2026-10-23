@@ -5,7 +5,7 @@ import type { Collectible, Millis, Profile, Ruleset, TaskId } from './model';
 export type CollectibleState = 'party' | 'pending' | 'reserve';
 
 /** The party is the source of truth: a collectible whose id is in `partyIds` is in the party. */
-export function collectibleState(collectible: Collectible, partyIds: readonly TaskId[]): CollectibleState {
+export function collectibleState(collectible: Pick<Collectible, 'id' | 'reserveAt'>, partyIds: readonly TaskId[]): CollectibleState {
   if (partyIds.includes(collectible.id)) return 'party';
   return collectible.reserveAt === null ? 'pending' : 'reserve';
 }

@@ -479,11 +479,24 @@ service cloud.firestore {
               && newDoc().profileId == getAfter(rewardPath(rewardId)).data.profileId)
           );
 
+        // ADR 0010: anyone takes a collectible from the reserve into their own party. It changes
+        // owner and leaves the reserve, in the batch that puts its id in the taker's party.
+        function takes() {
+          return isMember()
+            && activeProfileId() != null
+            && resource.data.reserveAt != null
+            && changed().hasOnly(['profileId', 'reserveAt'])
+            && newDoc().profileId == activeProfileId()
+            && newDoc().reserveAt == null
+            && getAfter(profilePath(activeProfileId())).data.partyIds.hasAny([rewardId]);
+        }
+
         allow update: if validNickname(newDoc()) && (
             (isOwnerOf(resource.data.profileId)
               && changed().hasOnly(['nickname', 'reserveAt'])
               && (newDoc().reserveAt == null || newDoc().reserveAt is timestamp))
             || (isAdmin() && changed().hasOnly(['nickname']))
+            || takes()
           );
 
         allow delete: if false;

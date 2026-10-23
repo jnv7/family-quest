@@ -849,3 +849,76 @@ describe('retiring tasks', () => {
     await assertFails(setDoc(doc(as(CHILD), p('tasks', 'tNew')), openTask('pChild', { tokens: 2 })));
   });
 });
+
+describe('taking a collectible from the reserve (ADR 0010)', () => {
+  const owned = (profileId: string, extra: Record<string, unknown> = {}) => ({
+    profileId,
+    slot: 'slot-01',
+    tier: 'mid',
+    nickname: 'Rex',
+    obtainedWeekKey: '2026-W42',
+    obtainedAt: now,
+    reserveAt: now,
+    ...meta,
+    ...extra,
+  });
+
+  beforeEach(async () => {
+    await seedDoc(p('collectibles', 'cReserve'), owned('pChild2'));
+    await seedDoc(p('collectibles', 'cParty'), owned('pChild2', { reserveAt: null }));
+    await seedDoc(p('profiles', 'pChild2'), profile('Child two', 'child', { partyIds: ['cParty'] }));
+  });
+
+  async function take(uid: string, profileId: string, id: string, patch: Record<string, unknown> = {}, party: string[] = [id]) {
+    const db = as(uid);
+    const batch = writeBatch(db);
+    batch.update(doc(db, p('collectibles', id)), { profileId, reserveAt: null, ...patch });
+    batch.update(doc(db, p('profiles', profileId)), { partyIds: party });
+    return batch.commit();
+  }
+
+  it('lets anyone take it into their own party, and keeps its name', async () => {
+    await assertSucceeds(take(CHILD, 'pChild', 'cReserve'));
+    await assertSucceeds(getDoc(doc(as(CHILD), p('collectibles', 'cReserve'))));
+    // It is theirs now: they rename it, and its first owner cannot.
+    await assertSucceeds(updateDoc(doc(as(CHILD), p('collectibles', 'cReserve')), { nickname: 'Max' }));
+    await assertFails(updateDoc(doc(as(CHILD2), p('collectibles', 'cReserve')), { nickname: 'Back' }));
+  });
+
+  it('lets an adult take it too', async () => {
+    await assertSucceeds(take(ADMIN, 'pAdult', 'cReserve'));
+  });
+
+  it('refuses a taking that does not put it in the taker’s party', async () => {
+    const db = as(CHILD);
+    await assertFails(updateDoc(doc(db, p('collectibles', 'cReserve')), { profileId: 'pChild', reserveAt: null }));
+    await assertFails(take(CHILD, 'pChild', 'cReserve', {}, []));
+  });
+
+  it('refuses taking what is not in the reserve', async () => {
+    await assertFails(take(CHILD, 'pChild', 'cParty'));
+  });
+
+  it('refuses giving it to someone else, or changing anything more', async () => {
+    await assertFails(take(CHILD, 'pChild', 'cReserve', { profileId: 'pAdult' }));
+    await assertFails(take(CHILD, 'pChild', 'cReserve', { nickname: 'Mine' }));
+    await assertFails(take(CHILD, 'pChild', 'cReserve', { tier: 'high' }));
+    await assertFails(take(CHILD, 'pChild', 'cReserve', { reserveAt: now }));
+  });
+
+  it('refuses a non-member and a device with no profile', async () => {
+    await assertFails(updateDoc(doc(as(STRANGER), p('collectibles', 'cReserve')), { profileId: 'pChild', reserveAt: null }));
+    await assertFails(updateDoc(doc(as(FRESH), p('collectibles', 'cReserve')), { profileId: 'pChild', reserveAt: null }));
+  });
+
+  it('gives it to the first of two takings, and refuses the second', async () => {
+    await assertSucceeds(take(CHILD, 'pChild', 'cReserve'));
+    await assertFails(take(ADMIN, 'pAdult', 'cReserve'));
+  });
+
+  it('does not let the party above its size gain the taken one', async () => {
+    await seedDoc(p('profiles', 'pChild'), profile('Child', 'child', { partyIds: ['a', 'b', 'c', 'd', 'e'] }));
+    await assertFails(take(CHILD, 'pChild', 'cReserve', {}, ['a', 'b', 'c', 'd', 'e', 'cReserve']));
+    await assertSucceeds(take(CHILD, 'pChild', 'cReserve', {}, ['a', 'b', 'c', 'd', 'cReserve']));
+  });
+});

@@ -735,6 +735,99 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
       });
     });
 
+    describe('taking from the reserve (ADR 0010)', () => {
+      const take = (id: string, partyIds: string[], toReserve: string[] = []) => ({ partyIds, toReserve, fromReserve: [id] });
+
+      /** The child reserves one collectible and names it; returns its id. */
+      async function reservedByChild(env: Awaited<ReturnType<typeof setup>>) {
+        const id = await legacyReward(env, env.childProfileId);
+        await env.child.rewards.openReward(env.worldId, id, { slot: 'slot-a' }).settled;
+        await env.child.collectibles.setNickname(env.worldId, id, 'Rex').settled;
+        now += 1000;
+        await env.child.collectibles.arrangeParty(env.worldId, env.childProfileId, { partyIds: [], toReserve: [id], fromReserve: [] }).settled;
+        return id;
+      }
+
+      it('gives it to the taker, with its name, and the first owner loses it', async () => {
+        const env = await setup();
+        const { admin, child, worldId, adminProfileId, childProfileId } = env;
+        const id = await reservedByChild(env);
+
+        await admin.collectibles.takeFromReserve(worldId, id, take(id, [id])).settled;
+
+        const mine = new Watch<Collectible[]>((v, e) => admin.collectibles.observeCollectibles(worldId, adminProfileId, v, e));
+        await eventually(() => expect(mine.value?.map((c) => c.id)).toEqual([id]));
+        expect(mine.value![0]).toMatchObject({ profileId: adminProfileId, nickname: 'Rex', slot: 'slot-a', reserveAt: null });
+        const theirs = new Watch<Collectible[]>((v, e) => child.collectibles.observeCollectibles(worldId, childProfileId, v, e));
+        await eventually(() => expect(theirs.value).toEqual([]));
+        const profiles = new Watch<Profile[]>((v, e) => admin.worlds.observeProfiles(worldId, v, e));
+        await eventually(() => expect(profiles.value?.find((p) => p.id === adminProfileId)?.partyIds).toEqual([id]));
+        const showcase = new Watch<ShowcaseItem[]>((v, e) => child.collectibles.observeShowcase(worldId, 30, v, e));
+        await eventually(() => expect(showcase.value).toEqual([]));
+        for (const watch of [mine, theirs, profiles, showcase]) watch.close();
+      });
+
+      it('lets the new owner rename it and send it back, and the first owner cannot', async () => {
+        const env = await setup();
+        const { admin, child, worldId, adminProfileId } = env;
+        const id = await reservedByChild(env);
+        await admin.collectibles.takeFromReserve(worldId, id, take(id, [id])).settled;
+        await rejectsWith(child.collectibles.setNickname(worldId, id, 'Back'), 'permission-denied');
+        await admin.collectibles.setNickname(worldId, id, 'Max').settled;
+        await admin.collectibles.arrangeParty(worldId, adminProfileId, { partyIds: [], toReserve: [id], fromReserve: [] }).settled;
+        const showcase = new Watch<ShowcaseItem[]>((v, e) => child.collectibles.observeShowcase(worldId, 30, v, e));
+        await eventually(() => expect(showcase.value?.map((item) => [item.id, item.nickname])).toEqual([[id, 'Max']]));
+        showcase.close();
+      });
+
+      it('sends the one that leaves a full party to the reserve', async () => {
+        const env = await setup();
+        const { admin, worldId, adminProfileId } = env;
+        const own = await legacyReward(env, adminProfileId);
+        await admin.rewards.openReward(worldId, own, { slot: 'slot-own' }).settled;
+        await admin.collectibles.arrangeParty(worldId, adminProfileId, { partyIds: [own], toReserve: [], fromReserve: [] }).settled;
+        await admin.worlds.setPartySize(worldId, 1).settled;
+        const id = await reservedByChild(env);
+
+        await rejectsWith(admin.collectibles.takeFromReserve(worldId, id, take(id, [own, id])), 'invalid-argument');
+        await admin.collectibles.takeFromReserve(worldId, id, take(id, [id], [own])).settled;
+        const showcase = new Watch<ShowcaseItem[]>((v, e) => admin.collectibles.observeShowcase(worldId, 30, v, e));
+        await eventually(() => expect(showcase.value?.map((item) => item.id)).toEqual([own]));
+        showcase.close();
+      });
+
+      it('gives it to the first of two takers, and refuses the other without changing anything', async () => {
+        const env = await setup();
+        const { admin, child, worldId, adminProfileId, childProfileId } = env;
+        const id = await reservedByChild(env);
+        await admin.collectibles.takeFromReserve(worldId, id, take(id, [id])).settled;
+        await rejectsWith(child.collectibles.takeFromReserve(worldId, id, take(id, [id])), 'permission-denied');
+
+        const mine = new Watch<Collectible[]>((v, e) => admin.collectibles.observeCollectibles(worldId, adminProfileId, v, e));
+        const theirs = new Watch<Collectible[]>((v, e) => child.collectibles.observeCollectibles(worldId, childProfileId, v, e));
+        await eventually(() => {
+          expect(mine.value).toHaveLength(1);
+          expect(theirs.value).toEqual([]);
+        });
+        mine.close();
+        theirs.close();
+      });
+
+      it('refuses what is not in the reserve, a device with no profile, and a change that does not hold it', async () => {
+        const env = await setup();
+        const { admin, child, newcomer, worldId, childProfileId } = env;
+        const pending = await legacyReward(env, childProfileId);
+        await child.rewards.openReward(worldId, pending, { slot: 'slot-p' }).settled;
+        await rejectsWith(admin.collectibles.takeFromReserve(worldId, pending, take(pending, [pending])), 'permission-denied');
+
+        const id = await reservedByChild(env);
+        await rejectsWith(newcomer.collectibles.takeFromReserve(worldId, id, take(id, [id])), 'permission-denied');
+        await rejectsWith(admin.collectibles.takeFromReserve(worldId, id, { partyIds: [], toReserve: [], fromReserve: [id] }), 'invalid-argument');
+        await rejectsWith(admin.collectibles.takeFromReserve(worldId, id, { partyIds: [id], toReserve: [], fromReserve: [] }), 'invalid-argument');
+        await rejectsWith(admin.collectibles.takeFromReserve(worldId, 'nothing-here', take('nothing-here', ['nothing-here'])), 'not-found');
+      });
+    });
+
     describe('profile symbols', () => {
       const profilesOf = (device: DataStore, worldId: string) => new Watch<Profile[]>((v, e) => device.worlds.observeProfiles(worldId, v, e));
       const symbolOf = (watch: Watch<Profile[]>, id: string) => watch.value?.find((p) => p.id === id)?.avatar.symbol;

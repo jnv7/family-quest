@@ -646,6 +646,51 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
         });
       },
 
+      takeFromReserve(worldId, collectibleId, change) {
+        const now = clock();
+        return write(undefined, async () => {
+          if (!change.partyIds.includes(collectibleId) || !change.fromReserve.includes(collectibleId)) {
+            throw invalid('The taken collectible joins the party and leaves the reserve');
+          }
+          const ids = [...new Set([...change.partyIds, ...change.toReserve, ...change.fromReserve])];
+          const [worldSnapshot, memberSnapshot, ...collectibleSnapshots] = await Promise.all([
+            readDoc(worldDoc(db, worldId)),
+            readDoc(memberDoc(db, worldId, requireUid())),
+            ...ids.map((id) => readDoc(collectibleDoc(db, worldId, id))),
+          ]);
+          const world = worldSnapshot.exists() ? decodeWorld(worldSnapshot) : null;
+          const member = memberSnapshot.exists() ? decodeMember(memberSnapshot) : null;
+          if (!world) throw new DataStoreError('not-found', `World ${worldId} does not exist`);
+          if (!member?.profileId) throw denied('Choose a profile first');
+          const profileId = member.profileId;
+          const profileSnapshot = await readDoc(profileDoc(db, worldId, profileId));
+          const profile = profileSnapshot.exists() ? decodeProfile(profileSnapshot) : null;
+          if (!profile) throw new DataStoreError('not-found', `Profile ${profileId} does not exist`);
+          const current = await Promise.all(
+            profile.partyIds.filter((id) => !ids.includes(id)).map((id) => readDoc(collectibleDoc(db, worldId, id))),
+          );
+          const known = [...collectibleSnapshots, ...current].flatMap((snapshot) => {
+            const collectible = snapshot.exists() ? decodeCollectible(snapshot) : null;
+            return collectible ? [collectible] : [];
+          });
+          const taken = known.find((collectible) => collectible.id === collectibleId);
+          if (!taken) throw new DataStoreError('not-found', `Collectible ${collectibleId} does not exist`);
+          if (taken.reserveAt === null) throw denied('Only what is in the reserve can be taken');
+          // Once taken it is the profile's own, coming from the reserve.
+          const owned = known.filter((collectible) => collectible.profileId === profileId && collectible.id !== collectibleId).concat({ ...taken, profileId });
+          const problem = checkPartyChange(profile, owned, change, world.ruleset.partySize);
+          if (problem) throw invalid(`The party change is not valid (${problem})`);
+
+          const batch = writeBatch(db);
+          batch.update(collectibleDoc(db, worldId, collectibleId), { profileId, ...encodeReserveAt(null) });
+          for (const id of change.toReserve) batch.update(collectibleDoc(db, worldId, id), encodeReserveAt(now));
+          for (const id of change.fromReserve) if (id !== collectibleId) batch.update(collectibleDoc(db, worldId, id), encodeReserveAt(null));
+          const same = profile.partyIds.length === change.partyIds.length && profile.partyIds.every((id, i) => id === change.partyIds[i]);
+          if (!same) batch.update(profileDoc(db, worldId, profileId), { partyIds: change.partyIds });
+          await batch.commit();
+        });
+      },
+
       // A single inequality on the field it orders by: the automatic single-field index serves it.
       observeShowcase: (worldId, limit, onValue, onError) =>
         onSnapshot(
