@@ -58,6 +58,11 @@
       "singular": "pasto",
       "plural": "pastos",
       "gender": "m"
+    },
+    "token": {
+      "singular": "grão",
+      "plural": "grãos",
+      "gender": "m"
     }
   },
   "tiers": {
@@ -74,6 +79,16 @@
     },
     "high": {
       "emoji": "🌟"
+    }
+  },
+  "tokenArt": {
+    "emoji": "🌾"
+  },
+  "vault": {
+    "invite": {
+      "low": "Uma escolha pequena.",
+      "mid": "Uma escolha melhor.",
+      "high": "A melhor escolha."
     }
   },
   "profileSymbols": [

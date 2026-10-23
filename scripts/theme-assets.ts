@@ -58,7 +58,7 @@ function kindsOf(theme: unknown, catalog: unknown): Map<string, ArtKind> {
     for (const [key, value] of Object.entries(node)) {
       const here = `${path}/${key}`;
       if (key === 'image' && typeof value === 'string') {
-        const kind: ArtKind = path.startsWith('/install/icons') ? 'icon' : path.startsWith('/map/background') ? 'map' : base;
+        const kind: ArtKind = path.startsWith('/install/icons') ? 'icon' : path.startsWith('/map/background') || path.startsWith('/vault/background') ? 'map' : base;
         kinds.set(value, kind);
       } else {
         visit(value, here, base);

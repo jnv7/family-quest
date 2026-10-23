@@ -17,6 +17,7 @@ export const ROLES = [
   'collectible',
   'party',
   'reserve',
+  'token',
 ] as const;
 export type Role = (typeof ROLES)[number];
 

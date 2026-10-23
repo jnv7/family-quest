@@ -56,6 +56,18 @@ export interface Install {
   icons: Record<'small' | 'large' | 'maskable' | 'apple', { image: string }>;
 }
 
+/**
+ * How the vault lays out the three tiers. Without `background`, `aspectRatio` and `spots` (all three or none)
+ * the engine stacks the tiers from the entrance (`low`) to the deep end (`high`), top to bottom.
+ */
+export interface ThemeVault {
+  /** One short line per tier that invites going deeper. */
+  invite: Record<Tier, string>;
+  background?: Art;
+  aspectRatio?: number;
+  spots?: Record<Tier, Spot>;
+}
+
 export interface ThemeFile {
   $schema: string;
   id: string;
@@ -65,6 +77,9 @@ export interface ThemeFile {
   tiers: Record<Tier, string>;
   /** Art of an unopened reward: the tier is visible before opening. */
   rewardArt: Record<Tier, Art>;
+  /** Art of one token, shown in the balance, the prices and the earned row. */
+  tokenArt: Art;
+  vault: ThemeVault;
   map: { background: Art; aspectRatio: number; moorings?: ThemeMoorings };
   /** Emoji suggested first when a profile chooses its symbol: at least 12, unique, one emoji each. */
   profileSymbols: string[];

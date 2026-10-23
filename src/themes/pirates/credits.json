@@ -90,6 +90,12 @@
       "author": "Family Quest",
       "source": "https://github.com/jnv7/family-quest",
       "licence": "MIT"
+    },
+    {
+      "file": "assets/vault/cave.svg",
+      "author": "Family Quest",
+      "source": "https://github.com/jnv7/family-quest",
+      "licence": "MIT"
     }
   ]
 }

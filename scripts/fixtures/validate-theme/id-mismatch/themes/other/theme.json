@@ -58,6 +58,11 @@
       "singular": "reserva",
       "plural": "reservas",
       "gender": "f"
+    },
+    "token": {
+      "singular": "moeda",
+      "plural": "moedas",
+      "gender": "f"
     }
   },
   "tiers": {
@@ -215,6 +220,16 @@
       "apple": {
         "image": "assets/icons/apple-touch-icon.png"
       }
+    }
+  },
+  "tokenArt": {
+    "emoji": "🪙"
+  },
+  "vault": {
+    "invite": {
+      "low": "Uma escolha pequena.",
+      "mid": "Uma escolha melhor.",
+      "high": "A melhor escolha."
     }
   }
 }

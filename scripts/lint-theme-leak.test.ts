@@ -20,6 +20,12 @@ describe('lint-theme-leak', () => {
     expect(leaks).toContainEqual({ file: 'src/ui/accents.ts', line: 2, term: 'baús' });
   });
 
+  it('reports the token words of the pirate theme outside src/themes/', () => {
+    const leaks = findLeaks(`${fixtures}/leak`, terms);
+    expect(leaks).toContainEqual({ file: 'src/ui/accents.ts', line: 4, term: 'tocha' });
+    expect(leaks).toContainEqual({ file: 'src/ui/accents.ts', line: 5, term: 'torches' });
+  });
+
   it('matches whole words only, and skips src/themes/', () => {
     expect(findLeaks(`${fixtures}/clean`, terms)).toEqual([]);
   });

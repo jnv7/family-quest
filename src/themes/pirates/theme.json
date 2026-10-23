@@ -58,6 +58,11 @@
       "singular": "taberna",
       "plural": "tabernas",
       "gender": "f"
+    },
+    "token": {
+      "singular": "tocha",
+      "plural": "tochas",
+      "gender": "f"
     }
   },
   "tiers": {
@@ -74,6 +79,40 @@
     },
     "high": {
       "image": "assets/rewards/high.svg"
+    }
+  },
+  "tokenArt": {
+    "emoji": "🔥"
+  },
+  "vault": {
+    "invite": {
+      "low": "Perto da entrada, ainda há luz.",
+      "mid": "Mais fundo, as tochas tremem.",
+      "high": "Mais fundo, mais escuro… e mais valioso."
+    },
+    "background": {
+      "image": "assets/vault/cave.svg"
+    },
+    "aspectRatio": 0.5625,
+    "spots": {
+      "low": {
+        "x": 15,
+        "y": 12,
+        "width": 70,
+        "height": 20
+      },
+      "mid": {
+        "x": 15,
+        "y": 40,
+        "width": 70,
+        "height": 20
+      },
+      "high": {
+        "x": 15,
+        "y": 68,
+        "width": 70,
+        "height": 20
+      }
     }
   },
   "profileSymbols": [

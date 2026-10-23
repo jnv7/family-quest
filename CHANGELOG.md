@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.9.3] — 2026-10-23
+
+### Added
+
+- The theme package for tokens, with no visible change in the app yet. The schema (`schemas/theme.schema.json`) and `src/theme/types.ts` gain the `token` role (singular, plural and gender, so `{@token}`, `{@token.plural}` and the other forms work), `tokenArt`, and `vault`: an `invite` line per tier, and optionally a `background` with its `aspectRatio` and one `spot` per tier. `validate-theme` checks the three parts of the depth come together, lie within the background and do not overlap (`scripts/theme-vault.ts`); a vault background is budgeted like the map.
+- Pirate theme: `tocha`/`tochas` (f) with 🔥, the three spots from the cave mouth to its deep end on a new SVG background made for this repository (MIT, in `credits.json`), invite texts, and 12 new collectibles (4 per tier, 8 per tier in all). Minimal themes: `moeda`/`moedas` 🪙 and `grão`/`grãos` 🌾, with the tiers stacked.
+- `lint:theme-leak` also reports `tocha`, `tochas`, `torch` and `torches` outside `src/themes/`, with a test.
+
 ## [0.9.2] — 2026-10-23
 
 ### Added

@@ -4,7 +4,7 @@
  * Checks, in order, failing on the first error with the file and JSON path:
  * 1. schemas; 2. theme id; 3. slots; 4. art files; 5. placeholders; 6. image files: formats,
  * credits, licences, budgets and metadata (`scripts/theme-assets.ts`); 7. moorings and profile
- * symbols (`scripts/theme-moorings.ts`).
+ * symbols (`scripts/theme-moorings.ts`); 8. the vault's depth (`scripts/theme-vault.ts`).
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
@@ -14,6 +14,7 @@ import type { ErrorObject } from 'ajv';
 import { parsePlaceholder, placeholderBodies } from '../src/theme/placeholders.ts';
 import { checkThemeAssets } from './theme-assets.ts';
 import { checkThemeMoorings } from './theme-moorings.ts';
+import { checkThemeVault } from './theme-vault.ts';
 import { ThemeValidationError } from './theme-error.ts';
 
 /** **[proposal]** Enough slots in every tier for the draw to feel varied (SPEC.md §8). */
@@ -106,6 +107,9 @@ export function validateTheme(options: ValidateThemeOptions): void {
 
   // 7. Moorings and profile symbols.
   checkThemeMoorings(themeFile, theme);
+
+  // 8. The depth of the vault.
+  checkThemeVault(themeFile, theme);
 }
 
 function findImages(node: unknown, path: string): Array<{ path: string; image: string }> {

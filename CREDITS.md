@@ -39,6 +39,7 @@ Emoji are drawn by each phone's system font and need no credit.
 - `assets/rewards/high.svg`: [MIT](https://opensource.org/license/mit), [source](https://github.com/jnv7/family-quest)
 - `assets/rewards/low.svg`: [MIT](https://opensource.org/license/mit), [source](https://github.com/jnv7/family-quest)
 - `assets/rewards/mid.svg`: [MIT](https://opensource.org/license/mit), [source](https://github.com/jnv7/family-quest)
+- `assets/vault/cave.svg`: [MIT](https://opensource.org/license/mit), [source](https://github.com/jnv7/family-quest)
 
 ### Kenney (kenney.nl)
 
