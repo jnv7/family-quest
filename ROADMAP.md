@@ -4,7 +4,7 @@ Each release is one minor version, developed on its own `release/0.x` branch (`G
 
 The behaviour each release implements is specified in `SPEC.md`.
 
-**Last closed release: 0.7 — `showcase`, `home` and art** (2026-10-21, tag `v0.7`; [release notes](docs/release-notes/0.7.md)). **Current release:** none; the next one is 0.8 — Usability ([plan](docs/plans/0.8.md)), then 0.9 — Rewards that last.
+**Last closed release: 0.8 — Usability** (2026-10-23, tag `v0.8`; [release notes](docs/release-notes/0.8.md)). **Current release:** none; the next one is 0.9 — Rewards that last ([plan](docs/plans/0.9.md)).
 
 ## Release plan
 
