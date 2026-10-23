@@ -1,8 +1,8 @@
 # 0008 — Tokens, and spending them offline without double spending
 
-- **Status:** Proposed (tech lead, 2026-10-23), awaiting the product owner
+- **Status:** Accepted (product owner, 2026-10-23)
 - **Date:** 2026-10-23
-- **Decided by:** product owner (the token model: `docs/plans/0.9-product-brief.md`); the data and rules design is the tech lead's proposal
+- **Decided by:** product owner (the token model: `docs/plans/0.9-product-brief.md`); the data and rules design is the tech lead's proposal, accepted with it
 - **Supersedes:** "Reward pieces" (`SPEC.md` §6, decision D5 in `docs/plans/0.8.md`), which was never built
 - **Refines:** ADR 0002 (write semantics), `SPEC.md` §4, §5, §6 and §10
 

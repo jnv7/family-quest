@@ -1,8 +1,8 @@
 # 0009 — Retiring an open task
 
-- **Status:** Proposed (tech lead, 2026-10-23), awaiting the product owner
+- **Status:** Accepted (product owner, 2026-10-23)
 - **Date:** 2026-10-23
-- **Decided by:** product owner (the feature, and who can retire: decisions D8 and D10 in `docs/plans/0.8.md`); the data and rules design is the tech lead's proposal
+- **Decided by:** product owner (the feature, and who can retire: decisions D8 and D10 in `docs/plans/0.8.md`); the data and rules design is the tech lead's proposal, accepted with it
 - **Refines:** `SPEC.md` §4, §5 and §6 ("Retiring a task")
 
 ## Context
