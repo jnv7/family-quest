@@ -65,6 +65,8 @@ const recurring = (defId: string, key: PeriodKey, state: { done: Millis } | 'ope
   weekKey: null,
 });
 
+const retired = (defId: string, key: PeriodKey): Task => ({ ...recurring(defId, key, 'open'), status: 'retired' });
+
 const adhoc = (): Task => ({ ...recurring('x', 'k', 'open'), id: 'adhoc1', source: 'adhoc', defId: null, periodKey: null });
 
 const ids = (defs: TaskDef[], tasks: Task[] = [], overrides: { profile?: Profile; now?: Millis } = {}) =>
@@ -72,6 +74,16 @@ const ids = (defs: TaskDef[], tasks: Task[] = [], overrides: { profile?: Profile
 
 describe('recurringTasksToCreate', () => {
   const daily = def('daily', 'daily');
+
+  it('does not generate a task retired in the current period again, but does in the next one', () => {
+    const today = retired('daily', '2026-10-19');
+    expect(ids([daily], [today])).toEqual([]);
+    expect(ids([daily], [today], { now: NOW + 24 * 3_600_000 })).toEqual(['daily_2026-10-20_p1']);
+  });
+
+  it('generates the current period when an older task was retired', () => {
+    expect(ids([daily], [retired('daily', '2026-10-18')])).toEqual(['daily_2026-10-19_p1']);
+  });
 
   it('1. creates today’s task for a daily definition', () => {
     expect(ids([daily])).toEqual(['daily_2026-10-19_p1']);

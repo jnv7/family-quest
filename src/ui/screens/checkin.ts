@@ -58,7 +58,7 @@ export const renderCheckin: WorldScreen = (ctx, root, { worldId }) => {
       entry.cancel();
       pending.delete(task.id);
       const rewardTier = drawTier(tierOddsFor(task.level, current.ruleset), ctx.randomInt);
-      ctx.settle(ctx.store.tasks.completeTask(worldId, task.id, { answer, talkFlag: task.talkFlag, rewardTier }).settled);
+      ctx.settle(ctx.store.tasks.completeTaskWithReward(worldId, task.id, { answer, talkFlag: task.talkFlag, rewardTier }).settled);
     };
     pending.set(task.id, { run, cancel: ctx.later(run, UNDO_MS) });
     say('congrats');

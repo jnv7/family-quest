@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Profile, Task } from './model';
-import { adhocCreatedForSelfToday, adhocPermission, doneRecently, sortForBoard, visibleOpenTasks } from './tasks';
+import { adhocCreatedForSelfToday, adhocPermission, canRetire, doneRecently, sortForBoard, visibleOpenTasks } from './tasks';
 
 const TZ = 'Europe/Lisbon';
 const ruleset = { timezone: TZ, childDailyTaskLimit: 3 } as const;
@@ -184,5 +184,41 @@ describe('doneRecently', () => {
       done('future', NOW + DAY),
     ];
     expect(doneRecently(tasks, NOW, 7).map((t) => t.title)).toEqual(['today', 'week']);
+  });
+});
+
+describe('canRetire', () => {
+  const adult = profile('mum', 'adult');
+  const own = task({ createdBy: 'kid' });
+
+  it('lets an admin retire any open task', () => {
+    expect(canRetire(own, adult)).toBe(true);
+    expect(canRetire(task({ source: 'recurring', defId: 'd', periodKey: 'k' }), adult)).toBe(true);
+    expect(canRetire(task({ profileId: 'mum', createdBy: 'mum' }), adult)).toBe(true);
+  });
+
+  it('does not let an archived adult retire', () => {
+    expect(canRetire(own, { ...adult, archived: true })).toBe(false);
+  });
+
+  it('lets a child retire only an ad hoc task they made for themselves', () => {
+    expect(canRetire(own, kid)).toBe(true);
+    expect(canRetire(task({ createdBy: 'mum' }), kid)).toBe(false);
+    expect(canRetire(task({ source: 'recurring', defId: 'd', periodKey: 'k' }), kid)).toBe(false);
+    expect(canRetire(task({ profileId: 'other', createdBy: 'other' }), kid)).toBe(false);
+  });
+
+  it('is false for a done or retired task', () => {
+    expect(canRetire(task({ status: 'done', doneAt: NOW }), adult)).toBe(false);
+    expect(canRetire(task({ status: 'retired' }), adult)).toBe(false);
+  });
+});
+
+describe('retired tasks', () => {
+  it('are neither open nor done in the lists', () => {
+    const retired = task({ status: 'retired', retiredAt: NOW, retiredBy: 'mum' });
+    expect(visibleOpenTasks([retired])).toEqual([]);
+    expect(sortForBoard([retired], NOW, TZ, () => false)).toEqual([]);
+    expect(doneRecently([retired], NOW, 7)).toEqual([]);
   });
 });

@@ -62,7 +62,7 @@ export type Cadence = (typeof CADENCES)[number];
 export const PROFILE_KINDS = ['adult', 'child'] as const;
 export type ProfileKind = (typeof PROFILE_KINDS)[number];
 
-export type TaskStatus = 'open' | 'done';
+export type TaskStatus = 'open' | 'done' | 'retired';
 export type TaskSource = 'recurring' | 'adhoc';
 export type TaskOrigin = 'app' | 'api';
 export type Answer = 'yes' | 'no';
@@ -83,6 +83,12 @@ export const LIMITS = {
   worldIdMinLength: 24,
   /** `showcaseSize` is a whole number from 1 to this (SPEC.md §4). */
   showcaseSizeMax: 30,
+  /** Tokens a task can earn, per level (SPEC.md §4, firestore.rules). */
+  tokensPerLevelMax: 10,
+  /** The price of a reward, per tier (SPEC.md §4, firestore.rules). */
+  tokenPriceMax: 200,
+  /** `partySize` is a whole number from 1 to this. */
+  partySizeMax: 10,
 } as const;
 
 /** Whether `size` is a valid `showcaseSize`: a whole number from 1 to `LIMITS.showcaseSizeMax`. */
@@ -108,6 +114,10 @@ export interface Ruleset {
   openingDay: IsoWeekday;
   pendingDays: number;
   tierOdds: Record<TaskLevel, TierOdds>;
+  /** Tokens earned by completing a task, per level; fixed on the task when it is completed. */
+  tokensPerLevel: Record<TaskLevel, number>;
+  /** The price of a reward, per tier; strictly increasing from low to high. */
+  tokenPrices: Record<Tier, number>;
   /** Extension point; always null until the product owner decides (SPEC.md §4). */
   guarantee: null;
 }
@@ -125,6 +135,8 @@ export const DEFAULT_RULESET: Ruleset = {
     mid: { low: 65, mid: 25, high: 10 },
     high: { low: 45, mid: 35, high: 20 },
   },
+  tokensPerLevel: { low: 1, mid: 2, high: 4 },
+  tokenPrices: { low: 5, mid: 12, high: 25 },
   guarantee: null,
 };
 
@@ -220,18 +232,28 @@ export interface Task extends DocMeta {
   talkFlag: boolean;
   /** Week of completion; null while open. */
   weekKey: WeekKey | null;
+  /** Tokens earned, set at completion from 0.9; absent on tasks completed before 0.9 and on open or retired tasks. */
+  tokens?: number;
+  /** Set only when retired (ADR 0009). */
+  retiredAt?: Millis;
+  retiredBy?: ProfileId;
 }
 
-/** `worlds/{worldId}/rewards/{taskId}` */
+/** A reward id: a task's id for rewards from before 0.9, random for bought ones. Also the id of its collectible. */
+export type RewardId = string;
+
+/** `worlds/{worldId}/rewards/{rewardId}` */
 export interface Reward extends DocMeta {
-  id: TaskId;
+  id: RewardId;
   profileId: ProfileId;
   weekKey: WeekKey;
   tier: Tier;
   openedAt: Millis | null;
+  /** Present only on a reward bought with tokens (from 0.9). Such a reward is created already opened. */
+  price?: number;
 }
 
-/** `worlds/{worldId}/collectibles/{taskId}` */
+/** `worlds/{worldId}/collectibles/{rewardId}` */
 export interface Collectible extends DocMeta {
   id: TaskId;
   profileId: ProfileId;

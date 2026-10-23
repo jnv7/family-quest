@@ -103,6 +103,14 @@ describe('checkPartyChange', () => {
     expect(check([], change({ partyIds: ['a', 'b'] }), 1)).toBe('too-many');
   });
 
+  it('lets a party above a lowered size lose members and be reordered, but not gain any', () => {
+    const above = ['a', 'b', 'c'];
+    expect(check(above, change({ partyIds: ['a', 'b'], toReserve: ['c'] }), 2)).toBeNull();
+    expect(check(above, change({ partyIds: ['c', 'b', 'a'] }), 2)).toBeNull();
+    expect(check(above, change({ partyIds: ['a', 'b', 'd'], toReserve: ['c'] }), 2)).toBe('too-many');
+    expect(check(above, change({ partyIds: ['a', 'b', 'c', 'd'] }), 2)).toBe('too-many');
+  });
+
   it('reports duplicate when an id repeats', () => {
     expect(check([], change({ partyIds: ['a', 'a'] }))).toBe('duplicate');
     expect(check(['a'], change({ partyIds: ['a'], toReserve: ['b', 'b'] }))).toBe('duplicate');

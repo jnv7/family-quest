@@ -104,3 +104,13 @@ export function doneRecently(tasks: readonly Task[], now: Millis, days: number):
     .filter((task) => task.status === 'done' && task.doneAt !== null && task.doneAt >= since && task.doneAt <= now)
     .sort((a, b) => b.doneAt! - a.doneAt! || (a.id < b.id ? 1 : -1));
 }
+
+/**
+ * Whether the active profile may retire this task (ADR 0009): an admin, any open task; otherwise the owner,
+ * only an ad hoc task they created for themselves.
+ */
+export function canRetire(task: Task, active: Profile): boolean {
+  if (task.status !== 'open') return false;
+  if (isAdmin(active)) return true;
+  return task.profileId === active.id && task.source === 'adhoc' && task.createdBy === active.id;
+}

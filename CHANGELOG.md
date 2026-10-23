@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.9.2] — 2026-10-23
+
+### Added
+
+- Domain for tokens and retiring, with no visible change: `src/core/tokens.ts` (`tokensFor`, `priceOf`, `canAfford`, `tokenRulesProblem`, `isPartySize`), `canRetire` in `src/core/tasks.ts`, `Ruleset.tokensPerLevel` (1/2/4) and `tokenPrices` (5/12/25), `Task.tokens`, `retiredAt`, `retiredBy`, status `retired`, `Reward.price`, and the limits `tokensPerLevelMax`, `tokenPriceMax` and `partySizeMax`. `checkPartyChange` reports `too-many` only when someone joins a party above the size.
+- `DataStore`: `tasks.completeTask` (tokens, one batch with `increment()` on the profile), `tasks.retireTask`, `tokens.observeBalance` and `tokens.buyReward` (one batch: price, bought reward created opened, collectible), `worlds.setTokenRules` and `worlds.setPartySize`, in both adapters. The 0.8 completion is kept as `completeTaskWithReward`, which the check-in still calls.
+- The memory adapter applies balances as server-side increments and has `setOnline` (tests only): an offline device sees its own writes on the state it left, and its batches commit in order when it returns. The Firestore decoders accept retired tasks, fill in the token rules of worlds stored before 0.9, and leave the balance out of `Profile`.
+- Contract tests for earning, buying, the refused double spend of two offline devices of one profile (the exit criterion), the sum of two offline completions, retiring, and the new management values; the Firestore emulator suite runs them with `disableNetwork` and `enableNetwork`.
+
 ## [0.9.1] — 2026-10-23
 
 ### Changed

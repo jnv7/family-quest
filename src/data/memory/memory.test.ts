@@ -1,6 +1,6 @@
 import { createRandomInt } from '../../core/random';
 import { runDataStoreContract } from '../datastore.contract';
-import { createMemoryBackend, createMemoryStore } from './index';
+import { createMemoryBackend, createMemoryStore, type MemoryDataStore } from './index';
 
 runDataStoreContract('memory', async ({ clock }) => {
   const backend = createMemoryBackend();
@@ -15,5 +15,6 @@ runDataStoreContract('memory', async ({ clock }) => {
     child: await connect('device-child'),
     child2: await connect('device-child-2'),
     newcomer: await connect('device-newcomer'),
+    setOnline: (device, online) => (device as MemoryDataStore).setOnline(online),
   };
 });

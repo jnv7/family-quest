@@ -22,6 +22,7 @@ import type {
   ProfileId,
   ProfileKind,
   Reward,
+  RewardId,
   Ruleset,
   Slot,
   Task,
@@ -131,6 +132,15 @@ export interface CompleteTaskInput {
   /** `yes` when the task has a question; null otherwise. */
   answer: Answer | null;
   talkFlag: boolean;
+  /** Computed by the caller with `tokensFor(task.level, ruleset)`; a whole number from 1 to `LIMITS.tokensPerLevelMax`, else `invalid-argument`. */
+  tokens: number;
+}
+
+/** The 0.8 completion, which gives a reward instead of tokens. Removed in 0.9.5. */
+export interface CompleteTaskWithRewardInput {
+  /** `yes` when the task has a question; null otherwise. */
+  answer: Answer | null;
+  talkFlag: boolean;
   /** Drawn by the caller with `drawTier(tierOddsFor(task.level, ruleset), randomInt)`. */
   rewardTier: Tier;
 }
@@ -175,6 +185,18 @@ export interface WorldStore {
   setTierOdds(worldId: WorldId, tierOdds: Ruleset['tierOdds']): Write;
 
   /**
+   * Admin only. Replaces the tokens a task earns per level and the price of a reward per tier. `tokenRulesProblem`
+   * first (`invalid-argument`, before any write). Writes only `ruleset.tokensPerLevel` and `ruleset.tokenPrices`.
+   */
+  setTokenRules(worldId: WorldId, rules: Pick<Ruleset, 'tokensPerLevel' | 'tokenPrices'>): Write;
+
+  /**
+   * Admin only. Sets `ruleset.partySize`: a whole number from 1 to `LIMITS.partySizeMax`, otherwise `invalid-argument`
+   * before any write. Nobody is removed from any party: a party above the size may only lose members.
+   */
+  setPartySize(worldId: WorldId, size: number): Write;
+
+  /**
    * Admin only. Sets how many collectibles the showcase shows (`ruleset.showcaseSize`): a whole number from
    * 1 to `LIMITS.showcaseSizeMax`, otherwise `invalid-argument` before any write. Nothing is deleted:
    * the ones beyond the limit stay stored, out of reach (SPEC.md §6).
@@ -213,11 +235,24 @@ export interface TaskStore {
   createAdhocTask(worldId: WorldId, input: CreateAdhocTaskInput): Write<{ taskId: TaskId }>;
 
   /**
-   * Moves an open task of the active profile to done, with the week of `now`.
-   * The same batch creates `rewards/{taskId}` with `input.rewardTier`, the task's
-   * profile and completion week, and `openedAt: null`.
+   * One batch: the open task of the active profile moves to done, with the week of `now` and `input.tokens`, and its
+   * profile gets `increment(tokens)` and `tokensFrom: taskId`. No reward. The server adds the tokens to the real
+   * balance, so two offline devices that each complete a task end with the sum of both.
    */
   completeTask(worldId: WorldId, taskId: TaskId, input: CompleteTaskInput): Write;
+
+  /**
+   * The 0.8 completion: the open task moves to done and the same batch creates `rewards/{taskId}` with
+   * `input.rewardTier`, the task's profile and completion week, and `openedAt: null`. Nothing calls it from 0.9.5.
+   */
+  completeTaskWithReward(worldId: WorldId, taskId: TaskId, input: CompleteTaskWithRewardInput): Write;
+
+  /**
+   * `canRetire` first (`permission-denied`, before any write); then the task's status becomes `retired`, `retiredAt` is
+   * now and `retiredBy` is the active profile (ADR 0009). A retired task leaves `observeOpenTasks` and is never
+   * generated again for its period.
+   */
+  retireTask(worldId: WorldId, taskId: TaskId): Write;
 
   /** Sets or clears the "I think I did better" flag on an open task of the active profile. */
   setTalkFlag(worldId: WorldId, taskId: TaskId, talkFlag: boolean): Write;
@@ -256,6 +291,26 @@ export interface TaskDefStore {
   updateTaskDef(worldId: WorldId, defId: TaskDefId, patch: Partial<TaskDefInput & { active: boolean }>): Write;
 }
 
+export interface TokenStore {
+  /**
+   * The profile's balance (0 when it has none yet). The interface calls it only for the active profile and shows it
+   * only at the top of the vault (SPEC.md §2); no other type carries it.
+   */
+  observeBalance(worldId: WorldId, profileId: ProfileId, onValue: Observer<number>, onError?: ObserverError): Unsubscribe;
+
+  /**
+   * One batch, for the active profile: the profile gets `increment(-price)` and `tokensFor`; `rewards/{id}` is created
+   * already opened, with the tier, the price, the week of now and `openedAt` now; `collectibles/{id}` is created with
+   * the given slot (pending: no nickname, `reserveAt: null`). The id is random and returned at once. The caller passes
+   * `priceOf(tier, ruleset)` and a slot drawn with `drawSlot(catalogue, tier, randomInt)`.
+   *
+   * Before any write: `invalid-argument` if the price is not a whole number from 1 to `LIMITS.tokenPriceMax`, or if the
+   * balance this device knows is below it. The server refuses a double spend: `settled` rejects with `permission-denied`
+   * and nothing changes.
+   */
+  buyReward(worldId: WorldId, input: { tier: Tier; price: number; slot: Slot }): Write<{ rewardId: RewardId }>;
+}
+
 export interface RewardStore {
   /** The profile's unopened rewards, oldest first. Owner or admin. */
   observeUnopenedRewards(worldId: WorldId, profileId: ProfileId, onValue: Observer<Reward[]>, onError?: ObserverError): Unsubscribe;
@@ -267,7 +322,7 @@ export interface RewardStore {
    * on another device) is `permission-denied`, and nothing changes. The caller checks `canOpen`
    * first and draws the slot with `drawSlot(theme catalogue, reward.tier, randomInt)`.
    */
-  openReward(worldId: WorldId, rewardId: TaskId, input: { slot: Slot }): Write;
+  openReward(worldId: WorldId, rewardId: RewardId, input: { slot: Slot }): Write;
 }
 
 /** What the showcase may show about a collectible: never the owner (SPEC.md §2, §6). */
@@ -314,5 +369,6 @@ export interface DataStore {
   readonly tasks: TaskStore;
   readonly taskDefs: TaskDefStore;
   readonly rewards: RewardStore;
+  readonly tokens: TokenStore;
   readonly collectibles: CollectibleStore;
 }
