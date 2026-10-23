@@ -2,7 +2,7 @@
 
 A family game that encourages planning, cooperation and task resolution.
 
-**Status: pre-release.** Releases 0.1 to 0.8 are closed.
+**Status: pre-release.** Releases 0.1 to 0.8 are closed. Release 0.9 (tokens, offline spending and retiring tasks) is a release candidate on `release/0.9`.
 
 Family Quest is a PWA where each family member completes their daily, weekly, monthly and ad hoc tasks on their phone, and earns rewards in a themed collection game. It runs on GitHub Pages with Firebase (free Spark plan) and works offline.
 

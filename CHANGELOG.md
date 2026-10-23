@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.9.7] — 2026-10-23
+
+Release candidate. No new behaviour.
+
+### Changed
+
+- `SPEC.md` was checked against the code, section by section for the vault, the tokens, retiring and management, and `docs/architecture.md` describes the balance, the adapters, the vault and retiring. The pirate catalogue has 8 collectibles per tier, and `validate-theme` passes for the three themes.
+- What remains is for the product owner: two real phones of one profile in airplane mode (both buy with the same tokens, and each completes a different task), and a real family week with tokens.
+
 ## [0.9.6] — 2026-10-23
 
 ### Added
