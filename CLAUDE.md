@@ -18,7 +18,7 @@ A web app (PWA) for one family: daily, weekly, monthly and ad hoc tasks, complet
 3. **No cost.** Spark plan: no Cloud Functions, no Cloud Storage. If anything asks for billing, stop and ask.
 4. **Local-first.** Everything works offline and syncs later. Firestore transactions do not work offline: use `writeBatch` with deterministic ids (`SPEC.md` §10).
 5. **Nothing earned is deleted.** No deletion of rewards or collectibles.
-6. **No friction.** Completing a task takes at most 2 taps from the map (3 for a task with a verification question: done, then the answer). Never show counts, rankings or comparisons between people. Each person completes only their own tasks, and a completed task never reopens.
+6. **No friction.** Completing a task takes at most 2 taps from the map (3 for a task with a verification question: done, then the answer). Never show counts, rankings or comparisons between people. The one exception (from 0.9) is a person's own token balance: shown only to them, only at the top of the `vault` (`SPEC.md` §2). Each person completes only their own tasks, and a completed task never reopens.
 7. **Language.** Every repository artefact is in English. The interface is in European Portuguese, and its text lives only in locale files (`src/i18n/`, and `theme.json` in each theme).
 
 ## Keeping documentation current
