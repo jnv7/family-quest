@@ -1,18 +1,16 @@
-import { taskPlanAlert } from '../../core/alerts';
 import { dateKey, lastDayOfPeriod } from '../../core/calendar';
 import { LIMITS, type ProfileId, type Task, type TaskDef, type TaskId, type World } from '../../core/model';
 import { validatePlan } from '../../core/plan';
-import { visibleOpenTasks } from '../../core/tasks';
+import { isNewTask } from '../../core/alerts';
+import { sortForBoard } from '../../core/tasks';
 import type { WorldScreen } from '../context';
 import { h } from '../dom';
 import { observeWithRetry } from '../observe';
 import { observeSelf } from '../self';
+import { taskCard } from '../taskCard';
+import { screenBar } from '../bar';
 
 const TRIGGER_SUGGESTIONS = ['plan.suggestion1', 'plan.suggestion2', 'plan.suggestion3'] as const;
-
-/** `2026-10-25` as "25 de outubro", in the interface language. */
-const dayLabel = (date: string) =>
-  new Intl.DateTimeFormat('pt-PT', { day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`));
 
 /**
  * All open tasks of the active profile, oldest first, including those from past periods
@@ -25,34 +23,37 @@ export const renderBoard: WorldScreen = (ctx, root, { worldId }) => {
   const problem = h('div');
 
   root.append(
-    h('h1', {}, ctx.text('board.title')),
+    screenBar(ctx, {
+      title: ctx.text('board.title'),
+      back: { name: 'map' },
+      action: h('button', { onClick: () => ctx.go({ name: 'newTask', defId: null }) }, ctx.text('board.new')),
+    }),
     problem,
     list,
     empty,
-    h('div', { class: 'stack' },
-      h('button', { class: 'primary', onClick: () => ctx.go({ name: 'newTask' }) }, ctx.text('board.new')),
-      h('button', { onClick: () => ctx.go({ name: 'map' }) }, ctx.text('app.back')),
-    ),
   );
 
   let tasks: Task[] = [];
   let defs = new Map<string, TaskDef>();
   let world: World | null = null;
+  /** When this profile last opened its list on this device, read before it is renewed below. */
+  let seenBefore: number | null = null;
   /** The task whose plan is being edited. */
   let planning: TaskId | null = null;
 
-  const planForm = (task: Task, def: TaskDef, timeZone: string) => {
+  const planForm = (task: Task, def: TaskDef | undefined, timeZone: string) => {
     const today = dateKey(ctx.clock(), timeZone);
     const date = h('input', {
       type: 'date',
       required: true,
       min: today,
-      max: lastDayOfPeriod(def.cadence, task.periodKey ?? today),
+      // A task of a definition has until the end of its period; a big one-off task has no end.
+      max: def ? lastDayOfPeriod(def.cadence, task.periodKey ?? today) : undefined,
       value: task.plan?.date ?? today,
     });
     const trigger = h('input', { type: 'text', required: true, maxLength: LIMITS.trigger, autocomplete: 'off', value: task.plan?.trigger ?? '' });
     const save = (plan: { date: string; trigger: string } | null) => {
-      if (plan && validatePlan(task, def, plan, ctx.clock(), timeZone) !== 'ok') return;
+      if (plan && validatePlan(task, def ?? null, plan, ctx.clock(), timeZone) !== 'ok') return;
       ctx.settle(ctx.store.tasks.setPlan(worldId, task.id, plan).settled);
       planning = null;
       draw();
@@ -77,20 +78,25 @@ export const renderBoard: WorldScreen = (ctx, root, { worldId }) => {
   };
 
   function draw(): void {
-    const shown = visibleOpenTasks(tasks);
-    const timeZone = world?.ruleset.timezone ?? null;
+    if (!world) return;
+    const timeZone = world.ruleset.timezone;
+    const isNew = (task: Task) => isNewTask(task, defs, seenBefore);
+    const shown = sortForBoard(tasks, ctx.clock(), timeZone, isNew);
     list.replaceChildren(
       ...shown.map((task) => {
         const def = task.defId === null ? undefined : defs.get(task.defId);
-        const canPlan = def?.big === true && timeZone !== null;
-        const due = world ? taskPlanAlert(task, ctx.clock(), world.ruleset.timezone) : null;
-        return h('li', { class: `board-task${due ? ` planned-${due}` : ''}` },
-          h('span', {}, task.title),
-          task.plan && h('small', { class: 'plan' }, `${dayLabel(task.plan.date)} · ${task.plan.trigger}`),
-          canPlan && planning !== task.id &&
-            h('button', { onClick: () => ((planning = task.id), draw()) }, ctx.text(task.plan ? 'plan.change' : 'plan.open')),
-          canPlan && planning === task.id && planForm(task, def, timeZone),
-        );
+        const canPlan = def?.big === true || (task.source === 'adhoc' && task.big === true);
+        return taskCard(ctx, {
+          task,
+          def,
+          timeZone,
+          isNew: isNew(task),
+          below: [
+            canPlan && planning !== task.id &&
+              h('button', { class: 'link', onClick: () => ((planning = task.id), draw()) }, ctx.text(task.plan ? 'plan.change' : 'plan.open')),
+            canPlan && planning === task.id && planForm(task, def, timeZone),
+          ],
+        });
       }),
     );
     empty.replaceChildren(...(shown.length === 0 ? [h('p', { class: 'message' }, ctx.text('board.empty'))] : []));
@@ -112,6 +118,8 @@ export const renderBoard: WorldScreen = (ctx, root, { worldId }) => {
     if (profile.id === watchedProfile) return;
     stopTasks();
     watchedProfile = profile.id;
+    seenBefore = ctx.world.getLastSeen(worldId, profile.id);
+    ctx.world.setLastSeen(worldId, profile.id, ctx.clock());
     stopTasks = observeWithRetry(ctx, problem, (onError) =>
       ctx.store.tasks.observeOpenTasks(worldId, profile.id, (value) => ((tasks = value), draw()), onError),
     );

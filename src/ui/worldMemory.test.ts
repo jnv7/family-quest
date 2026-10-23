@@ -53,4 +53,18 @@ describe('createWorldMemory', () => {
       expect(memory.get()).toBeNull();
     }
   });
+
+  it('remembers when a profile last saw its list, per world and profile, even without writable storage', () => {
+    const storage = fakeStorage();
+    const memory = createWorldMemory(storage);
+    expect(memory.getLastSeen('w', 'p')).toBeNull();
+    memory.setLastSeen('w', 'p', 1234);
+    expect(createWorldMemory(storage).getLastSeen('w', 'p')).toBe(1234);
+    expect(createWorldMemory(storage).getLastSeen('w', 'q')).toBeNull();
+    expect(createWorldMemory(storage).getLastSeen('x', 'p')).toBeNull();
+
+    const broken = createWorldMemory({ getItem: () => null, setItem: () => { throw new Error('full'); }, removeItem: () => {} });
+    broken.setLastSeen('w', 'p', 99);
+    expect(broken.getLastSeen('w', 'p')).toBe(99);
+  });
 });

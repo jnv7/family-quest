@@ -1,6 +1,6 @@
 # Specification — Family Quest
 
-Last revised: 2026-10-19.
+Last revised: 2026-10-23.
 
 Tags: **[decided]** came from the product owner; **[proposal]** is a design suggestion that may change; **[open]** is still to be decided.
 
@@ -8,7 +8,7 @@ The release plan and the radar of future ideas live in `ROADMAP.md`. Architectur
 
 ## 1. Goal and scope
 
-A PWA for a family of adults and children. Each person has tasks (daily, weekly, monthly or ad hoc), completes them on their phone and earns rewards in a themed collection game. The game teaches time planning and gives the family a weekly ritual, without pressure and without comparing people.
+A PWA for a family of adults and children. Each person has tasks (daily, weekly, monthly or ad hoc), completes them on their phone and earns tokens, which they spend on rewards in a themed collection game (from 0.9). The game teaches time planning and managing a scarce resource (open a cheap reward now, or save for a rarer one), without pressure and without comparing people.
 
 - Devices: Android phones (children) and iPhones (adults), with the app installed on the home screen. **[decided]**
 - Hosting: GitHub Pages (static, public repository) + Firebase Spark (Firestore and anonymous Authentication). **[decided]**
@@ -20,9 +20,10 @@ A PWA for a family of adults and children. Each person has tasks (daily, weekly,
 - **Theme independence.** See section 8 and rule 1 in `CLAUDE.md`. **[decided]**
 - **Local-first.** Works offline; syncs on its own. **[decided]**
 - **No cost:** Spark plan; no Cloud Functions, no Cloud Storage. **[decided]**
-- **No friction.** Completing a task takes at most 2 taps from the map. Alerts are visual (a speech bubble with dots appears on a place of the map, as if it wanted to say something), with no scolding text and no push notifications. **[decided]**
+- **No friction.** Completing a task takes at most 2 taps from the map; a task with a verification question takes a third, to answer it (product owner, 2026-10-21). Alerts are visual (a speech bubble with dots appears on a place of the map, as if it wanted to say something), with no scolding text and no push notifications. **[decided]**
 - **No comparison.** No screen shows counts, rankings or who owns a collectible to other people. **[decided]**
-- **Nothing earned is lost.** Rewards and collectibles are never deleted. No document in the system is deletable. **[decided]**
+  - **One deliberate exception: your own balance** (product owner, 2026-10-23; from 0.9). The active profile's own token balance is shown as a number at the top of the `vault`, and nowhere else. It is never shown to anyone else, nor in the adults' view. **[decided]**
+- **Nothing earned is lost.** Rewards and collectibles are never deleted. No document in the system is deletable. Spending tokens deletes nothing: every token earned is recorded on its done task, and every token spent on the reward it bought (ADR 0008). **[decided]**
   - **One deliberate exception in reach, not in data** (product owner, 2026-10-21): a collectible that drops out of the `showcase` "leaves for another island". It stays stored, but it can no longer be seen or brought back (section 6). **[decided]**
   - **Retiring a task** (from 0.9) hides an open task that earned nothing. It is a status change, not a deletion (section 6).
 - **Public repository data:** code and art only. No family data. **[decided]**
@@ -40,11 +41,12 @@ These names are the only ones allowed in code, ids, collections and rules. The t
 | `board` | Map place showing today's tasks | Papagaio na doca |
 | `checkin` | Place where a task is completed; its character asks the question | Farol e velho sábio |
 | `home` | Each person's own place: avatar and party | Barco |
-| `vault` | Unopened rewards | Gruta do tesouro |
+| `vault` | Where a person spends tokens to open a reward of the tier they choose, and opens rewards from before 0.9 | Gruta do tesouro |
 | `showcase` | The latest collectibles moved to the reserve | Bar |
-| `reward` | Reward produced by a completed task | Baú |
+| `reward` | What is opened in the `vault`; it has a `tier` and yields one collectible. From 0.9 it is bought with tokens; before 0.9 a completed task produced one | Baú |
+| `token` | Unit earned by completing a task and spent in the `vault` (from 0.9) | Tocha |
 | `collectible` | What comes out of a reward | Bicho |
-| `party` | The collectibles (max. 5) that accompany a profile | Tripulação |
+| `party` | The collectibles (`partySize`, 5 by default) that accompany a profile | Tripulação |
 | `reserve` | Collectibles that are not in the `party` | Ilha |
 | `tier` | Rarity: `low`, `mid`, `high` | Baixo, médio, alto |
 | `slot` | Stable identifier of a collectible in the theme catalogue | — |
@@ -64,21 +66,18 @@ All collections live under `worlds/{worldId}`. Every document has `schemaVersion
 
 `ruleset` (defaults):
 
-- `partySize`: 5. **[decided]**
+- `partySize`: 5. **[decided]** From 0.9 an admin can change it in management (1 to 10). Lowering it never removes anyone from a `party`: a `party` above the new size keeps its members, and nobody can join it until it is below the size. **[decided]** (product owner, 2026-10-23)
 - `showcaseSize`: 10. **[decided]** (product owner, 2026-10-21; it was 30.) An admin can change it in management (0.8), which is also how an existing world, created with 30, gets 10.
 - `childDailyTaskLimit`: 3 ad hoc tasks created by a child for themselves per day. **[decided]**
 - `timezone`: `Europe/Lisbon`; `weekStartsOn`: Monday.
-- `openingDay`: ISO weekday on which the current week's rewards can be opened; default 7 (Sunday). **[decided]**
 - `pendingDays`: how many days a newly obtained collectible stays in its owner's pending list before moving to the reserve; default 1. **[decided]** (value is configurable)
-- `tierOdds`: probability of each reward `tier`, per task `level`. **[decided]** The values below are the product owner's. Each row holds integers that sum to 100; the client validates this whenever the ruleset is saved. A world keeps the odds it was created with, so an admin edits them in management (section 7.8).
+- `tokensPerLevel` (from 0.9): the tokens a completed task earns, by its `level`: `low` 1, `mid` 2, `high` 4. **[decided]** (product owner, 2026-10-23)
+- `tokenPrices` (from 0.9): the price of a reward, by `tier`: `low` 5, `mid` 12, `high` 25. **[decided]** Whole numbers, strictly increasing from `low` to `high`.
+- `guarantee`: weekly minimum rule per person. **[open]** Defaults to `null` (off). The code provides the extension point (from 0.9, in `tokensFor`) but implements no rule until the product owner decides.
 
-| Task `level` | `low` | `mid` | `high` |
-| --- | --- | --- | --- |
-| `low` | 80 | 17 | 3 |
-| `mid` | 65 | 25 | 10 |
-| `high` | 45 | 35 | 20 |
+An admin edits `tokensPerLevel` and `tokenPrices` in management (section 7.8). A change applies only to later completions and purchases. A world created before 0.9 has neither field; it reads them as the defaults until an admin saves them.
 
-- `guarantee`: weekly minimum rule per person. **[open]** Defaults to `null` (off). The code provides the extension point but implements no rule until the product owner decides.
+`openingDay` and `tierOdds` were removed in 0.9: there is no opening day, and the tier of a reward is chosen, not drawn. Worlds created before 0.9 still store them; the app ignores them.
 
 ### `members/{uid}`
 
@@ -99,6 +98,8 @@ A device in the world. `uid` comes from anonymous authentication.
 | `avatar` | map | Layers as indices (`body`, `hair`, `outfit`, `accessory`), plus `symbol`: one emoji, any single emoji (the theme only suggests some), or null until chosen. Never an image. A profile read without `symbol` has `symbol: null`. The rules only require `avatar` to be a map, so `symbol` needs no rules change **[decided]** |
 | `partyIds` | list of ids | Up to `partySize`; the source of truth for the `party` |
 | `archived` | boolean | Profiles are never deleted. Only child profiles can be archived, so a world always keeps at least one adult profile, and therefore an admin |
+| `tokens` | integer, optional | From 0.9: the token balance; absent means 0. Changed only with `increment()`, in the batch that completes a task or buys a reward, and never below 0 (ADR 0008). Readable by members like the rest of the profile; shown only to its owner, in the `vault` |
+| `tokensFrom`, `tokensFor` | string, optional | From 0.9: the task that last added tokens, and the reward that last spent them. They let the rules check every change of `tokens` against its reason |
 
 ### `taskDefs/{defId}` — recurring task definitions
 
@@ -115,22 +116,28 @@ A device in the world. `uid` comes from anonymous authentication.
 | `periodKey` | string or null | Period of a recurring task (see below); null for ad hoc |
 | `createdBy` | string | `profileId` of the creator |
 | `origin` | `app` or `api` | For future integrations |
-| `plan` | map or null | `{date, trigger}`; only `big` tasks (0.3) |
+| `big` | boolean, optional | `true` only on an ad hoc task made big (0.8); absent otherwise, and never changed after creation. A recurring task is big when its `taskDef` is |
+| `plan` | map or null | `{date, trigger}`; only tasks from a `big` definition (0.3) and big ad hoc tasks (0.8) |
 | `status` | `open`, `done` or (from 0.9) `retired` | A `done` or `retired` task never changes status again |
 | `doneAt` | timestamp or null | |
 | `answer` | `yes`, `no` or null | Answer to the `question` |
 | `talkFlag` | boolean | "I think I did better, I want to talk to my parents" |
 | `weekKey` | string or null | `YYYY-Www` of completion; null while open |
+| `tokens` | integer, optional | From 0.9: the tokens earned, fixed at completion (`tokensPerLevel[level]` at that moment). Absent on open and retired tasks, and on tasks completed before 0.9 |
+| `retiredAt`, `retiredBy` | timestamp and string, optional | From 0.9: set only when the task is retired, with the `profileId` of whoever retired it (ADR 0009) |
 
 Tasks have no due date for now; what counts is completion. **[decided]** Due dates and rescheduling are on the radar.
 
 Recurring task id: `{defId}_{periodKey}_{profileId}`, where `periodKey` is `YYYY-MM-DD` (daily), `YYYY-Www` (weekly, ISO week) or `YYYY-MM` (monthly). The id identifies the period in which the task was generated; a period does not always yield a task (section 6). Ad hoc task id: random.
 
-### `rewards/{taskId}` and `collectibles/{taskId}`
+### `rewards/{rewardId}` and `collectibles/{rewardId}`
 
-A completed task produces a `reward` with the task's id. Opening the reward produces a `collectible` with that same id. **[proposal]** One id per task across three collections is what prevents duplicates without transactions (section 10).
+A reward and its collectible share one id. **[decided]**
 
-`rewards`: `profileId`, `weekKey`, `tier` (drawn at completion), `openedAt` (null until opened).
+- **Before 0.9**, a completed task produced a `reward` with the task's id. Opening it produces a `collectible` with that same id. One id per task across three collections prevents duplicates without transactions (section 10).
+- **From 0.9**, a reward is bought in the `vault` (ADR 0008). It has a random id, and is created already opened, in the same batch that spends its price and creates its collectible.
+
+`rewards`: `profileId`, `weekKey` (of completion before 0.9, of purchase from 0.9), `tier` (drawn at completion before 0.9, chosen from 0.9), `openedAt` (null until opened; set at creation for a bought reward), `price` (only on a bought reward: the tokens it cost).
 
 `collectibles`: `profileId`, `slot`, `tier`, `nickname` (string or null; chosen by the user, survives a theme change), `obtainedWeekKey`, `obtainedAt` (timestamp), `reserveAt` (null while in the `party` or pending; timestamp once it moves to the reserve).
 
@@ -157,15 +164,15 @@ A completed task produces a `reward` with the task's id. Opening the reward prod
 | --- | --- | --- |
 | `worlds` | members | create: any authenticated user, with `createdBy == uid`; update: `admin`, without changing `themeId` or `createdBy` |
 | `members` | members | create: only its own `uid`, with `profileId` null, or with the creator's new adult profile inside the world-creating batch; update: the device itself changes only `profileId`, to an existing, non-archived profile |
-| `profiles` | members | create: `admin`, or the world's creator for its own adult profile inside the world-creating batch; update: `admin` changes `displayName`, `avatar` and `archived` (archiving only child profiles), never `kind`; the owner updates only `avatar` and `partyIds` |
+| `profiles` | members | create: `admin`, or the world's creator for its own adult profile inside the world-creating batch; update: `admin` changes `displayName`, `avatar` and `archived` (archiving only child profiles), never `kind`; the owner updates only `avatar` and `partyIds`, plus (from 0.9) `tokens` by increment, with `tokensFrom` in the batch that completes that task, or with `tokensFor` in the batch that creates that reward, never below 0 (ADR 0008); `partyIds` fits `partySize`, or, above a lowered size, only loses members |
 | `taskDefs` | members | `admin` |
-| `tasks` | `admin` or the owner | create ad hoc: `admin` for any profile, or the owner for itself with `origin: app`; create recurring: the owner only, with an id equal to `{defId}_{periodKey}_{profileId}`, for an active `taskDef` assigned to that profile; every new task has `status: open`; update: only the owner completes (`status` from `open` to `done`, together with `doneAt`, `answer`, `talkFlag`, `weekKey`), and the owner may change `talkFlag` and `plan` on an open task; an `admin` may change `title`, `level` and `question` on an open task; nobody changes `status` of a `done` task, nor `profileId`, `source`, `defId`, `periodKey`, `createdBy` or `createdAt` |
-| `rewards` | `admin` or the owner | create: the owner only, never replacing an existing one, and only in the same batch that moves the task with the same id from `open` to `done` (checked with `get` and `getAfter`), with the same `profileId` and `weekKey`; update: the owner, only `openedAt`, once |
-| `collectibles` | members (the `showcase` needs to read other people's; the interface hides the owner) | create: the owner only, never replacing, and only in the same batch that sets `openedAt` on the reward with the same id, with that reward's `tier` and `profileId`; update: the owner, only `nickname` and `reserveAt`; `admin`, only `nickname` (moderation, since the `showcase` shows nicknames to everyone) **[decided]** |
+| `tasks` | `admin` or the owner | create ad hoc: `admin` for any profile, or the owner for itself with `origin: app` (optionally with `big: true`, only on an ad hoc task); create recurring: the owner only, with an id equal to `{defId}_{periodKey}_{profileId}`, for an active `taskDef` assigned to that profile; every new task has `status: open`; update: only the owner completes (`status` from `open` to `done`, together with `doneAt`, `answer`, `talkFlag`, `weekKey`, and from 0.9 `tokens` from 1 to 10, added to the profile in the same batch); an `admin` retires any open task, and the owner retires an ad hoc task they created for themselves (`status` from `open` to `retired`, with `retiredAt` and `retiredBy`; ADR 0009); and the owner may change `talkFlag` and `plan` on an open task (a plan only on a task from a big definition or a big ad hoc task); an `admin` may change `title`, `level` and `question` on an open task; nobody changes `status` of a `done` or `retired` task, nor `profileId`, `source`, `defId`, `periodKey`, `big`, `createdBy` or `createdAt` |
+| `rewards` | `admin` or the owner | create, the owner only and never replacing an existing one: from a task, only in the same batch that moves the task with the same id from `open` to `done` without `tokens` (checked with `get` and `getAfter`), with the same `profileId` and `weekKey` (the 0.8 path, kept for writes queued before 0.9); or bought (from 0.9), with a `price` from 1 to 200 and `openedAt` set, only in the batch that takes that price from the profile's `tokens` and creates its collectible; update: the owner, only `openedAt`, once |
+| `collectibles` | members (the `showcase` needs to read other people's; the interface hides the owner) | create: the owner only, never replacing, and only in the same batch that sets `openedAt` on the reward with the same id, or (from 0.9) that creates the bought reward with the same id, with that reward's `tier` and `profileId`; update: the owner, only `nickname` and `reserveAt`; `admin`, only `nickname` (moderation, since the `showcase` shows nicknames to everyone) **[decided]** |
 
 The rule "a `done` task never changes `status`", together with the immutable `createdAt`, is essential. Without it, generating recurring tasks again could overwrite completed tasks (section 6).
 
-The rules cannot count documents, and checking the weekday there would use UTC server time at sync. The daily task limit and the opening day are therefore enforced in the client and tested in the domain. The `party` size is enforced in both places: the rules compare the length of `partyIds` with `ruleset.partySize`. The reward `tier` and the collectible `slot` are drawn in the client and cannot be verified by the rules; like profile choice, this relies on trust. **[decided]**
+The rules cannot count documents, and checking the weekday there would use UTC server time at sync. The daily task limit (and the opening day, until 0.9) is therefore enforced in the client and tested in the domain, and so is the `low` level of a child's own task (from 0.9). The `party` size is enforced in both places: the rules compare the length of `partyIds` with `ruleset.partySize` whenever `partyIds` changes. The reward `tier` (drawn before 0.9, chosen from 0.9) and the collectible `slot` are set in the client and cannot be verified by the rules; like profile choice, this relies on trust. **[decided]** From 0.9 the same holds for the amounts: the rules check that a task's `tokens` and a reward's `price` are within range, not that they equal the current `ruleset`, so a device that was offline while an adult changed the values never sees a completed task reopen (ADR 0008). The rules do guarantee that a balance never goes below 0, that the same tokens are never spent twice, and that only the owner earns or spends.
 
 ## 6. Mechanics
 
@@ -188,20 +195,22 @@ Known edge case: the "no open task" check runs on the local cache, so a device w
 - **Repeats:** once, daily, weekly or monthly.
   - **once:** one ad hoc task per chosen profile ("everyone" means every non-archived profile at that moment);
   - **any repetition:** one `taskDef` with those profiles in `assignedTo` ("everyone" means `assignedTo: []`, which includes future profiles).
-- **Other fields:** the difficulty and an optional question; "big" is offered only when the task repeats.
+- **Other fields:** the difficulty, an optional question and "big" (can be planned). A big task that does not repeat is allowed (ADR 0007): its plan may be any day from today on, with no end, while a task of a big definition can be planned only up to the end of its period.
 
 A child's form keeps only the title. The details are in `docs/plans/0.8.md`, 0.8.1.
 
-**Ad hoc tasks.** An `admin` creates them for any profile. A child creates them only for themselves, within the daily limit. The limit counts the ad hoc tasks the child's profile created for itself whose `createdAt` falls on today's date in Lisbon; tasks created by an admin do not count. **[decided]** A child only gives the task a title: it is always for themselves, with `level` `mid` and no `question`. **[decided]** An adult may also set the `level`, a `question` and who it is for. An ad hoc task stays open until it is completed.
+**Ad hoc tasks.** An `admin` creates them for any profile. A child creates them only for themselves, within the daily limit. The limit counts the ad hoc tasks the child's profile created for itself whose `createdAt` falls on today's date in Lisbon; tasks created by an admin do not count. **[decided]** A child only gives the task a title: it is always for themselves, with `level` `low` (from 0.9; it was `mid`) and no `question`. **[decided]** (product owner, 2026-10-23: a task a child invents never earns more than the tasks they are given.) An adult may also set the `level`, a `question` and who it is for. An ad hoc task stays open until it is completed.
 
 **Completing.** Each person completes only their own tasks. **[decided]** In one atomic batch, the client:
 
 - moves the task to `done`, with `doneAt`, `answer`, `talkFlag` and the `weekKey` of the completion;
-- creates the `reward` with the same id, with a `tier` drawn from `tierOdds[level]` using `crypto.getRandomValues` (until 0.9; see "Reward pieces").
+- from 0.9, sets the task's `tokens` to `tokensPerLevel[level]` and adds them to the profile's balance with `increment()` (ADR 0008). A completed task no longer produces a reward. Until 0.9 it created the `reward` with the same id, with a `tier` drawn from `tierOdds[level]`.
+
+Tokens are earned only by completing: "no" to the question, "undo" within the 4 seconds and retiring a task earn nothing. Every balance starts at 0 in 0.9: tasks completed before 0.9 earn nothing, because they already produced rewards. Adults earn and spend tokens like everyone else. **[decided]**
 
 **Undo** (from 0.8). **[decided]** After "done" (or "yes"), the card offers "undo" for 4 seconds, and the batch is written only when they end. If the page is hidden first, it is written at once. Undo within the 4 seconds writes nothing, so a mis-tap never needs a task to be reopened. It adds no tap.
 
-**Verification question.** If the task has a `question`, the `checkin` character asks it: the task's card shows the character's small portrait with the question in a speech bubble, and "yes" and "no" inside the bubble (from 0.8). **[decided]** Answering "yes" completes the task; it is still two taps from the map. On "no", the task stays open, the character says a friendly themed line, and no failure is recorded. **[decided]**
+**Verification question.** If the task has a `question`, "done" comes first, and only then the `checkin` character asks it: after "done" the card shows the character's small portrait with the question in a speech bubble, and "yes" and "no" inside the bubble (from 0.8). **[decided]** (product owner, 2026-10-21) Answering "yes" completes the task, so a task with a question takes three taps from the map (the place, "done", "yes"); one without takes two. On "no", the task stays open, the character says a friendly themed line, and no failure is recorded. **[decided]**
 
 **"I think I did better".** **[decided]** (product owner, 2026-10-21) This is no longer a button. The `checkin` shows a static line before the list of tasks ("if you think you did a task better than expected, talk to your parents"), so the conversation happens out loud. The `talkFlag` field and its store operation remain in the data, but the interface does not set it, so it stays `false`. There are no points, states or multipliers.
 
@@ -219,7 +228,7 @@ A child's form keeps only the title. The details are in `docs/plans/0.8.md`, 0.8
 
 **Recurring tasks:** retiring a recurring task skips only that period. Its id stays taken, so it is not generated again in that period. To stop a recurring task, deactivate its definition.
 
-This needs a rules change (`open → retired`), so it comes with an ADR, rules tests and a rules deploy by the product owner.
+This needs a rules change (`open → retired`), so it comes with an ADR (0009), rules tests and a rules deploy by the product owner. A retired task still counts towards a child's daily ad hoc limit.
 
 **Board alert** (from 0.8, replacing the 0.3 alert). **[decided]** The `board` place lights up, with no text or number, for the active profile's open tasks. From strongest to weakest:
 
@@ -229,19 +238,16 @@ This needs a rules change (`open → retired`), so it comes with an ADR, rules t
 
 What counts as **new**: an ad hoc task created by someone else, or the first task of a recurring definition created since the profile last opened the `board` or the `checkin` on this device. Daily repeats of a known definition are not new. The "last seen" time is kept on the device only.
 
-**Reward pieces** (from 0.9). **[decided]** (product owner, 2026-10-21, "until we see how it goes") A completed task no longer gives a whole reward, but a piece:
+**Spending tokens** (from 0.9). **[decided]** (product owner, 2026-10-23; replaces "reward pieces", which was never built)
 
-- **Pieces per task:** 1, or 2 for a `high` task.
-- **Rewards:** every 4 pieces make one reward. Its `tier` is drawn when it is opened, from the odds of the difficulty that most of its pieces had (a tie goes to the higher difficulty).
-- **Nothing expires:** pieces carry over from week to week.
-- **In the `vault`:** the reward being assembled shows as a picture of filled segments, not a number.
-- **Opening** is one batch that marks 4 unopened pieces as used and creates the collectible. A piece can be used only once, so two devices can never build two rewards from the same piece.
-- **No migration:** unopened rewards from before 0.9 stay whole rewards.
+- **Any day:** there is no opening day and no weekly ritual.
+- **Choosing the tier:** the person chooses one of the three tiers in the `vault` and pays its price (`tokenPrices`). The reward has that `tier`.
+- **The draw:** the collectible is drawn uniformly among the theme catalogue's slots of that tier, with repeats allowed. The catalogue is not shown, and nothing says how many collectibles exist.
+- **Never below zero, never twice:** a person cannot spend more tokens than they have. Two devices of the same profile, both offline, can never spend the same tokens (ADR 0008). If that happens, the second purchase is refused when it syncs, and that device shows a neutral line saying the tokens had already been spent on another device.
+- **One batch:** buying takes the price from the balance, creates the reward (already opened) and creates its collectible, which is pending.
 - **Catalogue size:** at least 8 collectibles per tier in the pirate theme. **[decided]**
 
-This needs a rules change, so it comes with an ADR, rules tests and a rules deploy by the product owner.
-
-**Opening rewards.** On or after `ruleset.openingDay` (Sunday by default), a person can open the current week's rewards. Rewards from closed weeks can be opened at any time, so if the family skips a Sunday, everything opens on Monday or later. Each person opens their own. Everyone can open at the same time on the same screen, but each person sees only their own result. Opening is one atomic batch that:
+**Rewards from before 0.9.** **[decided]** Unopened rewards from before 0.9 stay whole, with no migration. They appear in the `vault` as rewards already found, and open for free, on any day. Opening one is one atomic batch that:
 
 - draws a theme catalogue `slot` with the reward's `tier`, uniformly among that tier's slots **[decided]**;
 - creates the `collectible` with the same id;
@@ -281,12 +287,22 @@ The pirate theme declares moorings for children only, at the pier. Adults keep t
    3. new (with a "new" marker);
    4. the rest, oldest first.
 
-   A card's action leads to the `checkin` with that task in focus. This is the entry point for creating a task, with the single task form (adults for any profiles, children for themselves).
-4. **`checkin`.** Pick an open task, tap done (with 4 seconds to undo, from 0.8). A task with a question is asked by the character in a bubble on its card (from 0.8). From 0.9, "⋯" on a card offers to retire it, within the limits in section 6. Each task is a card with its button in front of it (for a task with a question, "yes" and "no" in front of it). A static line before the list says to talk to the parents about a task done better than expected; it is not a button. The `board` lists its tasks as cards too.
+   The `board` cards have no action: a task is completed only in the `checkin`. This is the entry point for creating a task, with the single task form (adults for any profiles, children for themselves).
+4. **`checkin`.** Pick an open task, tap done (with 4 seconds to undo, from 0.8). A task with a question is first marked done, and then asked by the character in a bubble on its card (from 0.8). From 0.9, "⋯" on a card offers to retire it, within the limits in section 6, and a completed task shows the tokens it earned as icons, one per token, with no number **[proposal]**. Each task is a card with its "done" button in front of it (for a task with a question, "yes" and "no" come in a bubble after it). A static line before the list says to talk to the parents about a task done better than expected; it is not a button. The `board` lists its tasks as cards too.
 5. **`home`.** The active profile with the theme's look for its kind (`homeVariants`), with the profile's symbol on its sail (the symbol is the avatar for now), a button under it to choose the symbol, its `party` and its pending collectibles; there is no reserve list. Each collectible in the `party` can be renamed (the nickname is trimmed, empty clears it, at most 30 characters). A `party` member is sent away, to the `showcase`, in one tap with no confirmation, because nothing is lost; a pending collectible joins the `party`, and with a full `party` the screen asks who leaves. No counts and no comparisons. The `party` list has a short line saying what it is. The owner chooses or changes the profile's symbol with the button under the boat, which opens a panel with the theme's suggestions first and then the animals and plants, with large squares, and a way to clear it; the chosen emoji goes onto the sail at once. An adult's symbol also shows on the big ship at the pier of the map, where the theme gives a place for it (`symbolAt` on the place). Where the theme does not place the symbol over its art, it is shown next to the name. The layered avatar (0.8) is not started.
-6. **`vault`.** The active profile's unopened `rewards`, grouped by week, each shown with the theme's art for its `tier` (the tier is visible before opening **[decided]**). Only that profile's own rewards. A reward is opened here from the opening day on; the collectible that comes out is shown and can join the `party` at once, or stay pending. The vault also lists the pending collectibles in a "recent" section, with the same choices as the `home`.
+6. **`vault`** (from 0.9). **[decided]** (product owner, 2026-10-23)
+   - **The balance** of the active profile is at the top, as the token icon and a number: the only place it is shown (section 2).
+   - **Rewards already found** (from before 0.9) come next, if any, each with its tier art, opening for free.
+   - **The depth:** the three tiers are three spots, from the entrance (`low`) to the deep end (`high`), each with its reward art, the theme's line inviting the person to go deeper, and its price. Their placement, art and wording are theme data (section 8); the engine only knows three tiers, ordered `low` to `high`.
+     - A tier the person cannot afford is dimmed, still shows its price, and does nothing when tapped.
+     - Tapping an affordable tier selects it and shows "open for N" (with the token icon). Tapping that spends the tokens and opens the reward. Tapping elsewhere cancels.
+   - **After opening** the collectible is shown, and its owner chooses:
+     - join the `party` (with a full `party`, the screen asks who leaves, and that one goes to the reserve); the name tag can be set right there;
+     - let it go, straight to the reserve (the `showcase`);
+     - or leave without choosing: it stays pending (`pendingDays`), so it is never lost by accident.
+   - **"Recent":** the pending collectibles, with the same choices as the `home`.
 7. **`showcase`.** The latest `showcaseSize` (10) from the reserve, from everyone, as a grid of art and name. Tapping one shows it larger, with its name and tier name. It never shows the owner, a date or a count. An admin can also rename any of them (moderation). A person who taps one of their own can bring it back into the `party`. **[decided]**
-8. **Management (`admin` only).** Create and archive profiles (optionally choosing the new profile's symbol), list, edit and deactivate `taskDefs` (creating goes through the single task form), edit the reward odds (`tierOdds`) and `showcaseSize`, **view tasks per profile** (open tasks, and those done in the last 7 days, as lists with the day, never counts or totals; built in 0.8), show the join link and QR code again. Profiles and worlds are always created through the app, with generated ids, never by editing data by hand. **[decided]**
+8. **Management (`admin` only).** Create and archive profiles (optionally choosing the new profile's symbol), list, edit and deactivate `taskDefs` (creating goes through the single task form), edit the tokens per level, the prices per tier, `partySize` (from 0.9; the reward odds editor is gone) and `showcaseSize`, **view tasks per profile** (open tasks, and those done in the last 7 days, as lists with the day, never counts or totals; built in 0.8), show the join link and QR code again. Profiles and worlds are always created through the app, with generated ids, never by editing data by hand. **[decided]**
 
 Adults play like everyone else. The theme can give an adult's `home` a different look (in the pirate theme, a luxury ship).
 
@@ -324,7 +340,9 @@ Folder `src/themes/{themeId}/` with:
   - optionally, `map.moorings` per `kind`: a list of spots (`x`, `y`, `width`, `height` in percent of the map, like places), plus where on the boat the profile symbol goes (`symbolAt`: `x`, `y` and `size`, in percent of the spot) (section 7);
   - `profileSymbols`: the emoji suggested first when a profile chooses its symbol, neutral or themed, at least 12, without duplicates (the picker offers every emoji, so this is not a limit);
   - optionally, `homeSymbolAt` per `kind`: where the symbol goes over the `homeVariants` art on the `home` (`x`, `y` and `size`, in percent of the art);
-  - `rewardArt`: the art of an unopened reward, per tier;
+  - `rewardArt`: the art of a reward, per tier;
+  - from 0.9, the `token`: its name (a glossary role, with singular, plural and gender) and its icon (`tokenArt`);
+  - from 0.9, `vault`: per tier, the line that invites going deeper (`invite`); optionally a background with its aspect ratio and one spot per tier, in percent, like map places. Without spots, the engine stacks the tiers from the entrance (`low`) to the deep end (`high`);
   - `homeVariants` per `kind`;
   - `install`: the name and colours of the installed app and its icons, from which one manifest per theme is built (ADR 0005);
   - the `checkin` character's lines (greeting, congratulations, doubt, farewell), short and fixed in number.
@@ -360,12 +378,13 @@ firebase.json   Firebase CLI configuration (at the root, where the CLI expects i
 - Firestore uses a persistent local cache with multi-tab support (`persistentLocalCache` with `persistentMultipleTabManager`; confirm the exact name in the installed SDK version). Writes are queued and resent automatically.
 - **Do not use transactions for anything that must work offline:** they do not run without a network. Completing and opening are `writeBatch` operations. Uniqueness comes from deterministic ids plus "create, never replace" rules (section 5). If two devices complete or open the same task, the second batch is rejected as a whole and the client refreshes its state from the server.
 - "Already exists" rejections while generating recurring tasks are expected and silent.
+- **Tokens** (from 0.9) are a counter changed only with `increment()`, which the server applies to its own value. Each change is in the batch that justifies it, and the rules refuse a batch whose result is wrong or below 0. So offline devices of the same profile can earn and spend independently, and the server never accepts more spending than there are tokens (ADR 0008).
 - A rejected write must never leave the interface in a false state: after a rejection, the screen reflects the server again.
 
 ## 11. Tests and verification
 
-- **Domain (Vitest):** week and `periodKey`, including 25 October 2026 and the turn of the year into `2026-W53`; task generation, including no new copy while a task from the same `taskDef` is open, and no new task after an overdue one is completed in the current period; the draw; `party`, pending and reserve rules; opening-day rules, including a skipped Sunday.
-- **Draw simulation:** 10,000 draws per `level`, checking the distribution against `tierOdds` within a margin fixed in the test.
+- **Domain (Vitest):** week and `periodKey`, including 25 October 2026 and the turn of the year into `2026-W53`; task generation, including no new copy while a task from the same `taskDef` is open, and no new task after an overdue one is completed in the current period; the slot draw; `party`, pending and reserve rules, including a `party` above a lowered `partySize`; from 0.9, tokens per level, prices, affordability and who can retire, and generation after a retired recurring task.
+- **Draw simulation:** 10,000 slot draws per tier, checking that every slot of the tier comes out within a margin fixed in the test.
 - **Firestore rules** (`@firebase/rules-unit-testing`, emulator). These run in the GitHub Action:
   - a non-member reads nothing;
   - a device writes nothing on documents of a profile that is not its active one;
@@ -373,12 +392,13 @@ firebase.json   Firebase CLI configuration (at the root, where the CLI expects i
   - a `done` task can never return to `open`, by anyone;
   - generating an existing recurring task again is rejected, both for the owner and for an `admin`;
   - a recurring task with an id that does not match its `defId`, `periodKey` and `profileId` is rejected;
-  - a `reward` can only be created in the batch that completes its task;
+  - a `reward` can only be created in the batch that completes its task (without `tokens`), or bought in the batch that spends its price;
+  - from 0.9: tokens are earned only in the batch that completes the task, by its `tokens`; a purchase above the balance, the same tokens spent twice, and a device spending another profile's tokens are refused; only the allowed people retire, and a retired task never changes again;
   - `rewards` and `collectibles` are never replaced;
   - only an `admin` writes `taskDefs`;
   - nothing can be deleted.
 - **`npm run lint:theme-leak`:** fails if it finds theme vocabulary anywhere in `src/`, `firebase/`, `schemas/` or `.github/` outside `src/themes/`. Documentation is not scanned. The forbidden terms are listed per theme in `scripts/theme-leak-terms.json` (for the pirate theme, for example: baú, bicho, pirata, farol, papagaio, tripulação, gruta, chest, crew, parrot, lighthouse, pirate, treasure).
-- **Two real devices** in releases 0.2, 0.5 and 0.6, including airplane mode.
+- **Two real devices** in releases 0.2, 0.5, 0.6 and 0.9, including airplane mode (in 0.9: two phones of one profile spending the same tokens).
 - **Second minimal theme** (emoji and text) working without touching code or data, in 0.2.
 
 ## 12. Releases
@@ -394,4 +414,4 @@ See `ROADMAP.md`. Each release is a minor version developed on its own `release/
 
 ## 14. Out of scope (v1)
 
-Push notifications; tokens or currency; trading collectibles between people; family meter and paired tasks; dragging rewards on a grid; changing the theme of an existing world; several worlds per device; API integration (the `origin` field is reserved for it). Ideas that may come later are tracked in the radar in `ROADMAP.md`.
+Push notifications; trading collectibles between people; family meter and paired tasks; dragging rewards on a grid; changing the theme of an existing world; several worlds per device; API integration (the `origin` field is reserved for it). Ideas that may come later are tracked in the radar in `ROADMAP.md`.

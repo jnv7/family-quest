@@ -4,9 +4,10 @@ import type { WorldScreen } from '../context';
 import { artElement } from '../art';
 import { h } from '../dom';
 import { observeWithRetry } from '../observe';
-import { createPartyControls, createRenamer, entryOf, nameOf } from '../party';
+import { createPartyControls, createRenamer, entryOf } from '../party';
 import { observeSelf } from '../self';
 import emojiGroups from '../emoji.json';
+import { screenBar } from '../bar';
 
 /**
  * The home: the active profile's own place (SPEC.md §7.5). It shows the profile with the
@@ -30,14 +31,13 @@ export const renderHome: WorldScreen = (ctx, root, { worldId }) => {
   );
 
   const renamer = createRenamer(ctx, worldId, () => draw());
-  const nameLine = (collectible: Collectible): HTMLElement => renamer.control(collectible.id, collectible.nickname);
 
   const card = (collectible: Collectible, extras: Array<HTMLElement | null>): HTMLElement => {
     // A slot the theme lacks is a bug, reported by `entryOf` and `nameOf`; the card still shows, with the tier name.
     const entry = entryOf(ctx, collectible);
     return h('li', { class: 'collectible-card' },
       entry ? artElement(ctx.theme, entry.art, 'recent-art') : null,
-      h('p', { class: 'reveal-name' }, nameOf(ctx, collectible)),
+      renamer.tag(collectible, true),
       h('small', {}, ctx.theme.tiers[collectible.tier]),
       ...extras,
     );
@@ -109,7 +109,6 @@ export const renderHome: WorldScreen = (ctx, root, { worldId }) => {
 
     section(partySection, ctx.text('home.party'), ctx.text('home.partyHint'), ctx.text('home.partyEmpty'),
       list(party, (c) => [
-        nameLine(c),
         h('button', { onClick: () => controls.toReserve(c) }, ctx.text('home.toReserve')),
       ]),
     );
@@ -118,13 +117,12 @@ export const renderHome: WorldScreen = (ctx, root, { worldId }) => {
   }
 
   root.append(
-    h('h1', {}, ctx.text('home.title')),
+    screenBar(ctx, { title: ctx.text('home.title'), back: { name: 'map' } }),
     problem,
     header,
     symbolPanel,
     partySection,
     pendingSection,
-    h('div', { class: 'stack' }, h('button', { onClick: () => ctx.go({ name: 'map' }) }, ctx.text('app.back'))),
   );
 
   const stopWorld = observeWithRetry(ctx, problem, (onError) =>

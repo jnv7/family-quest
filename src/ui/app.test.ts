@@ -18,6 +18,21 @@ const theme = loadTheme('minimal');
 let now = Date.parse('2026-10-20T10:00:00Z');
 const clock = () => now;
 
+/** Delayed calls (the undo window), run by the test instead of by real time. */
+let timers: Array<{ run: () => void; ms: number; done: boolean }> = [];
+const later = (run: () => void, ms: number) => {
+  const timer = { run, ms, done: false };
+  timers.push(timer);
+  return () => void (timer.done = true);
+};
+/** Lets every pending undo window end. */
+const runTimers = () => {
+  for (const timer of timers.filter((t) => !t.done)) {
+    timer.done = true;
+    timer.run();
+  }
+};
+
 /** An installer that lets a test choose the platform and what can be offered. */
 function fakeInstaller(mode: InstallMode = 'none', platform: Partial<Platform> = {}) {
   const installer: Installer & { prompt: ReturnType<typeof vi.fn> } = {
@@ -48,7 +63,7 @@ async function openDevice(
   const root = document.createElement('main');
   document.body.append(root);
   const store = (options.wrap ?? ((s) => s))(createMemoryStore(backend, { uid, clock, randomInt }));
-  stops.push(await startApp({ root, store, theme: options.theme ?? theme, baseUrl: BASE_URL, world, clock, randomInt, navigation: memoryNavigation(options.hash ?? ''), installer: options.installer ?? fakeInstaller(), assetBase: '/family-quest/', launchTheme: options.launchTheme ?? null }));
+  stops.push(await startApp({ root, store, theme: options.theme ?? theme, baseUrl: BASE_URL, world, clock, randomInt, navigation: memoryNavigation(options.hash ?? ''), installer: options.installer ?? fakeInstaller(), assetBase: '/family-quest/', later, launchTheme: options.launchTheme ?? null }));
 
   const find = (selector: string, text?: string) =>
     [...root.querySelectorAll<HTMLElement>(selector)].find((el) => text === undefined || el.textContent?.includes(text));
@@ -83,6 +98,7 @@ async function openDevice(
 
 beforeEach(() => {
   now = Date.parse('2026-10-20T10:00:00Z');
+  timers = [];
   backend = createMemoryBackend();
   vi.spyOn(console, 'error').mockImplementation(() => {});
   vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -183,8 +199,13 @@ describe('managing profiles', () => {
   });
 });
 
+/** In the task form: ticks who the task is for. */
+async function pickPeople(device: Awaited<ReturnType<typeof openDevice>>, ...names: string[]) {
+  for (const name of names) await device.click('button.chip', name);
+}
+
 describe('managing recurring tasks', () => {
-  /** Opens the management screen of a world with a child profile "Sam", and returns the recurring-task form helpers. */
+  /** Opens the management screen of a world with a child profile "Sam". */
   async function openRecurring() {
     const { admin, worldId } = await createFamily();
     await admin.click('button', 'Continuar');
@@ -192,21 +213,20 @@ describe('managing recurring tasks', () => {
     await admin.type('Nome', 'Sam');
     admin.submit();
     await admin.see('Sam');
-    const form = () => admin.root.querySelectorAll('form')[1]!;
-    const save = () => form().dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
-    return { admin, worldId, form, save };
+    return { admin, worldId };
   }
 
   it('creates a definition, dims it when deactivated, and brings it back', async () => {
-    const { admin, form, save } = await openRecurring();
+    const { admin } = await openRecurring();
     await admin.see('Ainda não há tarefas recorrentes.');
 
-    await admin.click('button', 'Nova tarefa recorrente');
-    expect(form().hidden).toBe(false);
+    await admin.click('button', 'Nova tarefa');
     await admin.type('O que é para fazer?', 'Arrumar o quarto');
-    save();
+    await pickPeople(admin, 'Todos');
+    await admin.click('button.chip', 'Todos os dias');
+    await admin.enabled('Criar tarefa');
+    admin.submit();
     await admin.see('Arrumar o quarto · Todos os dias');
-    expect(form().hidden).toBe(true);
 
     await admin.click('li button', 'Desativar');
     await admin.see('(desativada)');
@@ -216,24 +236,26 @@ describe('managing recurring tasks', () => {
     await admin.notSee('(desativada)');
   });
 
-  it('assigns a definition to chosen profiles, and edits it', async () => {
-    const { admin, form, save } = await openRecurring();
-    await admin.click('button', 'Nova tarefa recorrente');
+  it('assigns a definition to chosen profiles, and edits it without offering "once"', async () => {
+    const { admin, worldId } = await openRecurring();
+    await admin.click('button', 'Nova tarefa');
     await admin.type('O que é para fazer?', 'Regar as plantas');
-    await admin.choose('Repete', 'Todas as semanas');
-    await admin.choose('Dificuldade', 'Difícil');
-    const sam = [...form().querySelectorAll('label.check')].find((l) => l.textContent?.includes('Sam'))!;
-    (sam.querySelector('input') as HTMLInputElement).checked = true;
-    save();
+    await pickPeople(admin, 'Sam');
+    await admin.click('button.chip', 'Todas as semanas');
+    await admin.click('button.chip', 'Difícil');
+    admin.submit();
     await admin.see('Regar as plantas · Todas as semanas');
 
     await admin.click('li button', 'Editar');
-    expect((form().querySelector('input[type=text]') as HTMLInputElement).value).toBe('Regar as plantas');
-    expect(((form().querySelector('label.check input[value]:checked') as HTMLInputElement | null)?.parentElement?.textContent) ?? '').toContain('Sam');
+    await vi.waitFor(() => expect((admin.root.querySelector('input[type=text]') as HTMLInputElement).value).toBe('Regar as plantas'));
+    expect(admin.find('button.chip[aria-pressed=true]', 'Sam')).toBeDefined();
+    expect(admin.find('button.chip', 'Só uma vez')?.hidden).toBe(true);
     await admin.type('O que é para fazer?', 'Regar o jardim');
-    save();
+    await admin.enabled('Guardar');
+    admin.submit();
     await admin.see('Regar o jardim');
     await admin.notSee('Regar as plantas');
+    expect([...backend.state.get(worldId)!.taskDefs.values()]).toHaveLength(1);
   });
 });
 
@@ -242,9 +264,11 @@ type Device = Awaited<ReturnType<typeof openDevice>>;
 /** On the map of an admin device: creates a daily recurring task for everyone, and comes back to the map. */
 async function addRecurring(device: Device, title: string) {
   await device.click('button', 'Gerir');
-  await device.click('button', 'Nova tarefa recorrente');
+  await device.click('button', 'Nova tarefa');
   await device.type('O que é para fazer?', title);
-  device.root.querySelectorAll('form')[1]!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+  await pickPeople(device, 'Todos');
+  await device.click('button.chip', 'Todos os dias');
+  device.submit();
   await device.see(`${title} · Todos os dias`);
   await device.click('button', 'Voltar');
 }
@@ -320,11 +344,12 @@ describe('planning a big task', () => {
   async function bigTaskFamily() {
     const { admin, worldId } = await familyWithChild();
     await admin.click('button', 'Gerir');
-    await admin.click('button', 'Nova tarefa recorrente');
+    await admin.click('button', 'Nova tarefa');
     await admin.type('O que é para fazer?', 'Limpar a garagem');
-    await admin.choose('Repete', 'Todos os meses');
+    await pickPeople(admin, 'Todos');
+    await admin.click('button.chip', 'Todos os meses');
     (admin.root.querySelector('label.check input') as HTMLInputElement).checked = true; // "big"
-    admin.root.querySelectorAll('form')[1]!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    admin.submit();
     await admin.see('Limpar a garagem');
     const child = await openDevice('child-device', { savedWorld: worldId });
     await child.click('button.place', 'Quadro');
@@ -372,21 +397,22 @@ describe('planning a big task', () => {
     submitPlan(child);
     await child.see('21 de outubro');
     await child.notSee('Planeada'); // no scolding text, only the light
-    expect(child.find('li.planned-tomorrow')).toBeDefined();
+    expect(child.find('li.planned-soon')).toBeDefined();
     await child.click('button', 'Voltar');
-    await vi.waitFor(() => expect(alert()).toBe('tomorrow'));
+    await vi.waitFor(() => expect(alert()).toBe('soon'));
 
     await child.click('button.place', 'Quadro');
     await child.click('button', 'Mudar o plano');
     fill(child, 'Que dia?', '2026-10-20');
     submitPlan(child);
     await child.see('20 de outubro');
-    expect(child.find('li.planned-today')).toBeDefined();
+    expect(child.find('li.planned-due')).toBeDefined();
     await child.click('button', 'Voltar');
-    await vi.waitFor(() => expect(alert()).toBe('today'));
+    await vi.waitFor(() => expect(alert()).toBe('due'));
 
     await child.click('button.place', 'Registo');
     await child.click('button', 'Feito');
+    runTimers();
     await child.click('button', 'Voltar');
     await vi.waitFor(() => expect(alert()).toBeNull());
   });
@@ -398,6 +424,41 @@ describe('planning a big task', () => {
     fill(child, 'Quando é que te lembras?', 'Depois do jantar');
     submitPlan(child);
     expect(planOf(worldId)).toBeNull();
+  });
+
+  it('plans a big task that does not repeat, on any later day', async () => {
+    const { admin, worldId } = await familyWithChild();
+    await admin.click('button.place', 'Quadro');
+    await admin.click('button', 'Nova tarefa');
+    await admin.type('O que é para fazer?', 'Pintar a cerca');
+    await pickPeople(admin, 'Sam');
+    (admin.root.querySelector('label.check input') as HTMLInputElement).checked = true; // "big", with "once" chosen
+    admin.submit();
+    await admin.see('As tuas tarefas');
+    const stored = [...backend.state.get(worldId)!.tasks.values()][0]!;
+    expect(stored).toMatchObject({ source: 'adhoc', big: true });
+
+    const child = await openDevice('child-device', { savedWorld: worldId });
+    await child.click('button.place', 'Quadro');
+    await child.see('Pintar a cerca');
+    await child.click('button', 'Planear');
+    expect(child.root.querySelector<HTMLInputElement>('.plan-form input[type=date]')!.max).toBe(''); // no end of period
+    fill(child, 'Que dia?', '2027-01-15');
+    fill(child, 'Quando é que te lembras?', 'Nas férias');
+    submitPlan(child);
+    await child.see('15 de janeiro · Nas férias');
+    expect(planOf(worldId)).toEqual({ date: '2027-01-15', trigger: 'Nas férias' });
+  });
+
+  it('offers neither "big" nor a plan to a child, and no plan on a one-off task that was not made big', async () => {
+    const { admin, child } = await familyWithChild();
+    await createTask(admin, 'Regar as plantas', 'Sam');
+    await child.click('button.place', 'Quadro');
+    await child.see('Regar as plantas');
+    expect(child.find('button', 'Planear')).toBeUndefined();
+    await child.click('button', 'Nova tarefa');
+    await child.see('O que é para fazer?');
+    expect(child.root.querySelector('label.check')).toBeNull();
   });
 
   it('offers no plan on a task that is not big', async () => {
@@ -449,11 +510,26 @@ async function createTask(device: Awaited<ReturnType<typeof openDevice>>, title:
   await device.click('button.place', 'Quadro');
   await device.click('button', 'Nova tarefa');
   await device.type('O que é para fazer?', title);
-  if (forWho) await device.choose('Para quem', forWho);
+  // An adult must choose who it is for; a child has no such choice.
+  if (forWho) await pickPeople(device, forWho);
   await device.enabled('Criar tarefa');
   device.submit();
   await device.see('As tuas tarefas');
 }
+
+describe('the profile picker', () => {
+  it('shows each profile with its emoji where the picture would be, or its initial, and the name alone', async () => {
+    const { admin, worldId } = await familyWithChild();
+    const sam = [...backend.state.get(worldId)!.profiles.values()].find((p) => p.displayName === 'Sam')!;
+    sam.avatar.symbol = '🐬';
+    await admin.click('button', 'Trocar de perfil');
+    await vi.waitFor(() => expect(admin.root.querySelectorAll('button.profile')).toHaveLength(2));
+    expect(admin.find('button.profile', 'Sam')?.querySelector('.avatar')?.textContent).toBe('🐬');
+    expect(admin.find('button.profile', 'Sam')?.querySelector('.name')?.textContent).toBe('Sam');
+    expect(admin.find('button.profile', 'Alex')?.querySelector('.avatar')?.textContent).toBe('A');
+    expect(admin.root.querySelector('button.profile img')).toBeNull(); // no boat
+  });
+});
 
 describe('the map', () => {
   it('lays out the five places of the theme, and every place leads somewhere', async () => {
@@ -485,6 +561,7 @@ describe('the board and ad hoc tasks', () => {
 
     await admin.click('button', 'Nova tarefa');
     await admin.type('O que é para fazer?', 'Regar as plantas');
+    await pickPeople(admin, 'Alex');
     await admin.enabled('Criar tarefa');
     admin.submit();
     await admin.see('Regar as plantas');
@@ -503,14 +580,15 @@ describe('the board and ad hoc tasks', () => {
 
   it('lists the oldest task first', async () => {
     const { admin } = await familyWithChild();
-    await createTask(admin, 'Primeira');
+    await createTask(admin, 'Primeira', 'Alex');
     now += 60_000;
     await admin.click('button', 'Nova tarefa');
     await admin.type('O que é para fazer?', 'Segunda');
+    await pickPeople(admin, 'Alex');
     await admin.enabled('Criar tarefa');
     admin.submit();
     await admin.see('Segunda');
-    expect([...admin.root.querySelectorAll('.tasks li')].map((li) => li.textContent)).toEqual(['Primeira', 'Segunda']);
+    expect([...admin.root.querySelectorAll('.tasks li .task-title')].map((el) => el.textContent)).toEqual(['Primeira', 'Segunda']);
   });
 
   it('lets a child create tasks only for themselves, and only name them', async () => {
@@ -556,6 +634,194 @@ describe('the board and ad hoc tasks', () => {
     await child.enabled('Criar tarefa');
     child.submit();
     await child.see('Quarta');
+  });
+});
+
+describe('the one task form', () => {
+  const stored = (worldId: string) => [...backend.state.get(worldId)!.tasks.values()];
+  const defsOf = (worldId: string) => [...backend.state.get(worldId)!.taskDefs.values()];
+
+  /** A world with an adult and two children, "Sam" and "Kim"; returns the admin device. */
+  async function twoChildren() {
+    const { admin, worldId } = await familyWithChild();
+    await admin.click('button', 'Gerir');
+    await admin.type('Nome', 'Kim');
+    admin.submit();
+    await vi.waitFor(() => expect(admin.root.querySelectorAll('ul.rows li').length).toBeGreaterThanOrEqual(3));
+    await admin.click('button', 'Voltar');
+    await admin.click('button.place', 'Quadro');
+    await admin.click('button', 'Nova tarefa');
+    await admin.type('O que é para fazer?', 'Lavar a loiça');
+    return { admin, worldId };
+  }
+
+  it('is disabled until someone is chosen', async () => {
+    const { admin } = await twoChildren();
+    await vi.waitFor(() => expect(admin.find('button.chip', 'Kim')).toBeDefined());
+    expect((admin.find('button', 'Criar tarefa') as HTMLButtonElement).disabled).toBe(true);
+    await pickPeople(admin, 'Kim');
+    await admin.enabled('Criar tarefa');
+  });
+
+  it('makes one task for each chosen child when it happens once', async () => {
+    const { admin, worldId } = await twoChildren();
+    await pickPeople(admin, 'Sam', 'Kim');
+    await admin.enabled('Criar tarefa');
+    admin.submit();
+    await admin.see('As tuas tarefas');
+    expect(stored(worldId)).toHaveLength(2);
+    expect(new Set(stored(worldId).map((t) => t.profileId)).size).toBe(2);
+    expect(stored(worldId).every((t) => t.source === 'adhoc' && t.title === 'Lavar a loiça')).toBe(true);
+    expect(defsOf(worldId)).toHaveLength(0);
+  });
+
+  it('makes a task for every active profile when "everyone" is chosen once', async () => {
+    const { admin, worldId } = await twoChildren();
+    await pickPeople(admin, 'Todos');
+    await admin.enabled('Criar tarefa');
+    admin.submit();
+    await admin.see('As tuas tarefas');
+    expect(stored(worldId)).toHaveLength(3); // Alex, Sam and Kim
+  });
+
+  it('makes one definition for the chosen children when it repeats', async () => {
+    const { admin, worldId } = await twoChildren();
+    await pickPeople(admin, 'Sam', 'Kim');
+    await admin.click('button.chip', 'Todas as semanas');
+    admin.submit();
+    await admin.see('Lavar a loiça · Todas as semanas');
+    expect(stored(worldId)).toHaveLength(0);
+    expect(defsOf(worldId)).toHaveLength(1);
+    expect(defsOf(worldId)[0]!.assignedTo).toHaveLength(2);
+  });
+
+  it('keeps an empty list for "everyone" in a repeating task, and says it includes new profiles', async () => {
+    const { admin, worldId } = await twoChildren();
+    await pickPeople(admin, 'Todos');
+    expect(admin.find('small', 'perfis que vierem a ser criados')?.hidden).toBe(true); // once: no hint
+    await admin.click('button.chip', 'Todos os dias');
+    expect(admin.find('small', 'perfis que vierem a ser criados')?.hidden).toBe(false);
+    admin.submit();
+    await admin.see('Lavar a loiça · Todos os dias');
+    expect(defsOf(worldId)[0]!.assignedTo).toEqual([]);
+  });
+});
+
+describe('the one task card', () => {
+  const cards = (device: Awaited<ReturnType<typeof openDevice>>) =>
+    [...device.root.querySelectorAll('li.task-card')].map((li) => ({
+      title: li.querySelector('.task-title')?.textContent,
+      tags: [...li.querySelectorAll('.tag')].map((tag) => tag.textContent),
+    }));
+
+  it('shows the same cards in the same order on the board and in the check-in, and the board cannot complete anything', async () => {
+    const { admin, worldId } = await familyWithChild();
+    await admin.click('button.place', 'Quadro');
+    await admin.click('button', 'Nova tarefa');
+    await admin.type('O que é para fazer?', 'Primeiro');
+    await admin.click('button', '+ Juntar uma pergunta');
+    await admin.type('Pergunta de verificação', 'Já está?');
+    await pickPeople(admin, 'Sam');
+    admin.submit();
+    await admin.see('As tuas tarefas');
+    now += 60_000;
+    await admin.click('button', 'Voltar');
+    await addRecurring(admin, 'Segundo');
+
+    const child = await openDevice('child-device', { savedWorld: worldId }); // generates today’s task
+    await child.click('button.place', 'Quadro');
+    await child.see('Segundo');
+    const expected = [
+      { title: 'Primeiro', tags: [] },
+      { title: 'Segundo', tags: ['↻ Todos os dias'] }, // no "?" chip for a question
+    ];
+    expect(cards(child)).toEqual(expected);
+    expect(child.root.querySelectorAll('li.task-card button')).toHaveLength(0); // a task is completed only at the check-in
+
+    await child.click('button', 'Voltar');
+    await child.click('button.place', 'Registo');
+    await child.see('Segundo');
+    expect(cards(child)).toEqual(expected);
+  });
+});
+
+describe('the board alert for new tasks', () => {
+  const alert = (device: Awaited<ReturnType<typeof openDevice>>) => device.find('button.place', 'Quadro')?.getAttribute('data-alert') ?? null;
+
+  it('lights when an adult gives the child a task, marks it "novo", and goes out once the child opens the board', async () => {
+    const { admin, child } = await familyWithChild();
+    await child.click('button.place', 'Quadro'); // the first visit only records the time
+    await child.see('Nada por fazer');
+    await child.click('button', 'Voltar');
+    expect(alert(child)).toBeNull();
+
+    now += 60_000;
+    await createTask(admin, 'Arrumar o quarto', 'Sam');
+    await vi.waitFor(() => expect(alert(child)).toBe('new'));
+    expect(child.find('button.place', 'Quadro')?.textContent).not.toMatch(/\d/); // a dot, never a number
+
+    await child.click('button.place', 'Quadro');
+    await child.see('Arrumar o quarto');
+    expect(child.find('li.task-card .tag.new')?.textContent).toBe('novo');
+    await child.click('button', 'Voltar');
+    await vi.waitFor(() => expect(alert(child)).toBeNull());
+  });
+
+  it('does not light for a task the child made, nor for the daily repeat of a known definition', async () => {
+    const { admin, child } = await familyWithChild();
+    await child.click('button.place', 'Quadro');
+    await child.click('button', 'Nova tarefa');
+    await child.type('O que é para fazer?', 'Ler um livro');
+    await child.enabled('Criar tarefa');
+    child.submit();
+    await child.see('Ler um livro');
+    await child.click('button', 'Voltar');
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(alert(child)).toBeNull();
+    expect(admin.root).toBeDefined();
+  });
+});
+
+describe('the adults’ view of the family', () => {
+  it('lists the open and recently done tasks of a chosen profile, with no counts, and nothing of the others', async () => {
+    const { admin, child } = await familyWithChild();
+    await admin.click('button', 'Gerir');
+    await admin.type('Nome', 'Kim');
+    admin.submit();
+    await vi.waitFor(() => expect(admin.root.querySelectorAll('ul.rows li').length).toBeGreaterThanOrEqual(3));
+    await admin.click('button', 'Voltar');
+    await createTask(admin, 'Arrumar o quarto', 'Sam');
+    await admin.click('button', 'Voltar');
+    await createTask(admin, 'Pôr a mesa', 'Sam');
+    await admin.click('button', 'Voltar');
+    await createTask(admin, 'Regar as plantas', 'Kim');
+    await admin.click('button', 'Voltar');
+
+    await child.click('button.place', 'Registo');
+    await child.click('button', 'Feito');
+    runTimers();
+    await child.see('Nada para concluir').catch(() => {});
+    await vi.waitFor(() => expect([...backend.state.get(admin.world.get()!)!.tasks.values()].some((t) => t.status === 'done')).toBe(true));
+
+    await admin.click('button', 'Gerir');
+    await admin.see('Tarefas por perfil');
+    expect(admin.root.textContent).not.toContain('Arrumar o quarto'); // nobody chosen yet
+    await admin.click('button.chip', 'Sam');
+    await admin.see('Feitas nos últimos dias');
+    await vi.waitFor(() => expect(admin.root.querySelectorAll('li.task-card')).toHaveLength(1)); // one still open
+    expect(admin.root.querySelector('li.task-card button')).toBeNull(); // read-only
+    expect(admin.root.textContent).not.toContain('Regar as plantas');
+    const doneItems = [...admin.root.querySelectorAll('ul.rows li:not(.task-card)')].filter((li) => li.querySelector('small'));
+    expect(doneItems.some((li) => li.textContent?.includes('20 de outubro'))).toBe(true);
+
+    await admin.click('button.chip', 'Kim');
+    await admin.see('Regar as plantas');
+    expect(admin.root.textContent).not.toContain('Pôr a mesa');
+    expect(admin.root.textContent).not.toMatch(/\b\d+ (tarefas|feitas)/i); // no counts
+
+    await admin.click('button.chip', 'Kim'); // tapping the chosen one again lets go of it
+    await admin.notSee('Regar as plantas');
+    expect(admin.find('button.chip[aria-pressed=true]')).toBeUndefined();
   });
 });
 
@@ -621,6 +887,7 @@ describe('the check-in', () => {
     await child.see('Arrumar o quarto');
     expect(lines.greeting).toContain(bubble(child));
     await child.click('button', 'Feito'); // tap 2
+    runTimers();
 
     await child.notSee('Arrumar o quarto');
     expect(lines.congrats).toContain(bubble(child));
@@ -636,24 +903,82 @@ describe('the check-in', () => {
     await admin.click('button.place', 'Quadro');
     await admin.click('button', 'Nova tarefa');
     await admin.type('O que é para fazer?', 'Lavar os dentes');
+    await admin.click('button', '+ Juntar uma pergunta');
     await admin.type('Pergunta de verificação', 'Lavaste mesmo?');
-    await admin.choose('Para quem', 'Sam');
+    await pickPeople(admin, 'Sam');
     await admin.enabled('Criar tarefa');
     admin.submit();
     await admin.see('As tuas tarefas');
 
     await child.click('button.place', 'Registo');
+    await child.see('Lavar os dentes');
+    expect(child.root.textContent).not.toContain('Lavaste mesmo?'); // "done" comes first; the question after it
+    expect(child.find('button', 'Sim')).toBeUndefined();
+
+    await child.click('button', 'Feito');
     await child.see('Lavaste mesmo?');
-    expect(child.find('button', 'Feito')).toBeUndefined(); // a question needs an answer
+    expect(child.find('button', 'Feito')).toBeUndefined(); // now it is the character's turn
 
     await child.click('button', 'Não');
     expect(lines.doubt).toContain(bubble(child));
     expect(storedTask(worldId)).toMatchObject({ status: 'open', answer: null }); // nothing is recorded
-    expect(child.root.textContent).toContain('Lavaste mesmo?');
+    expect(child.root.textContent).not.toContain('Lavaste mesmo?'); // back to "done"
+    expect(child.find('button', 'Feito')).toBeDefined();
 
+    await child.click('button', 'Feito');
     await child.click('button', 'Sim');
+    runTimers();
     await child.notSee('Lavaste mesmo?');
     expect(storedTask(worldId)).toMatchObject({ status: 'done', answer: 'yes' });
+  });
+
+  it('gives four seconds to undo: nothing is written before, and "Desfazer" writes nothing at all', async () => {
+    const { admin, child, worldId } = await familyWithChild();
+    await createTask(admin, 'Arrumar o quarto', 'Sam');
+    await child.click('button.place', 'Registo');
+    await child.click('button', 'Feito');
+    await child.see('Desfazer');
+    expect(timers.at(-1)!.ms).toBe(4000);
+    expect(lines.congrats).toContain(bubble(child)); // the character already congratulates
+    expect(storedTask(worldId)).toMatchObject({ status: 'open' });
+
+    await child.click('button', 'Desfazer');
+    runTimers();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(storedTask(worldId)).toMatchObject({ status: 'open' });
+    expect(backend.state.get(worldId)!.rewards.size).toBe(0);
+    await child.see('Feito'); // the card is back
+
+    await child.click('button', 'Feito');
+    runTimers();
+    await vi.waitFor(() => expect(storedTask(worldId)).toMatchObject({ status: 'done' }));
+  });
+
+  it('writes at once when the page is hidden or the screen is left, and writes two completions in a row', async () => {
+    const { admin, child, worldId } = await familyWithChild();
+    await createTask(admin, 'Primeira', 'Sam');
+    await admin.click('button', 'Voltar');
+    await createTask(admin, 'Segunda', 'Sam');
+    await child.click('button.place', 'Registo');
+    await child.see('Segunda');
+    await child.click('button', 'Feito');
+    await child.click('button', 'Feito');
+    const done = () => [...backend.state.get(worldId)!.tasks.values()].filter((t) => t.status === 'done').length;
+    expect(done()).toBe(0);
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+    document.dispatchEvent(new Event('visibilitychange'));
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+    await vi.waitFor(() => expect(done()).toBe(2));
+    expect(backend.state.get(worldId)!.rewards.size).toBe(2);
+  });
+
+  it('writes a pending completion when the person leaves the check-in', async () => {
+    const { admin, child, worldId } = await familyWithChild();
+    await createTask(admin, 'Primeira', 'Sam');
+    await child.click('button.place', 'Registo');
+    await child.click('button', 'Feito');
+    await child.click('button', 'Voltar');
+    await vi.waitFor(() => expect(storedTask(worldId)).toMatchObject({ status: 'done' }));
   });
 
   it('puts the button in front of the task, and a static note before the list instead of a button for "I did better"', async () => {
@@ -663,7 +988,7 @@ describe('the check-in', () => {
     await child.click('button.place', 'Registo');
     await child.see('Ler um capítulo');
     const row = child.find('li.checkin-task')!;
-    expect(row.firstElementChild?.querySelector('button')?.textContent).toBe('Feito'); // the button comes first
+    expect(row.querySelector('button')?.textContent).toBe('Feito'); // the button comes first
     expect(row.querySelector('.task-title')?.textContent).toBe('Ler um capítulo');
     const note = child.find('p.hint', 'fala com os teus pais')!;
     expect(note.textContent).toBe('Se achas que fizeste uma tarefa melhor do que o esperado, fala com os teus pais.');
@@ -674,7 +999,7 @@ describe('the check-in', () => {
 
   it('says goodbye when there is nothing to complete, and never shows other people’s tasks', async () => {
     const { admin, child } = await familyWithChild();
-    await createTask(admin, 'Só para mim'); // Alex's own task
+    await createTask(admin, 'Só para mim', 'Alex'); // Alex's own task
     await child.click('button.place', 'Registo');
     await child.see('Nada para concluir');
     expect(lines.farewell).toContain(bubble(child));
@@ -692,15 +1017,17 @@ describe('the vault', () => {
 
     await child.click('button.place', 'Registo');
     await child.click('button', 'Feito');
+    runTimers();
     await vi.waitFor(() => expect(backend.state.get(worldId)!.rewards.size).toBe(1));
     now += 7 * 86_400_000; // the next week
     await child.click('button', 'Feito');
+    runTimers();
     await vi.waitFor(() => expect(backend.state.get(worldId)!.rewards.size).toBe(2));
 
     await child.click('button', 'Voltar');
     await child.click('button.place', 'Cofre');
     await vi.waitFor(() => expect(child.root.querySelectorAll('li.reward')).toHaveLength(2));
-    expect([...child.root.querySelectorAll('.vault-week h2')].map((el) => el.textContent)).toEqual(['Semana 43', 'Semana 44']);
+    expect([...child.root.querySelectorAll('.vault-week h2')].map((el) => el.textContent)).toEqual(['Semana passada', 'Esta semana']);
     for (const item of child.root.querySelectorAll<HTMLElement>('li.reward')) {
       const art = theme.rewardArt[item.dataset.tier as Tier];
       expect(item.querySelector('.reward-art')?.textContent).toBe('emoji' in art ? art.emoji : '');
@@ -720,6 +1047,7 @@ describe('opening rewards', () => {
     await createTask(admin, 'Arrumar o quarto', 'Sam');
     await child.click('button.place', 'Registo');
     await child.click('button', 'Feito');
+    runTimers();
     await vi.waitFor(() => expect(backend.state.get(worldId)!.rewards.size).toBe(1));
     await child.click('button', 'Voltar');
     return { admin, child, worldId };
@@ -748,11 +1076,33 @@ describe('opening rewards', () => {
     await child.see(entry.name);
     await child.see(theme.tiers[reward.tier]);
     expect(child.root.querySelectorAll('li.reward')).toHaveLength(0);
+    // The moment to name a new creature: the tag is offered at once.
+    expect(child.find('.reveal button.name-tag', 'dá-lhe um nome')).toBeDefined();
 
     // The new collectible is pending: "later" closes the reveal, and it waits among the recent ones.
     await child.click('button', 'Mais tarde');
     await child.see('Recentes');
     await child.see(entry.name);
+  });
+
+  it('offers "Abrir todos" only with two or more to open, and shows the reveals one after the other', async () => {
+    const { child, worldId } = await childWithRewards(2);
+    await vi.waitFor(() => expect(child.root.querySelectorAll('li.reward')).toHaveLength(2));
+    await child.click('button.primary', 'Abrir todos');
+    await vi.waitFor(() => expect(state(worldId).collectibles.size).toBe(2));
+    await vi.waitFor(() => expect(child.root.querySelectorAll('.reveal')).toHaveLength(2));
+    expect(child.find('button', 'Abrir todos')).toBeUndefined();
+  });
+
+  it('labels weeks as this week, last week, or the days, never as a week number', async () => {
+    const { child, worldId } = await childWithRewards(1);
+    await child.click('button', 'Voltar');
+    now = Date.parse('2026-11-18T10:00:00Z'); // three weeks later
+    await child.click('button.place', 'Cofre');
+    await child.see('19–25 out.');
+    expect(child.root.textContent).not.toMatch(/Semana \d|W\d/);
+    expect(child.find('button', 'Abrir todos')).toBeUndefined();
+    expect(worldId).toBeTruthy();
   });
 
   it('opens a reward from a closed week at any time', async () => {
@@ -798,6 +1148,7 @@ async function childWithRewards(count: number) {
   await child.click('button.place', 'Registo');
   for (let i = 0; i < count; i++) {
     await child.click('button', 'Feito');
+    runTimers();
     await vi.waitFor(() => expect(state(worldId).rewards.size).toBe(i + 1));
   }
   await child.click('button', 'Voltar');
@@ -808,7 +1159,7 @@ async function childWithRewards(count: number) {
 
 const openAll = async (child: Awaited<ReturnType<typeof openDevice>>, worldId: string, count: number) => {
   for (let i = 0; i < count; i++) {
-    await child.click('button', 'Abrir');
+    await child.click('li.reward button', 'Abrir');
     await vi.waitFor(() => expect(state(worldId).collectibles.size).toBe(i + 1));
     await child.click('button', 'Mais tarde');
   }
@@ -905,25 +1256,57 @@ describe('the home', () => {
 
   it('renames a collectible, then shows the catalogue name again when the name is cleared', async () => {
     const { child, worldId, first } = await childAtHome();
-    const catalogueName = () => cards(child, 0)[0]?.querySelector('.reveal-name')?.textContent;
+    const catalogueName = () => cards(child, 0)[0]?.querySelector('.name-tag .tag-name')?.textContent;
     await vi.waitFor(() => expect(cards(child, 0)).toHaveLength(1));
     const original = catalogueName();
-    await child.click('button', 'Mudar o nome');
+    await child.click('button.name-tag', 'dar um nome');
     await child.type('Nome', 'Bolinhas');
     child.submit();
     await vi.waitFor(() => expect(state(worldId).collectibles.get(first)!.nickname).toBe('Bolinhas'));
     await vi.waitFor(() => expect(catalogueName()).toBe('Bolinhas'));
 
-    await child.click('button', 'Mudar o nome');
+    await child.click('button.name-tag', 'Bolinhas');
     await child.type('Nome', '   ');
     child.submit();
     await vi.waitFor(() => expect(state(worldId).collectibles.get(first)!.nickname).toBeNull());
     await vi.waitFor(() => expect(catalogueName()).toBe(original));
   });
 
+  it('edits the name tag in place: Escape cancels, leaving the field saves, a long name is refused, and the catalogue name stays under a nickname', async () => {
+    const { child, worldId, first } = await childAtHome();
+    await vi.waitFor(() => expect(cards(child, 0)).toHaveLength(1));
+    const field = () => cards(child, 0)[0]!.querySelector('input') as HTMLInputElement | null;
+    const original = cards(child, 0)[0]!.querySelector('.tag-name')!.textContent;
+
+    await child.click('button.name-tag', 'dar um nome');
+    await vi.waitFor(() => expect(field()).not.toBeNull());
+    field()!.value = 'Nunca guardado';
+    field()!.dispatchEvent(new Event('input'));
+    field()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await vi.waitFor(() => expect(field()).toBeNull());
+    expect(state(worldId).collectibles.get(first)!.nickname).toBeNull();
+
+    await child.click('button.name-tag', 'dar um nome');
+    await vi.waitFor(() => expect(field()).not.toBeNull());
+    field()!.value = 'Salvo ao sair';
+    field()!.dispatchEvent(new Event('input'));
+    field()!.dispatchEvent(new Event('blur'));
+    await vi.waitFor(() => expect(state(worldId).collectibles.get(first)!.nickname).toBe('Salvo ao sair'));
+    await vi.waitFor(() => expect(cards(child, 0)[0]!.querySelector('.tag-catalogue')?.textContent).toBe(original));
+
+    await child.click('button.name-tag', 'Salvo ao sair');
+    await vi.waitFor(() => expect(field()).not.toBeNull());
+    field()!.maxLength = 500; // a pasted text can exceed what the field allows
+    field()!.value = 'x'.repeat(31);
+    field()!.dispatchEvent(new Event('input'));
+    child.submit();
+    await child.see('O nome é demasiado comprido');
+    expect(state(worldId).collectibles.get(first)!.nickname).toBe('Salvo ao sair');
+  });
+
   it('sends a party member away: it leaves the profile and shows in the showcase, and is not deleted', async () => {
     const { child, worldId, first } = await childAtHome();
-    await child.click('button', 'Enviar para a vitrina');
+    await child.click('button', 'Enviar para a reserva');
     await vi.waitFor(() => expect(profileSam(worldId).partyIds).toEqual([]));
     expect(state(worldId).collectibles.get(first)!.reserveAt).toBe(now);
     await vi.waitFor(() => expect(cards(child, 0)).toHaveLength(0));
@@ -943,7 +1326,7 @@ describe('the home', () => {
     await child.click('button', 'Voltar');
     await child.click('button.place', 'Casa');
     const tier = state(worldId).collectibles.get(first)!.tier;
-    await vi.waitFor(() => expect(cards(child, 0)[0]!.querySelector('.reveal-name')?.textContent).toBe(theme.tiers[tier]));
+    await vi.waitFor(() => expect(cards(child, 0)[0]!.querySelector('.tag-name')?.textContent).toBe(theme.tiers[tier]));
   });
 });
 
@@ -987,12 +1370,12 @@ describe('the showcase', () => {
     await vi.waitFor(() => expect(items(admin)).toHaveLength(2));
     (items(admin)[0] as HTMLElement).click();
     await admin.see('Fechar');
-    expect(admin.find('button', 'Pôr na equipa')).toBeUndefined(); // not Alex's
+    expect(admin.find('button', 'Trazer de volta')).toBeUndefined(); // not Alex's
 
     await child.click('button.place', 'Vitrina');
     await vi.waitFor(() => expect(items(child)).toHaveLength(2));
     (items(child)[0] as HTMLElement).click();
-    await child.click('button.primary', 'Pôr na equipa');
+    await child.click('button.primary', 'Trazer de volta');
     await vi.waitFor(() => expect(profileSam(worldId).partyIds).toHaveLength(1));
     const id = profileSam(worldId).partyIds[0]!;
     expect(state(worldId).collectibles.get(id)!.reserveAt).toBeNull();
@@ -1006,16 +1389,43 @@ describe('the showcase', () => {
     await vi.waitFor(() => expect(items(child)).toHaveLength(2));
     (items(child)[0] as HTMLElement).click();
     await child.see('Fechar');
-    await child.notSee('Mudar o nome');
+    expect(child.find('button.name-tag')).toBeUndefined(); // a child cannot rename someone else's
 
     await admin.click('button.place', 'Vitrina');
     await vi.waitFor(() => expect(items(admin)).toHaveLength(2));
     (items(admin)[0] as HTMLElement).click();
-    await admin.click('button', 'Mudar o nome');
+    await admin.click('button.name-tag', 'dar um nome');
     await admin.type('Nome', 'Moderado');
     admin.submit();
     await vi.waitFor(() => expect([...state(worldId).collectibles.values()].some((c) => c.nickname === 'Moderado')).toBe(true));
     await vi.waitFor(() => expect(items(admin).some((el) => el.textContent?.includes('Moderado'))).toBe(true));
+  });
+
+  it('shows the newest ten of the world; the others stay stored, out of reach, until an admin makes room', async () => {
+    const { admin, child, worldId } = await reserveOfTheChild();
+    const mine = [...state(worldId).collectibles.values()];
+    const template = mine[0]!;
+    // Ten newer ones, so the two original items are the oldest of twelve.
+    for (let i = 0; i < 10; i++) {
+      const id = `extra-${i}`;
+      state(worldId).collectibles.set(id, { ...template, id, reserveAt: template.reserveAt! + 1000 + i });
+    }
+    await child.click('button.place', 'Vitrina');
+    await vi.waitFor(() => expect(items(child)).toHaveLength(10));
+    const shownIds = items(child).map((el) => el.getAttribute('data-id'));
+    expect(shownIds.every((id) => id?.startsWith('extra-'))).toBe(true); // the two oldest are not offered
+    expect(child.find('button', 'Trazer de volta')).toBeUndefined();
+    expect(child.root.textContent).not.toMatch(/\d/); // and nothing says that something left
+    expect(state(worldId).collectibles.size).toBe(12); // nothing deleted
+
+    // An admin changes the size in management, and the showcase of the other device follows.
+    await admin.click('button', 'Gerir');
+    await admin.type('Lugares', '3');
+    const field = [...admin.root.querySelectorAll('label')].find((l) => l.textContent?.includes('Lugares'))!;
+    field.closest('form')!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    await vi.waitFor(() => expect(state(worldId).world.ruleset.showcaseSize).toBe(3));
+    await vi.waitFor(() => expect(items(child)).toHaveLength(3));
+    expect(state(worldId).collectibles.size).toBe(12);
   });
 
   it('is empty at first, and says so without a count', async () => {
@@ -1237,10 +1647,13 @@ describe('moorings and symbols', () => {
 
 describe('the reward odds', () => {
   const worldOdds = (worldId: string) => backend.state.get(worldId)!.world.ruleset.tierOdds;
+  /** The odds form is the one with a fieldset per task level. */
+  const oddsForm = (device: Awaited<ReturnType<typeof openDevice>>) =>
+    [...device.root.querySelectorAll('form')].find((form) => form.querySelector('fieldset'))!;
   const oddsInputs = (device: Awaited<ReturnType<typeof openDevice>>) =>
-    [...[...device.root.querySelectorAll('form')].at(-1)!.querySelectorAll<HTMLInputElement>('input')];
+    [...oddsForm(device).querySelectorAll<HTMLInputElement>('input')];
   const submitLast = (device: Awaited<ReturnType<typeof openDevice>>) =>
-    [...device.root.querySelectorAll('form')].at(-1)!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    oddsForm(device).dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
 
   it('shows the odds of the world, saves new ones, and refuses a row that does not sum to 100', async () => {
     const { admin, worldId } = await familyWithChild();

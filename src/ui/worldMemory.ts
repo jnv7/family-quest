@@ -1,4 +1,4 @@
-import type { WorldId } from '../core/model';
+import type { Millis, ProfileId, WorldId } from '../core/model';
 
 export interface WorldMemory {
   get(): WorldId | null;
@@ -6,6 +6,12 @@ export interface WorldMemory {
   /** The world's theme id, remembered so the next launch looks right before anything loads. */
   getTheme(): string | null;
   setTheme(themeId: string): void;
+  /**
+   * When the profile last opened its task list on this device (a viewer convenience, never shared),
+   * or null before the first time.
+   */
+  getLastSeen(worldId: WorldId, profileId: ProfileId): Millis | null;
+  setLastSeen(worldId: WorldId, profileId: ProfileId, at: Millis): void;
   /** Forgets the world and its theme. */
   clear(): void;
 }
@@ -14,6 +20,7 @@ type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 const KEY = 'familyQuest.worldId';
 const THEME_KEY = 'familyQuest.themeId';
+const lastSeenKey = (worldId: WorldId, profileId: ProfileId) => `fq.lastSeen.${worldId}.${profileId}`;
 
 /**
  * Remembers which world this device is in (several worlds per device are out of
@@ -23,6 +30,8 @@ const THEME_KEY = 'familyQuest.themeId';
 export function createWorldMemory(storage: StorageLike | null): WorldMemory {
   let current: WorldId | null = null;
   let theme: string | null = null;
+  /** Last-seen times kept in memory too, for storage that cannot be written. */
+  const lastSeen = new Map<string, Millis>();
   try {
     current = storage?.getItem(KEY) ?? null;
     theme = storage?.getItem(THEME_KEY) ?? null;
@@ -46,6 +55,21 @@ export function createWorldMemory(storage: StorageLike | null): WorldMemory {
     setTheme(themeId) {
       theme = themeId;
       persist((s) => s.setItem(THEME_KEY, themeId));
+    },
+    getLastSeen(worldId, profileId) {
+      const key = lastSeenKey(worldId, profileId);
+      if (lastSeen.has(key)) return lastSeen.get(key)!;
+      try {
+        const value = Number(storage?.getItem(key));
+        return storage?.getItem(key) != null && Number.isFinite(value) ? value : null;
+      } catch {
+        return null;
+      }
+    },
+    setLastSeen(worldId, profileId, at) {
+      const key = lastSeenKey(worldId, profileId);
+      lastSeen.set(key, at);
+      persist((s) => s.setItem(key, String(at)));
     },
     clear() {
       current = null;

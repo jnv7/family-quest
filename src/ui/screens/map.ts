@@ -1,6 +1,6 @@
-import { planAlert } from '../../core/alerts';
+import { boardAlert } from '../../core/alerts';
 import { mooredBoats } from '../../core/moorings';
-import type { Profile, ProfileId, Task, World } from '../../core/model';
+import type { Profile, ProfileId, Task, TaskDef, World } from '../../core/model';
 import type { WorldScreen } from '../context';
 import { artElement } from '../art';
 import { h } from '../dom';
@@ -129,18 +129,22 @@ export const renderMap: WorldScreen = (ctx, root, { worldId }) => {
     }
   };
 
-  // The board lights up when a planned task is due today or tomorrow: a neutral effect, the
-  // same for every theme (ADR 0006), with two intensities and no text (SPEC.md §2).
+  // The board lights up for a task due (today or past), new, or soon (tomorrow): a neutral effect,
+  // the same for every theme (ADR 0006), with no text and no number (SPEC.md §2).
   let world: World | null = null;
   let tasks: Task[] = [];
+  let defs = new Map<string, TaskDef>();
+  let activeProfile: ProfileId | null = null;
   const light = () => {
-    const alert = world ? planAlert(tasks, ctx.clock(), world.ruleset.timezone) : null;
+    const lastSeen = activeProfile === null ? null : ctx.world.getLastSeen(worldId, activeProfile);
+    const alert = world ? boardAlert(tasks, defs, ctx.clock(), world.ruleset.timezone, lastSeen) : null;
     if (alert) boardButton?.setAttribute('data-alert', alert);
     else boardButton?.removeAttribute('data-alert');
   };
   // The light is decoration: if it cannot load, the map still works, so errors are only logged.
   const unlit = (error: unknown) => console.warn('The plan alert could not load', error);
   const stopWorld = ctx.store.worlds.observeWorld(worldId, (value) => ((world = value), light()), unlit);
+  const stopDefs = ctx.store.taskDefs.observeTaskDefs(worldId, (value) => ((defs = new Map(value.map((d) => [d.id, d]))), light()), unlit);
   let watchedProfile: ProfileId | null = null;
   let stopTasks = () => {};
 
@@ -153,6 +157,7 @@ export const renderMap: WorldScreen = (ctx, root, { worldId }) => {
     if (profile.id !== watchedProfile) {
       stopTasks();
       watchedProfile = profile.id;
+      activeProfile = profile.id;
       tasks = [];
       stopTasks = ctx.store.tasks.observeTasks(worldId, profile.id, (value) => ((tasks = value), light()), unlit);
     }
@@ -167,6 +172,7 @@ export const renderMap: WorldScreen = (ctx, root, { worldId }) => {
   return () => {
     cancelTransition();
     stopTasks();
+    stopDefs();
     stopWorld();
     stopSelf();
   };

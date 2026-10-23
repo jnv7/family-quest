@@ -113,6 +113,8 @@ export interface CreateAdhocTaskInput {
   title: string;
   level: TaskLevel;
   question: string | null;
+  /** Makes the task big, so its owner can plan it (SPEC.md §6). The form offers it to adults only; stored only when true. */
+  big?: boolean;
 }
 
 export interface TaskDefInput {
@@ -171,6 +173,13 @@ export interface WorldStore {
    * (integers summing to 100), or the call is `invalid-argument` before any write.
    */
   setTierOdds(worldId: WorldId, tierOdds: Ruleset['tierOdds']): Write;
+
+  /**
+   * Admin only. Sets how many collectibles the showcase shows (`ruleset.showcaseSize`): a whole number from
+   * 1 to `LIMITS.showcaseSizeMax`, otherwise `invalid-argument` before any write. Nothing is deleted:
+   * the ones beyond the limit stay stored, out of reach (SPEC.md §6).
+   */
+  setShowcaseSize(worldId: WorldId, size: number): Write;
 
   /** Admin only. */
   createProfile(worldId: WorldId, input: CreateProfileInput): Write<{ profileId: ProfileId }>;

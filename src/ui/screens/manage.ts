@@ -3,7 +3,10 @@ import type { WorldScreen } from '../context';
 import { h } from '../dom';
 import { observeSelf } from '../self';
 import { createOddsSection } from './odds';
+import { createProfileTasksSection } from './profileTasks';
+import { createShowcaseSizeSection } from './showcaseSize';
 import { createTaskDefsSection } from './taskDefs';
+import { screenBar } from '../bar';
 
 /** Management, for admins only (SPEC.md §7.8): profiles, recurring task definitions and the reward odds. */
 export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
@@ -33,20 +36,24 @@ export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
   });
 
   const recurring = createTaskDefsSection(ctx, worldId);
+  const profileTasks = createProfileTasksSection(ctx, worldId);
   const odds = createOddsSection(ctx, worldId);
+  const reserveSize = createShowcaseSizeSection(ctx, worldId);
 
   root.append(
-    h('h1', {}, ctx.text('manage.title')),
+    screenBar(ctx, {
+      title: ctx.text('manage.title'),
+      back: { name: 'map' },
+      action: h('button', { onClick: () => ctx.go({ name: 'share' }) }, ctx.text('manage.invite')),
+    }),
     h('h2', {}, ctx.text('manage.profiles')),
     list,
     h('h2', {}, ctx.text('manage.newProfile')),
     form,
+    profileTasks.element,
     recurring.element,
     odds.element,
-    h('div', { class: 'stack' },
-      h('button', { onClick: () => ctx.go({ name: 'share' }) }, ctx.text('manage.invite')),
-      h('button', { onClick: () => ctx.go({ name: 'map' }) }, ctx.text('app.back')),
-    ),
+    reserveSize.element,
   );
 
   const stopSelf = observeSelf(ctx, worldId, ({ profiles, isAdmin }) => {
@@ -54,7 +61,7 @@ export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
       ctx.go({ name: 'map' }, { replace: true });
       return;
     }
-    recurring.setProfiles(profiles);
+    profileTasks.setProfiles(profiles);
     list.replaceChildren(
       ...profiles.map((profile) =>
         h('li', {},
@@ -72,5 +79,7 @@ export const renderManage: WorldScreen = (ctx, root, { worldId }) => {
     stopSelf();
     recurring.dispose();
     odds.dispose();
+    profileTasks.dispose();
+    reserveSize.dispose();
   };
 };

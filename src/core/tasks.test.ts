@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Profile, Task } from './model';
-import { adhocCreatedForSelfToday, adhocPermission, visibleOpenTasks } from './tasks';
+import { adhocCreatedForSelfToday, adhocPermission, doneRecently, sortForBoard, visibleOpenTasks } from './tasks';
 
 const TZ = 'Europe/Lisbon';
 const ruleset = { timezone: TZ, childDailyTaskLimit: 3 } as const;
@@ -133,5 +133,56 @@ describe('visibleOpenTasks', () => {
   it('breaks a tie in creation time by id, so every device picks the same task', () => {
     const tasks = [recurring('b', 'd1', 10), recurring('a', 'd1', 10)];
     expect(visibleOpenTasks(tasks).map((t) => t.id)).toEqual(['a']);
+  });
+});
+
+describe('sortForBoard', () => {
+  const NOW = Date.parse('2026-10-20T10:00:00Z'); // 2026-10-20 in Lisbon
+  const planned = (date: string) => ({ date, trigger: 'x' });
+  const ids = (tasks: Task[]) => tasks.map((t) => t.title);
+
+  it('puts today and past plans first, then tomorrow, then new, then the rest, oldest first inside each', () => {
+    const tasks = [
+      task({ title: 'rest-old', createdAt: 1 }),
+      task({ title: 'tomorrow', createdAt: 2, plan: planned('2026-10-21') }),
+      task({ title: 'new', createdAt: 3 }),
+      task({ title: 'past', createdAt: 4, plan: planned('2026-10-18') }),
+      task({ title: 'today', createdAt: 5, plan: planned('2026-10-20') }),
+      task({ title: 'rest-new', createdAt: 6 }),
+    ];
+    const sorted = sortForBoard(tasks, NOW, TZ, (t) => t.title === 'new');
+    expect(ids(sorted)).toEqual(['past', 'today', 'tomorrow', 'new', 'rest-old', 'rest-new']);
+  });
+
+  it('ignores plans further away, done tasks and a second open task of a definition', () => {
+    const tasks = [
+      task({ title: 'far', createdAt: 1, plan: planned('2026-10-25') }),
+      task({ title: 'done', createdAt: 2, status: 'done' }),
+      task({ title: 'first', createdAt: 3, defId: 'd1', periodKey: 'a' }),
+      task({ title: 'second', createdAt: 4, defId: 'd1', periodKey: 'b' }),
+    ];
+    expect(ids(sortForBoard(tasks, NOW, TZ))).toEqual(['far', 'first']);
+  });
+
+  it('uses the day in Lisbon, not in UTC', () => {
+    const lateEvening = Date.parse('2026-10-20T23:30:00Z'); // 2026-10-21 00:30 in Lisbon (UTC+1)
+    const tasks = [task({ title: 'later', createdAt: 1 }), task({ title: 'today', createdAt: 2, plan: planned('2026-10-21') })];
+    expect(ids(sortForBoard(tasks, lateEvening, TZ))).toEqual(['today', 'later']);
+  });
+});
+
+describe('doneRecently', () => {
+  const DAY = 86_400_000;
+  const done = (title: string, doneAt: number) => task({ title, status: 'done', doneAt, weekKey: '2026-W43' });
+
+  it('lists what was finished in the last days, newest first, and nothing else', () => {
+    const tasks = [
+      done('old', NOW - 8 * DAY),
+      done('week', NOW - 6 * DAY),
+      done('today', NOW - 1000),
+      task({ title: 'open' }),
+      done('future', NOW + DAY),
+    ];
+    expect(doneRecently(tasks, NOW, 7).map((t) => t.title)).toEqual(['today', 'week']);
   });
 });

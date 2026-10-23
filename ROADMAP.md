@@ -4,7 +4,7 @@ Each release is one minor version, developed on its own `release/0.x` branch (`G
 
 The behaviour each release implements is specified in `SPEC.md`.
 
-**Last closed release: 0.7 — `showcase`, `home` and art** (2026-10-21, tag `v0.7`; [release notes](docs/release-notes/0.7.md)). **Current release:** none; the next one is 0.8 — Usability ([plan](docs/plans/0.8.md)), then 0.9 — Rewards that last.
+**Last closed release: 0.8 — Usability** (2026-10-23, tag `v0.8`; [release notes](docs/release-notes/0.8.md)). **Current release:** none; the next one is 0.9 — Rewards that last ([plan](docs/plans/0.9.md)).
 
 ## Release plan
 
@@ -122,11 +122,14 @@ Exit criteria:
 
 ### 0.9 — Rewards that last
 
-Decided by the product owner on 2026-10-21. Specified in `SPEC.md` §6 ("Retiring a task", "Reward pieces"). The delivery plan is to be written by the tech lead before 0.8 closes.
+Decided by the product owner on 2026-10-21; the reward model was changed by the product owner on 2026-10-23, replacing reward pieces. Product brief: [docs/plans/0.9-product-brief.md](docs/plans/0.9-product-brief.md). Retiring a task is specified in `SPEC.md` §6. The delivery plan is to be written by the tech lead before 0.8 closes.
 
 Scope:
 
-- reward pieces: 4 pieces make a reward, its tier drawn at opening, and nothing expires;
+- tokens: a completed task earns tokens by its level (defaults 1, 2, 4), and no longer a reward;
+- the `vault`: a person spends tokens to open a reward of the tier they choose (defaults 5, 12, 25), on any day, with the balance shown only there;
+- no opening day and no tier odds; a child's self-created task is `low`;
+- tokens per level, prices per tier and `partySize` set by an adult in management;
 - a pirate catalogue of at least 8 collectibles per tier;
 - retiring an open task from the `checkin` and the adults' view.
 
@@ -134,9 +137,9 @@ Both changes need new Firestore rules, an ADR and a rules deploy by the product 
 
 Exit criteria:
 
-- rules tests for pieces and retiring;
-- two devices never build two rewards from the same piece;
-- a real family week and Sunday with pieces, without touching the code.
+- rules tests for tokens and retiring;
+- two devices of the same profile never spend the same tokens;
+- a real family week with tokens, without touching the code.
 
 ### 0.10 — Settings and configuration (not yet planned)
 
@@ -169,6 +172,7 @@ Ideas that are outside the current release. They are neither implemented on own 
 | Due dates on tasks, and rescheduling without penalty; with them, decide what happens to open recurring tasks from past periods (today they stay on the `board` and block new copies) | Deferred by the product owner, 2026-10-18 |
 | An admin can revoke a device (remove a member), for a leaked join code | Spec review, 2026-10-18 |
 | Device-bound admin rights with an admin recovery code, so a child picking an adult profile does not get admin rights (alternative B in ADR 0003) | Deferred by the product owner, 2026-10-18 |
+| Three identical collectibles make a "super" one, to give repeats a value; still to decide: how the three are kept (never deleted), which ones can take part, and the art (`docs/plans/0.9-product-brief.md` §7) | Product owner, 2026-10-23 |
 | Weekly guaranteed minimum (`ruleset.guarantee`) | `SPEC.md` §13 |
 | Switching the theme of an existing world | `SPEC.md` §14 |
 | Family meter and paired tasks | `SPEC.md` §14 |

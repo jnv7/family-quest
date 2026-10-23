@@ -19,7 +19,8 @@ export const renderProfiles: WorldScreen = (ctx, root, { worldId }) => {
               ctx.go({ name: 'map' });
             },
           },
-            h('span', { class: 'avatar', 'aria-hidden': 'true' }, [...profile.displayName][0]?.toUpperCase() ?? ''),
+            // The profile's emoji stands where the picture would be; with none, the initial.
+            h('span', { class: 'avatar', 'aria-hidden': 'true' }, profile.avatar.symbol ?? ([...profile.displayName][0]?.toUpperCase() ?? '')),
             h('span', { class: 'name' }, profile.displayName),
           ),
         ),

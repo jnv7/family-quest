@@ -10,3 +10,6 @@ Each major decision (`GOVERNANCE.md` §1) is recorded here as `NNNN-short-title.
 | [0004](0004-installable-offline-app-shell.md) | Installable app and offline app shell | Accepted |
 | [0005](0005-themed-install-flow.md) | Themed installation | Accepted |
 | [0006](0006-theme-is-a-skin.md) | A theme is a skin, and interface text has three layers | Accepted |
+| [0007](0007-big-ad-hoc-tasks.md) | Big tasks that do not repeat | Accepted |
+| [0008](0008-tokens-and-offline-spending.md) | Tokens, and spending them offline without double spending | Accepted |
+| [0009](0009-retiring-tasks.md) | Retiring an open task | Accepted |

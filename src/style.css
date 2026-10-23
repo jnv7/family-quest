@@ -55,7 +55,7 @@ p {
 label {
   display: grid;
   gap: 0.25rem;
-  font-size: 0.9rem;
+  font-size: 1rem;
 }
 
 input,
@@ -152,7 +152,7 @@ button.profile {
 }
 
 .rows button {
-  min-height: 2.5rem;
+  min-height: 3rem;
 }
 
 .rows li.inactive span {
@@ -179,7 +179,7 @@ fieldset {
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--line);
   border-radius: 0.75rem;
-  font-size: 0.9rem;
+  font-size: 1rem;
 }
 
 .notice {
@@ -344,7 +344,7 @@ img.place-art {
 }
 
 small {
-  opacity: 0.7;
+  opacity: 0.8;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -390,8 +390,7 @@ img.character-art {
   gap: 0.75rem;
 }
 
-.rows.tasks li,
-.rows.checkin-tasks li {
+.task-card {
   padding: 0.85rem 1rem;
   border: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
   border-radius: 1rem;
@@ -399,14 +398,13 @@ img.character-art {
   box-shadow: 0 0.2rem 0 color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
-.rows.tasks li > span,
 .task-title {
   font-size: 1.15rem;
   font-weight: 700;
   overflow-wrap: anywhere;
 }
 
-.rows li.checkin-task {
+.rows li.task-card {
   display: grid;
   grid-template-columns: auto 1fr;
   justify-content: stretch;
@@ -473,25 +471,36 @@ button.place[data-alert]::before {
   pointer-events: none;
 }
 
-button.place[data-alert='today']::after {
+button.place[data-alert='due']::after {
   top: -1.6rem;
   font-size: 1.6rem;
   border-color: var(--accent);
   animation: alert-bob 1.6s ease-in-out infinite;
 }
 
-button.place[data-alert='today']::before {
+button.place[data-alert='due']::before {
   top: 0.6rem;
   border-color: var(--accent);
 }
 
-button.place[data-alert='tomorrow']::after {
+button.place[data-alert='new']::after {
+  content: '•';
+  top: -1.2rem;
+  font-size: 1.3rem;
+  border-color: var(--accent);
+}
+
+button.place[data-alert='new']::before {
+  border-color: var(--accent);
+}
+
+button.place[data-alert='soon']::after {
   top: -0.85rem;
   font-size: 1rem;
   min-width: 1.3rem;
 }
 
-button.place[data-alert='tomorrow']::before {
+button.place[data-alert='soon']::before {
   top: 0.62rem;
   right: 0.75rem;
   width: 0.45rem;
@@ -509,18 +518,18 @@ button.place[data-alert='tomorrow']::before {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  button.place[data-alert='today']::after {
+  button.place[data-alert='due']::after {
     animation: none;
   }
 }
 
-.rows li.planned-today {
+.rows li.planned-due {
   border-color: var(--accent);
   border-left-width: 0.5rem;
   background: color-mix(in srgb, var(--accent) 18%, Canvas);
 }
 
-.rows li.planned-tomorrow {
+.rows li.planned-soon {
   border-left-width: 0.5rem;
 }
 
@@ -770,4 +779,175 @@ img.home-art {
 
 .hint + .rows {
   margin-top: 0.75rem;
+}
+
+/* The task form: single and multiple choices drawn as chips, 48 px tall for fingers. */
+.field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.field-label {
+  font-weight: 600;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+button.chip {
+  min-height: 3rem;
+  padding: 0 1rem;
+  border-radius: 999px;
+  border: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  background: Canvas;
+  color: inherit;
+  font: inherit;
+}
+
+button.chip[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent, #fff);
+  font-weight: 700;
+}
+
+button.link {
+  justify-self: start;
+  border: 0;
+  background: none;
+  text-decoration: underline;
+  min-height: 3rem;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.3rem;
+}
+
+.tag {
+  padding: 0.1rem 0.6rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 16%, Canvas);
+  font-size: 0.9rem;
+}
+
+
+/* The character asks the question: a small portrait and a speech bubble holding "yes" and "no". */
+.ask {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+img.ask-art {
+  width: 2.75rem;
+  height: 2.75rem;
+}
+
+span.ask-art {
+  font-size: 2rem;
+}
+
+.ask-bubble {
+  flex: 1;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem 1rem 1rem 0.2rem;
+  background: Canvas;
+}
+
+.ask-bubble .question {
+  margin: 0 0 0.5rem;
+}
+
+.ask-bubble .task-actions {
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+}
+
+.tag.new {
+  background: var(--accent);
+  color: var(--on-accent, #fff);
+  font-weight: 700;
+}
+
+/* A name as a tag attached to the creature (SPEC.md §4). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.name-tag {
+  display: inline-grid;
+  gap: 0.1rem;
+  justify-items: center;
+  min-height: 3rem;
+  padding: 0.3rem 0.9rem;
+  border: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border-radius: 0.6rem;
+  background: color-mix(in srgb, var(--accent) 10%, Canvas);
+  color: inherit;
+  font: inherit;
+}
+
+button.name-tag.unnamed {
+  border-style: dashed;
+  background: transparent;
+}
+
+.name-tag .tag-name {
+  font-weight: 700;
+}
+
+.name-tag small {
+  opacity: 0.75;
+}
+
+.name-tag input {
+  min-height: 2.5rem;
+  text-align: center;
+}
+
+/* The top bar: back on the left, the title, at most one action on the right. */
+.screen-bar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.screen-bar h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  text-align: center;
+}
+
+.screen-bar > :first-child {
+  justify-self: start;
+}
+
+.screen-bar > :last-child {
+  justify-self: end;
+}
+
+/* Motion: with "reduce motion" on, everything is instant. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
 }

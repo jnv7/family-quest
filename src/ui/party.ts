@@ -70,7 +70,7 @@ export function createPartyControls(ctx: Deps, worldId: WorldId, state: () => Pa
       const fromReserve = collectible.reserveAt === null ? [] : [collectible.id];
       if (party.length < ruleset.partySize) {
         return h('div', { class: 'choices' },
-          h('button', { class: 'primary', onClick: () => arrange(profile, [...party, collectible.id], [], fromReserve) }, ctx.text('party.join')),
+          h('button', { class: 'primary', onClick: () => arrange(profile, [...party, collectible.id], [], fromReserve) }, ctx.text(collectible.reserveAt === null ? 'party.join' : 'party.bringBack')),
         );
       }
       const byId = new Map(owned.map((c) => [c.id, c]));
@@ -93,48 +93,84 @@ export function createPartyControls(ctx: Deps, worldId: WorldId, state: () => Pa
 }
 
 /**
- * Inline renaming of a collectible, shared by the `home` and the `showcase` (admin). It keeps
- * what is being typed, so a redraw caused by incoming data does not lose it. Empty text clears
- * the name; the text is limited to `LIMITS.nickname`.
+ * The name of a collectible as a tag attached to its art, shared by the `home`, the vault and the
+ * `showcase` (SPEC.md §4). The nickname is shown with the catalogue name small under it; without a
+ * nickname the catalogue name is shown, and whoever may name it sees a dashed "give a name" tag.
+ * Tapping the tag edits it in place: Enter or leaving the field saves, Escape cancels, and empty
+ * text clears the name (back to the catalogue name). The text is limited to `LIMITS.nickname`.
+ * It keeps what is being typed, so a redraw caused by incoming data does not lose it.
  */
 export function createRenamer(ctx: Deps, worldId: WorldId, redraw: () => void) {
   let editing: TaskId | null = null;
   let draft = '';
   let tooLong = false;
 
+  const stop = () => {
+    editing = null;
+    tooLong = false;
+  };
+
   return {
     /** Forgets any rename in progress. */
     reset(): void {
-      editing = null;
-      tooLong = false;
+      stop();
     },
 
-    /** The "rename" button, or the form while this collectible is being renamed. */
-    control(id: TaskId, nickname: string | null): HTMLElement {
+    /**
+     * `editable` is whether this person may name it (the owner, or an admin in the showcase).
+     * `prompt` replaces the dashed tag's words, for example at the reveal of a new creature.
+     */
+    tag(collectible: Pick<Collectible, 'id' | 'slot' | 'nickname' | 'tier'>, editable: boolean, prompt?: string): HTMLElement {
+      const { id, nickname } = collectible;
+      const catalogue = nameOf(ctx, { ...collectible, nickname: null });
       if (editing !== id) {
-        return h('button', { onClick: () => ((editing = id), (draft = nickname ?? ''), redraw()) }, ctx.text('collectible.rename'));
+        const label = nickname
+          ? [h('span', { class: 'tag-name' }, nickname), h('small', { class: 'tag-catalogue' }, catalogue)]
+          : [h('span', { class: 'tag-name' }, catalogue), editable ? h('small', { class: 'tag-prompt' }, prompt ?? ctx.text('collectible.giveName')) : null];
+        if (!editable) return h('div', { class: 'name-tag' }, ...label);
+        return h('button', {
+          class: `name-tag${nickname ? '' : ' unnamed'}`,
+          type: 'button',
+          onClick: () => ((editing = id), (draft = nickname ?? ''), redraw()),
+        }, ...label);
       }
-      const input = h('input', { type: 'text', value: draft, maxLength: LIMITS.nickname });
+
+      const input = h('input', { type: 'text', value: draft, maxLength: LIMITS.nickname, autocomplete: 'off' });
       input.addEventListener('input', () => (draft = input.value));
+      let finished = false;
+      const save = () => {
+        if (finished) return;
+        const value = normaliseNickname(input.value);
+        if (nicknameTooLong(value)) {
+          tooLong = true;
+          redraw();
+          return;
+        }
+        finished = true;
+        stop();
+        if (value !== nickname) ctx.settle(ctx.store.collectibles.setNickname(worldId, id, value).settled);
+        redraw();
+      };
+      const cancel = () => {
+        finished = true;
+        stop();
+        redraw();
+      };
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') cancel();
+      });
+      // Leaving the field saves. A field that was only replaced by a redraw is not "left".
+      input.addEventListener('blur', () => queueMicrotask(() => input.isConnected && save()));
+      queueMicrotask(() => input.focus());
       return h('form', {
-        class: 'rename',
+        class: 'name-tag editing',
         onSubmit: (event: Event) => {
           event.preventDefault();
-          const value = normaliseNickname(input.value);
-          if (nicknameTooLong(value)) {
-            tooLong = true;
-            redraw();
-            return;
-          }
-          editing = null;
-          tooLong = false;
-          ctx.settle(ctx.store.collectibles.setNickname(worldId, id, value).settled);
-          redraw();
+          save();
         },
       },
-        h('label', {}, ctx.text('collectible.renameLabel'), input),
-        h('button', { class: 'primary', type: 'submit' }, ctx.text('collectible.renameSave')),
-        h('button', { type: 'button', onClick: () => ((editing = null), (tooLong = false), redraw()) }, ctx.text('collectible.renameCancel')),
+        h('label', {}, h('span', { class: 'visually-hidden' }, ctx.text('collectible.renameLabel')), input),
+        h('small', { class: 'tag-catalogue' }, catalogue),
         tooLong ? h('p', { class: 'message', role: 'alert' }, ctx.text('collectible.renameTooLong')) : null,
       );
     },

@@ -244,7 +244,7 @@ service cloud.firestore {
             && data.question == def.question;
         }
 
-        // Only tasks from a big definition can carry a plan.
+        // Only a task from a big definition, or a big ad hoc task, can carry a plan.
         function validPlan(data) {
           return data.plan == null || (
             data.plan is map
@@ -252,8 +252,10 @@ service cloud.firestore {
             && data.plan.keys().hasAll(['date', 'trigger'])
             && isDateKey(data.plan.date)
             && text(data.plan.trigger, 80)
-            && data.source == 'recurring'
-            && get(taskDefPath(data.defId)).data.big == true
+            && (
+              (data.source == 'recurring' && get(taskDefPath(data.defId)).data.big == true)
+              || (data.source == 'adhoc' && data.get('big', false) == true)
+            )
           );
         }
 
@@ -261,7 +263,7 @@ service cloud.firestore {
 
         allow create: if isMember()
           && newDoc().keys().hasOnly(['profileId', 'title', 'level', 'question', 'source', 'defId', 'periodKey',
-            'createdBy', 'origin', 'plan', 'status', 'doneAt', 'answer', 'talkFlag', 'weekKey', 'schemaVersion', 'createdAt'])
+            'createdBy', 'origin', 'big', 'plan', 'status', 'doneAt', 'answer', 'talkFlag', 'weekKey', 'schemaVersion', 'createdAt'])
           && newDoc().keys().hasAll(['profileId', 'title', 'level', 'question', 'source', 'defId', 'periodKey',
             'createdBy', 'origin', 'plan', 'status', 'doneAt', 'answer', 'talkFlag', 'weekKey', 'schemaVersion', 'createdAt'])
           && validMetaOnCreate()
@@ -272,6 +274,8 @@ service cloud.firestore {
           && isTier(newDoc().level)
           && optionalText(newDoc().question, 140)
           && newDoc().origin == 'app'
+          // `big` is optional and, when there, true and only on an ad hoc task; it never changes afterwards.
+          && (!newDoc().keys().hasAny(['big']) || (newDoc().big == true && newDoc().source == 'adhoc'))
           && newDoc().plan == null
           && newDoc().status == 'open'
           && newDoc().doneAt == null

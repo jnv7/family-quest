@@ -50,6 +50,7 @@ import {
   type Uid,
   type World,
   type WorldId,
+  isShowcaseSize,
 } from '../../core/model';
 import { randomWorldId } from '../../core/random';
 import {
@@ -266,6 +267,12 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
           await updateDoc(worldDoc(db, worldId), { 'ruleset.tierOdds': tierOdds });
         }),
 
+      setShowcaseSize: (worldId, size) =>
+        write(undefined, async () => {
+          if (!isShowcaseSize(size)) throw invalid(`The showcase size must be a whole number from 1 to ${LIMITS.showcaseSizeMax}`);
+          await updateDoc(worldDoc(db, worldId), { 'ruleset.showcaseSize': size });
+        }),
+
       createProfile(worldId, input) {
         const profileId = doc(profilesCollection(db, worldId)).id;
         return write({ profileId }, async () => {
@@ -340,6 +347,7 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
             periodKey: null,
             createdBy: member.profileId,
             origin: 'app',
+            ...(input.big === true ? { big: true } : {}),
             plan: null,
             status: 'open',
             doneAt: null,

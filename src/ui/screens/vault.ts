@@ -1,3 +1,4 @@
+import { weekRange, weekRelation } from '../../core/calendar';
 import { drawSlot } from '../../core/draw';
 import type { Collectible, Profile, ProfileId, Reward, Ruleset, TaskId, WeekKey } from '../../core/model';
 import { collectibleState } from '../../core/party';
@@ -7,9 +8,11 @@ import { artElement } from '../art';
 import { h } from '../dom';
 import { observeWithRetry } from '../observe';
 import { moveOldPendingToReserve } from '../reserve';
-import { createPartyControls, entryOf as entryOfTheme } from '../party';
+import { createPartyControls, createRenamer, entryOf as entryOfTheme } from '../party';
 import { observeSelf } from '../self';
+import { screenBar } from '../bar';
 
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'] as const;
 const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const;
 
 /** Groups rewards by the week they were earned in, oldest week first; each group keeps its order. */
@@ -56,6 +59,7 @@ export const renderVault: WorldScreen = (ctx, root, { worldId }) => {
     profile && ruleset && collectibles ? { profile, ruleset, owned: collectibles } : null,
   );
   const choices = (collectible: Collectible) => controls.choices(collectible);
+  const renamer = createRenamer(ctx, worldId, () => draw());
   const entryOf = (collectible: Collectible) => entryOfTheme(ctx, collectible);
 
   const revealCard = (collectible: Collectible) => {
@@ -65,7 +69,7 @@ export const renderVault: WorldScreen = (ctx, root, { worldId }) => {
     return h('div', { class: 'reveal', role: 'status' },
       artElement(ctx.theme, entry.art, 'reveal-art'),
       h('p', {}, ctx.text('vault.revealed')),
-      h('p', { class: 'reveal-name' }, entry.name),
+      renamer.tag(collectible, true, ctx.text('vault.giveName')),
       h('p', { class: 'reveal-tier' }, ctx.theme.tiers[collectible.tier]),
       choices(collectible),
       h('button', { onClick: () => ((revealed = revealed.filter((id) => id !== collectible.id)), draw()) }, ctx.text(pending ? 'party.later' : 'vault.close')),
@@ -77,7 +81,7 @@ export const renderVault: WorldScreen = (ctx, root, { worldId }) => {
     if (!entry) return null;
     return h('div', { class: 'recent-card' },
       artElement(ctx.theme, entry.art, 'recent-art'),
-      h('p', { class: 'reveal-name' }, entry.name),
+      renamer.tag(collectible, true),
       h('small', {}, ctx.theme.tiers[collectible.tier]),
       choices(collectible),
     );
@@ -89,6 +93,20 @@ export const renderVault: WorldScreen = (ctx, root, { worldId }) => {
       return h('li', { class: 'reward', 'data-tier': reward.tier }, art, h('button', { class: 'primary', onClick: () => open(reward) }, ctx.text('vault.open')));
     }
     return h('li', { class: 'reward waiting', 'data-tier': reward.tier }, art, h('small', {}, ctx.text('vault.notYet', { weekday: ctx.text(`weekday.${WEEKDAYS[rules.openingDay - 1]}`) })));
+  };
+
+  /** The days of a week as "19–25 out.", with the month names from the locale file. */
+  const rangeLabel = (week: WeekKey): string => {
+    const { start, end } = weekRange(week);
+    const part = (date: string) => ({ day: Number(date.slice(8, 10)), month: ctx.text(`month.${MONTHS[Number(date.slice(5, 7)) - 1]}`) });
+    const [from, to] = [part(start), part(end)];
+    return from.month === to.month ? `${from.day}–${to.day} ${to.month}` : `${from.day} ${from.month}–${to.day} ${to.month}`;
+  };
+
+  /** "Esta semana", "Semana passada", or the days of the week; never an ISO week number. */
+  const weekHeading = (week: WeekKey): string => {
+    const relation = ruleset ? weekRelation(week, ctx.clock(), ruleset.timezone) : 'other';
+    return relation === 'this' ? ctx.text('vault.thisWeek') : relation === 'last' ? ctx.text('vault.lastWeek') : rangeLabel(week);
   };
 
   function draw(): void {
@@ -118,10 +136,14 @@ export const renderVault: WorldScreen = (ctx, root, { worldId }) => {
       content.replaceChildren(somethingElse ? '' : h('p', { class: 'message' }, ctx.text('vault.empty')));
       return;
     }
+    const openable = shown.filter((reward) => canOpen(reward, ctx.clock(), rules));
     content.replaceChildren(
+      ...(openable.length >= 2
+        ? [h('button', { class: 'primary', onClick: () => openable.forEach(open) }, ctx.text('vault.openAll'))]
+        : []),
       ...groupByWeek(shown).map((group) =>
         h('section', { class: 'vault-week' },
-          h('h2', {}, ctx.text('vault.week', { week: Number(group.weekKey.slice(-2)) })),
+          h('h2', {}, weekHeading(group.weekKey)),
           h('ul', { class: 'reward-list' }, ...group.rewards.map((reward) => rewardItem(reward, rules))),
         ),
       ),
@@ -136,12 +158,11 @@ export const renderVault: WorldScreen = (ctx, root, { worldId }) => {
   }
 
   root.append(
-    h('h1', {}, ctx.text('vault.title')),
+    screenBar(ctx, { title: ctx.text('vault.title'), back: { name: 'map' } }),
     problem,
     reveals,
     recent,
     content,
-    h('div', { class: 'stack' }, h('button', { onClick: () => ctx.go({ name: 'map' }) }, ctx.text('app.back'))),
   );
 
   const stopWorld = observeWithRetry(ctx, problem, (onError) =>

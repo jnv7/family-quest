@@ -31,6 +31,8 @@ export interface AppContext {
   /** Interface text: a neutral message filled with the theme's names. */
   text(key: string, params?: MessageParams): string;
   go(route: Route, options?: { replace?: boolean }): void;
+  /** Runs `run` after `ms`; the returned function cancels it. Injected so tests control time. */
+  later(run: () => void, ms: number): () => void;
   /** Shows a short, non-blocking notice. */
   notify(messageKey: string): void;
   /**

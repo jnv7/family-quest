@@ -6,6 +6,7 @@ import { h } from '../dom';
 import { observeWithRetry } from '../observe';
 import { createPartyControls, createRenamer, entryOf, nameOf } from '../party';
 import { observeSelf } from '../self';
+import { screenBar } from '../bar';
 
 /**
  * The showcase: the latest collectibles that went to the reserve, from everyone (SPEC.md §6).
@@ -49,9 +50,8 @@ export const renderShowcase: WorldScreen = (ctx, root, { worldId }) => {
       const entry = entryOf(ctx, shown);
       const parts = [
         entry ? artElement(ctx.theme, entry.art, 'reveal-art') : null,
-        h('p', { class: 'reveal-name' }, nameOf(ctx, shown)),
+        renamer.tag(shown, isAdmin),
         h('p', { class: 'reveal-tier' }, ctx.theme.tiers[shown.tier]),
-        isAdmin ? renamer.control(shown.id, shown.nickname) : null,
         ownOf(shown.id),
         h('button', { onClick: close }, ctx.text('showcase.close')),
       ];
@@ -69,7 +69,7 @@ export const renderShowcase: WorldScreen = (ctx, root, { worldId }) => {
         ...items.map((item) => {
           const entry = entryOf(ctx, item);
           return h('li', {},
-            h('button', { class: 'showcase-item', onClick: () => ((selected = item.id), draw()) },
+            h('button', { class: 'showcase-item', 'data-id': item.id, onClick: () => ((selected = item.id), draw()) },
               entry ? artElement(ctx.theme, entry.art, 'recent-art') : null,
               h('span', {}, nameOf(ctx, item)),
             ),
@@ -80,11 +80,10 @@ export const renderShowcase: WorldScreen = (ctx, root, { worldId }) => {
   }
 
   root.append(
-    h('h1', {}, ctx.text('showcase.title')),
+    screenBar(ctx, { title: ctx.text('showcase.title'), back: { name: 'map' } }),
     problem,
     detail,
     content,
-    h('div', { class: 'stack' }, h('button', { onClick: () => ctx.go({ name: 'map' }) }, ctx.text('app.back'))),
   );
 
   let stopItems = () => {};

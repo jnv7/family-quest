@@ -1,12 +1,17 @@
 import { drawTier, tierOddsFor } from '../../core/draw';
-import type { ProfileId, Task, World } from '../../core/model';
-import { visibleOpenTasks } from '../../core/tasks';
+import type { ProfileId, Task, TaskDef, World } from '../../core/model';
+import { isNewTask } from '../../core/alerts';
+import { sortForBoard } from '../../core/tasks';
 import type { WorldScreen } from '../context';
 import { artElement } from '../art';
 import { h } from '../dom';
 import { pickLine } from '../lines';
 import { observeWithRetry } from '../observe';
 import { observeSelf } from '../self';
+import { taskCard } from '../taskCard';
+import { screenBar } from '../bar';
+
+const UNDO_MS = 4000;
 
 /**
  * Where a task is completed, in one tap on the task itself (SPEC.md §7.4), so
@@ -25,48 +30,119 @@ export const renderCheckin: WorldScreen = (ctx, root, { worldId }) => {
   const empty = h('div');
   const problem = h('div');
   let spoken = false;
+  /** Tasks with a question whose "done" was tapped: the character now asks. */
+  const asking = new Set<string>();
   // The odds belong to the world, so a task can be completed once the world has arrived (at once, from the cache).
   let world: World | null = null;
   let tasks: Task[] | null = null;
+  let defs = new Map<string, TaskDef>();
+  let seenBefore: number | null = null;
+  const isNew = (task: Task) => isNewTask(task, defs, seenBefore);
 
   const say = (kind: keyof typeof character.lines) => {
     bubble.textContent = pickLine(character.lines[kind], ctx.randomInt);
   };
 
+  /**
+   * A completion is written when the undo window ends, so "Desfazer" writes nothing and nothing is
+   * ever reopened in the data (SPEC.md §6). Hiding the page, or leaving the screen, writes at once.
+   */
+  const pending = new Map<string, { run: () => void; cancel: () => void }>();
+
   const complete = (task: Task, answer: 'yes' | null) => {
-    if (!world) return;
-    const rewardTier = drawTier(tierOddsFor(task.level, world.ruleset), ctx.randomInt);
-    ctx.settle(ctx.store.tasks.completeTask(worldId, task.id, { answer, talkFlag: task.talkFlag, rewardTier }).settled);
+    if (!world || pending.has(task.id)) return;
+    const current = world;
+    const run = () => {
+      const entry = pending.get(task.id);
+      if (!entry) return;
+      entry.cancel();
+      pending.delete(task.id);
+      const rewardTier = drawTier(tierOddsFor(task.level, current.ruleset), ctx.randomInt);
+      ctx.settle(ctx.store.tasks.completeTask(worldId, task.id, { answer, talkFlag: task.talkFlag, rewardTier }).settled);
+    };
+    pending.set(task.id, { run, cancel: ctx.later(run, UNDO_MS) });
     say('congrats');
     note.textContent = ctx.text('checkin.reward');
+    show();
   };
 
-  /** The button that completes the task comes first, then the task (SPEC.md §7.4). */
-  const row = (task: Task) => {
-    const actions = task.question
-      ? h('div', { class: 'task-actions' },
-          h('button', { class: 'primary', onClick: () => complete(task, 'yes') }, ctx.text('checkin.yes')),
-          h('button', { onClick: () => say('doubt') }, ctx.text('checkin.no')),
-        )
-      : h('div', { class: 'task-actions' }, h('button', { class: 'primary', onClick: () => complete(task, null) }, ctx.text('checkin.done')));
-    return h('li', { class: 'checkin-task' },
-      actions,
-      h('div', { class: 'task-body' },
-        h('span', { class: 'task-title' }, task.title),
-        task.question && h('p', { class: 'question' }, task.question),
-      ),
-    );
+  const undo = (task: Task) => {
+    pending.get(task.id)?.cancel();
+    pending.delete(task.id);
+    if (pending.size === 0) note.textContent = '';
+    say('greeting');
+    show();
+  };
+
+  const flush = () => [...pending.values()].forEach((entry) => entry.run());
+  const onHidden = () => {
+    if (document.hidden) flush();
+  };
+  document.addEventListener('visibilitychange', onHidden);
+  window.addEventListener('pagehide', flush);
+
+  /**
+   * The button that completes the task comes first, then the task (SPEC.md §7.4). For a task with a
+   * question, "done" comes first, and only then does the character ask it, in a bubble with "yes" and
+   * "no": "yes" completes the task, "no" takes it back to "done" and the character answers kindly.
+   */
+  const row = (task: Task, timeZone: string) => {
+    const waiting = pending.has(task.id);
+    const asked = task.question !== null && asking.has(task.id) && !waiting;
+    const action = waiting
+      ? h('button', { onClick: () => undo(task) }, ctx.text('checkin.undo'))
+      : asked
+        ? undefined
+        : h('button', {
+            class: 'primary',
+            onClick: () => {
+              if (task.question === null) complete(task, null);
+              else {
+                asking.add(task.id);
+                show();
+              }
+            },
+          }, ctx.text('checkin.done'));
+    return taskCard(ctx, {
+      task,
+      def: task.defId === null ? undefined : defs.get(task.defId),
+      timeZone,
+      action,
+      below: [
+        waiting && h('p', { class: 'message', role: 'status' }, ctx.text('checkin.doneNow')),
+        asked &&
+          h('div', { class: 'ask' },
+            artElement(ctx.theme, character.art, 'character-art ask-art'),
+            h('div', { class: 'ask-bubble' },
+              h('p', { class: 'question' }, task.question),
+              h('div', { class: 'task-actions' },
+                h('button', { class: 'primary', onClick: () => complete(task, 'yes') }, ctx.text('checkin.yes')),
+                h('button', {
+                  onClick: () => {
+                    asking.delete(task.id);
+                    say('doubt');
+                    show();
+                  },
+                }, ctx.text('checkin.no')),
+              ),
+            ),
+          ),
+      ],
+      isNew: isNew(task),
+      className: 'checkin-task',
+    });
   };
 
   const show = () => {
     if (tasks === null || world === null) return;
+    const shown = sortForBoard(tasks, ctx.clock(), world.ruleset.timezone, isNew);
     if (!spoken) {
-      say(tasks.length > 0 ? 'greeting' : 'farewell');
+      say(shown.length > 0 ? 'greeting' : 'farewell');
       spoken = true;
     }
-    list.replaceChildren(...tasks.map(row));
-    betterNote.hidden = tasks.length === 0;
-    empty.replaceChildren(...(tasks.length === 0 ? [h('p', { class: 'message' }, ctx.text('checkin.empty'))] : []));
+    list.replaceChildren(...shown.map((task) => row(task, world!.ruleset.timezone)));
+    betterNote.hidden = shown.length === 0;
+    empty.replaceChildren(...(shown.length === 0 ? [h('p', { class: 'message' }, ctx.text('checkin.empty'))] : []));
   };
 
   // A failure to read the world is shown like any other: the screen cannot complete anything without it.
@@ -75,18 +151,20 @@ export const renderCheckin: WorldScreen = (ctx, root, { worldId }) => {
   );
 
   root.append(
-    h('h1', {}, ctx.text('checkin.title')),
+    screenBar(ctx, { title: ctx.text('checkin.title'), back: { name: 'map' } }),
     h('div', { class: 'character' }, artElement(ctx.theme, character.art, 'character-art'), bubble),
     note,
     problem,
     betterNote,
     list,
     empty,
-    h('div', { class: 'stack' }, h('button', { onClick: () => ctx.go({ name: 'map' }) }, ctx.text('app.back'))),
   );
 
   let watchedProfile: ProfileId | null = null;
   let stopTasks = () => {};
+  const stopDefs = observeWithRetry(ctx, problem, (onError) =>
+    ctx.store.taskDefs.observeTaskDefs(worldId, (value) => ((defs = new Map(value.map((d) => [d.id, d]))), show()), onError),
+  );
   const stopSelf = observeSelf(ctx, worldId, ({ profile }) => {
     if (!profile) {
       ctx.go({ name: 'profiles' }, { replace: true });
@@ -95,13 +173,19 @@ export const renderCheckin: WorldScreen = (ctx, root, { worldId }) => {
     if (profile.id === watchedProfile) return;
     stopTasks();
     watchedProfile = profile.id;
+    seenBefore = ctx.world.getLastSeen(worldId, profile.id);
+    ctx.world.setLastSeen(worldId, profile.id, ctx.clock());
     stopTasks = observeWithRetry(ctx, problem, (onError) =>
-      ctx.store.tasks.observeOpenTasks(worldId, profile.id, (value) => ((tasks = visibleOpenTasks(value)), show()), onError),
+      ctx.store.tasks.observeOpenTasks(worldId, profile.id, (value) => ((tasks = value), show()), onError),
     );
   });
   return () => {
+    flush();
+    document.removeEventListener('visibilitychange', onHidden);
+    window.removeEventListener('pagehide', flush);
     stopTasks();
     stopWorld();
+    stopDefs();
     stopSelf();
   };
 };

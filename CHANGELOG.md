@@ -6,6 +6,80 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.10] — 2026-10-22
+
+### Added
+
+- Big tasks that do not repeat (ADR 0007, the product owner's request). An adult can make a one-off task "big" in the single task form, and its owner can plan it like a task of a big definition, on any day from today on (no end). The task gets an optional `big: true` field, stored only when true; `validatePlan` and `createAdhocTask` (both adapters, with the contract suite) know it. The `firestore.rules` change lets a plan sit on a big ad hoc task, allows `big` on create (ad hoc only) and keeps it immutable, with new rules tests. **The product owner must publish the rules** (`firebase deploy --only firestore:rules`) before devices can create such a task.
+
+## [0.8.9] — 2026-10-21
+
+### Changed (product owner's review of 0.8, 2026-10-21)
+
+- The `board` cannot complete anything: its "Concluir" button is gone (a task is completed only in the `checkin`), and with it the highlighted-task route (`#/checkin/<taskId>`).
+- No "?" chip on task cards.
+- The question comes after "done": a task with a question first shows "Feito", and then the character asks it in the bubble, with "Sim" (completes, with the 4 seconds to undo) and "Não" (the character answers kindly and the card goes back to "Feito"). A task with a question therefore takes three taps from the map; `SPEC.md` and `CLAUDE.md` now say so.
+- The profile picker shows the profile's emoji in place of the picture (the initial when there is none), with the name alone and no boat.
+- "Tarefas por perfil": tapping the chosen profile again deselects it.
+
+## [0.8.8] — 2026-10-21
+
+### Changed
+
+- One look and feel. Every screen has the same top bar (`src/ui/bar.ts`): back on the left, the title, and at most one action on the right (the `board` has "Nova tarefa", management has the invite link); the "Voltar" buttons at the bottom are gone. The map keeps its own bar.
+- The vault names weeks "Esta semana", "Semana passada", or the days ("19–25 out.", month names from the locale file), never an ISO week number (`weekRange` and `weekRelation` in `src/core/calendar.ts`), and offers "Abrir todos" when two or more can be opened; the reveals then stand one after the other.
+- The profile picker shows each profile with the art of its kind and its symbol.
+- Touch targets of at least 48 px in the lists, labels and group text at 16 px, a little more contrast on small text, and `prefers-reduced-motion` turns every animation and transition off.
+- Words: "Trazer de volta" for bringing a collectible back from the reserve, "Fechar" for closing a reveal; the same verb for the same act (Concluir on the `board`, Feito in the `checkin`, Abrir, Enviar).
+
+## [0.8.7] — 2026-10-21
+
+### Added
+
+- The adults' view of the family: management has "Tarefas por perfil". An admin picks a profile and sees its open tasks as the same read-only cards the profile sees, and what it finished in the last 7 days as a list with the day (`doneRecently` in `src/core/tasks.ts`). No counts, rankings or totals. It uses `observeTasks`, which adults may already read under the current rules, and is also where a task made by mistake is found. A child device is sent away from management as before.
+
+## [0.8.6] — 2026-10-21
+
+### Changed
+
+- Names as labels: every collectible card (`home`, vault reveal and recent list, `showcase` detail) shows its name as a tag attached to the art: the nickname with the catalogue name small under it, or the catalogue name with a dashed "dar um nome" tag for whoever may name it. Tapping the tag edits it in place (Enter or leaving the field saves, Escape cancels, empty text clears it, `LIMITS.nickname` applies). At the reveal in the vault the tag reads "dá-lhe um nome". The separate "Mudar o nome" button is gone; an admin still renames from the showcase detail, and a child cannot rename another person's.
+
+## [0.8.5] — 2026-10-21
+
+### Changed
+
+- The crew, end to end. `showcaseSize` is now 10 for new worlds, and management has a "Lugares {@reserve.in}" control (a whole number from 1 to 30) that writes the world's `ruleset`, so an existing world created with 30 can be set to 10. `DataStore`: `worlds.setShowcaseSize`, with both adapters and the contract suite (admin only, `invalid-argument` outside 1–30 before any write). No rules change: an admin may already update `ruleset`.
+- A collectible beyond the newest `showcaseSize` of the reserve goes to "another island": it is no longer shown or offered anywhere, stays stored, and no screen says it is about to leave or shows a count.
+- Words: moving a collectible to the reserve now says `{@reserve...}` (not `{@showcase...}`), and the pirate theme's `roles.reserve` is the tavern, so children read the same place for both (data only, ADR 0006).
+
+## [0.8.4] — 2026-10-21
+
+### Changed
+
+- The board alert on the map (`boardAlert` in `src/core/alerts.ts`, replacing `planAlert`) has three neutral states, strongest first: `due` (a task planned for today, or for a day that has passed and is still open), `new` (an open task the profile has not seen: an ad hoc task made by someone else, or the first task of a recurring definition made since; daily repeats of a known definition are not new) and `soon` (planned for tomorrow). Never a number. New cards carry a "novo" marker on the `board` and in the `checkin`, and the `new` bubble shows a dot.
+- "Last seen" is a per-device, per-profile time kept in `localStorage` (`fq.lastSeen.{worldId}.{profileId}`, through `WorldMemory`), set when the `board` or the `checkin` shows the list; with no value, nothing is new. No data or rules change.
+- Task cards for a plan that is today or past use `planned-due`, and tomorrow's `planned-soon`.
+
+## [0.8.3] — 2026-10-21
+
+### Changed
+
+- The character asks the question: a task with a question shows the character's small portrait and a speech bubble with the question and "Sim" / "Não" inside it (still two taps from the map). "Não" still makes the main bubble say a `doubt` line and leaves the task open.
+- Undo for 4 seconds: after "Feito" or "Sim" the card shows "Desfazer" while the character already congratulates. The completion and its reward are written when the 4 seconds end, at once when the page is hidden (`visibilitychange`, `pagehide`) or the check-in is left, and "Desfazer" writes nothing, so nothing is ever reopened in the data. Delayed calls go through `AppContext.later`, which tests replace.
+
+## [0.8.2] — 2026-10-21
+
+### Changed
+
+- One task card (`src/ui/taskCard.ts`) on the `board` and in the `checkin`: the title, large, then chips ("↻" and how it repeats, the plan, "?" when there is a question), with the one action first, in front of the title as the product owner asked in 0.7. The `board` action is now "Concluir", which opens the `checkin` (`#/checkin/<taskId>`) with that task highlighted; the plan control of a big task is a secondary link.
+- One order everywhere: `sortForBoard` (`src/core/tasks.ts`) puts tasks planned for today or for a past day first, then tomorrow's, then new ones, then the rest, oldest first. The "new" group is filled in 0.8.4.
+
+## [0.8.1] — 2026-10-21
+
+### Changed
+
+- One way to create a task (`src/ui/screens/taskForm.ts`, route `#/new-task[/<defId>]`), opened from the `board` and from management, and in edit mode for a recurring definition. An adult chooses who it is for with chips (each profile with its symbol, plus "Todos"; nothing is chosen by default), how often it repeats (once, daily, weekly, monthly), the difficulty, an optional question (collapsed) and, when it repeats, whether it is a big task. A child sees only the title. Once creates one ad hoc task per chosen profile ("Todos" means every active profile now); repeating creates one definition ("Todos" keeps `assignedTo: []`, which includes future profiles, and the form says so). Editing a definition does not offer "once". Management keeps only the list of definitions. `newTask.ts` and the creation half of `taskDefs.ts` are gone.
+
 ## [0.7.6] — 2026-10-21
 
 Closes release 0.7.
