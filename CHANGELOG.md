@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.9.1] — 2026-10-23
+
+### Changed
+
+- `firebase/firestore.rules` for tokens and retiring (ADR 0008 and 0009), with no change in `src/`, so the app behaves as 0.8. A profile's `tokens` change only by `increment()` in the batch that completes the task named in `tokensFrom` (by that task's `tokens`, 1–10) or creates the reward named in `tokensFor` (by its `price`, 1–200), and never below 0. A reward may now be bought (created opened, with a `price`, together with its collectible). A task may move from `open` to `retired`, by an admin or by the owner on an ad hoc task they made for themselves. The party size is checked only when `partyIds` changes, and a party above a lowered size may only lose members. The 0.8 completion path is kept, and never together with tokens.
+- New rules tests for earning, the 0.8 path, spending (including a double spend), the party above a lowered size and retiring. **The product owner must publish the rules** (`firebase deploy --only firestore:rules`) before 0.9.5 is pushed.
+
 ## [0.8.10] — 2026-10-22
 
 ### Added

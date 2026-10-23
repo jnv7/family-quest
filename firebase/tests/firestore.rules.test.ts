@@ -16,6 +16,7 @@ import {
   getDoc,
   getDocs,
   collection,
+  increment,
   query,
   setDoc,
   updateDoc,
@@ -514,5 +515,337 @@ describe('collectibles', () => {
     await assertSucceeds(getDoc(doc(as(CHILD2), p('collectibles', 'tChildDone'))));
     await assertSucceeds(updateDoc(doc(as(ADMIN), p('collectibles', 'tChildDone')), { nickname: 'Kind name' }));
     await assertFails(updateDoc(doc(as(ADMIN), p('collectibles', 'tChildDone')), { reserveAt: now }));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 0.9: tokens (ADR 0008) and retiring (ADR 0009)
+
+async function seedDoc(path: string, data: Record<string, unknown>) {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore() as unknown as Firestore, path), data);
+  });
+}
+
+const setBalance = (profileId: string, tokens: number) =>
+  seedDoc(p('profiles', profileId), profile(profileId === 'pChild' ? 'Child' : 'Child two', 'child', { tokens }));
+
+describe('earning tokens', () => {
+  const done = (tokens: number) => ({ ...completion, tokens });
+
+  async function earn(uid: string, taskId: string, tokens: number, ownTokens = tokens, profileId = 'pChild', from = taskId) {
+    const db = as(uid);
+    const batch = writeBatch(db);
+    batch.update(doc(db, p('tasks', taskId)), done(tokens));
+    batch.update(doc(db, p('profiles', profileId)), { tokens: increment(ownTokens), tokensFrom: from });
+    return batch.commit();
+  }
+
+  it('the owner completes a task and gets its tokens in one batch', async () => {
+    await assertSucceeds(earn(CHILD, 'tChildOpen', 2));
+    await assertSucceeds(earn(CHILD, 'tChildBig', 1));
+  });
+
+  it('a question task earns tokens with the answer', async () => {
+    const db = as(CHILD);
+    const batch = writeBatch(db);
+    batch.update(doc(db, p('tasks', 'tChildQuestion')), { ...done(2), answer: 'yes' });
+    batch.update(doc(db, p('profiles', 'pChild')), { tokens: increment(2), tokensFrom: 'tChildQuestion' });
+    await assertSucceeds(batch.commit());
+  });
+
+  it('tokens on the task without the increment on the profile are refused', async () => {
+    await assertFails(updateDoc(doc(as(CHILD), p('tasks', 'tChildOpen')), done(2)));
+  });
+
+  it('the increment without the task is refused', async () => {
+    await assertFails(updateDoc(doc(as(CHILD), p('profiles', 'pChild')), { tokens: increment(2), tokensFrom: 'tChildOpen' }));
+  });
+
+  it("an increment that differs from the task's tokens is refused", async () => {
+    await assertFails(earn(CHILD, 'tChildOpen', 2, 3));
+    await assertFails(earn(CHILD, 'tChildOpen', 2, 1));
+  });
+
+  it('tokens of 0 or 11 are refused', async () => {
+    await assertFails(earn(CHILD, 'tChildOpen', 0));
+    await assertFails(earn(CHILD, 'tChildOpen', 11));
+    await assertSucceeds(earn(CHILD, 'tChildOpen', 10));
+  });
+
+  it('a balance written as a plain value is refused', async () => {
+    const db = as(CHILD);
+    const batch = writeBatch(db);
+    batch.update(doc(db, p('tasks', 'tChildOpen')), done(2));
+    batch.update(doc(db, p('profiles', 'pChild')), { tokens: 99, tokensFrom: 'tChildOpen' });
+    await assertFails(batch.commit());
+  });
+
+  it('tokensFrom naming a task that was already done is refused', async () => {
+    const db = as(CHILD);
+    await assertFails(updateDoc(doc(db, p('profiles', 'pChild')), { tokens: increment(2), tokensFrom: 'tChildDone' }));
+  });
+
+  it("tokensFrom naming another profile's task is refused", async () => {
+    await seedDoc(p('tasks', 'tChild2Open'), openTask('pChild2'));
+    const db = as(CHILD);
+    const batch = writeBatch(db);
+    batch.update(doc(db, p('tasks', 'tChild2Open')), done(2));
+    batch.update(doc(db, p('profiles', 'pChild')), { tokens: increment(2), tokensFrom: 'tChild2Open' });
+    await assertFails(batch.commit());
+  });
+
+  it("nobody earns for someone else's profile", async () => {
+    await seedDoc(p('tasks', 'tChild2Open'), openTask('pChild2'));
+    await assertFails(earn(ADMIN, 'tChild2Open', 2, 2, 'pChild2'));
+    await assertFails(earn(CHILD, 'tChild2Open', 2, 2, 'pChild2'));
+  });
+
+  it('the profile changes nothing else together with tokens', async () => {
+    const db = as(CHILD);
+    const batch = writeBatch(db);
+    batch.update(doc(db, p('tasks', 'tChildOpen')), done(2));
+    batch.update(doc(db, p('profiles', 'pChild')), { tokens: increment(2), tokensFrom: 'tChildOpen', displayName: 'Rich' });
+    await assertFails(batch.commit());
+  });
+});
+
+describe('the 0.8 completion path', () => {
+  const reward = { profileId: 'pChild', weekKey: '2026-W42', tier: 'mid', openedAt: null, ...meta };
+
+  it('completing with a reward and no tokens still works', async () => {
+    const db = as(CHILD);
+    const batch = writeBatch(db);
+    batch.update(doc(db, p('tasks', 'tChildOpen')), completion);
+    batch.set(doc(db, p('rewards', 'tChildOpen')), reward);
+    await assertSucceeds(batch.commit());
+  });
+
+  it('a reward together with tokens is refused', async () => {
+    const db = as(CHILD);
+    const batch = writeBatch(db);
+    batch.update(doc(db, p('tasks', 'tChildOpen')), { ...completion, tokens: 2 });
+    batch.update(doc(db, p('profiles', 'pChild')), { tokens: increment(2), tokensFrom: 'tChildOpen' });
+    batch.set(doc(db, p('rewards', 'tChildOpen')), reward);
+    await assertFails(batch.commit());
+  });
+});
+
+describe('spending tokens', () => {
+  const bought = (price: number, extra: Record<string, unknown> = {}) => ({
+    profileId: 'pChild',
+    weekKey: '2026-W42',
+    tier: 'mid',
+    price,
+    openedAt: now,
+    ...meta,
+    ...extra,
+  });
+  const collectible = {
+    profileId: 'pChild',
+    slot: 'slot-01',
+    tier: 'mid',
+    nickname: null,
+    obtainedWeekKey: '2026-W42',
+    obtainedAt: now,
+    reserveAt: null,
+    ...meta,
+  };
+
+  interface BuyOptions {
+    price?: number;
+    take?: number;
+    rewardId?: string;
+    profileId?: string;
+    reward?: Record<string, unknown>;
+    withCollectible?: boolean;
+    withTokens?: boolean;
+  }
+
+  async function buy(
+    uid: string,
+    { price = 12, take = price, rewardId = 'rBought', profileId = 'pChild', reward = bought(price), withCollectible = true, withTokens = true }: BuyOptions = {},
+  ) {
+    const db = as(uid);
+    const batch = writeBatch(db);
+    if (withTokens) batch.update(doc(db, p('profiles', profileId)), { tokens: increment(-take), tokensFor: rewardId });
+    batch.set(doc(db, p('rewards', rewardId)), reward);
+    if (withCollectible) batch.set(doc(db, p('collectibles', rewardId)), collectible);
+    return batch.commit();
+  }
+
+  it('the owner buys with exactly its balance, which leaves 0', async () => {
+    await setBalance('pChild', 12);
+    await assertSucceeds(buy(CHILD));
+  });
+
+  it('spending more than the balance is refused', async () => {
+    await setBalance('pChild', 11);
+    await assertFails(buy(CHILD));
+  });
+
+  it('the same purchase twice, prepared from the same state, is refused the second time', async () => {
+    await setBalance('pChild', 25);
+    await assertSucceeds(buy(CHILD, { price: 25, rewardId: 'rFirst' }));
+    await assertFails(buy(CHILD, { price: 25, rewardId: 'rSecond' }));
+  });
+
+  it('a purchase without its collectible is refused', async () => {
+    await setBalance('pChild', 25);
+    await assertFails(buy(CHILD, { withCollectible: false }));
+  });
+
+  it('a bought reward without the decrement is refused', async () => {
+    await setBalance('pChild', 25);
+    await assertFails(buy(CHILD, { withTokens: false }));
+  });
+
+  it('a decrement that differs from the price is refused', async () => {
+    await setBalance('pChild', 25);
+    await assertFails(buy(CHILD, { price: 12, take: 5 }));
+    await assertFails(buy(CHILD, { price: 12, take: 20 }));
+  });
+
+  it("a device spending another profile's tokens is refused", async () => {
+    await setBalance('pChild2', 25);
+    await assertFails(buy(CHILD, { profileId: 'pChild2', reward: bought(12, { profileId: 'pChild2' }) }));
+  });
+
+  it("an admin spending a child's tokens is refused", async () => {
+    await setBalance('pChild', 25);
+    await assertFails(buy(ADMIN));
+  });
+
+  it('a price of 0 or 201 is refused', async () => {
+    await setBalance('pChild', 300);
+    await assertFails(buy(CHILD, { price: 0 }));
+    await assertFails(buy(CHILD, { price: 201 }));
+  });
+
+  it('a non-integer price is refused', async () => {
+    await setBalance('pChild', 25);
+    await assertFails(buy(CHILD, { price: 12.5, take: 12.5 }));
+  });
+
+  it('a bought reward replacing an existing reward is refused', async () => {
+    await setBalance('pChild', 25);
+    await assertFails(buy(CHILD, { rewardId: 'tChildDone' }));
+  });
+
+  it('a bought reward is never updated', async () => {
+    await setBalance('pChild', 25);
+    await assertSucceeds(buy(CHILD));
+    await assertFails(updateDoc(doc(as(CHILD), p('rewards', 'rBought')), { openedAt: now }));
+  });
+
+  it('a bought reward must be created already opened', async () => {
+    await setBalance('pChild', 25);
+    await assertFails(buy(CHILD, { reward: bought(12, { openedAt: null }) }));
+  });
+
+  it('the collectible of a bought reward must match its tier and owner', async () => {
+    await setBalance('pChild', 25);
+    const db = as(CHILD);
+    const batch = writeBatch(db);
+    batch.update(doc(db, p('profiles', 'pChild')), { tokens: increment(-12), tokensFor: 'rBought' });
+    batch.set(doc(db, p('rewards', 'rBought')), bought(12));
+    batch.set(doc(db, p('collectibles', 'rBought')), { ...collectible, tier: 'high' });
+    await assertFails(batch.commit());
+  });
+
+  it('a collectible alone, for a reward that does not exist, is refused', async () => {
+    await assertFails(setDoc(doc(as(CHILD), p('collectibles', 'rNothing')), collectible));
+  });
+});
+
+describe('the party above a lowered size', () => {
+  async function lowerSizeTo(size: number) {
+    await seedDoc(p(), { name: 'Test world', themeId: 'minimal', createdBy: ADMIN, ruleset: { ...ruleset, partySize: size }, ...meta });
+    await seedDoc(p('profiles', 'pChild'), profile('Child', 'child', { partyIds: ['a', 'b', 'c'] }));
+  }
+
+  it('the owner can still earn tokens', async () => {
+    await lowerSizeTo(2);
+    const db = as(CHILD);
+    const batch = writeBatch(db);
+    batch.update(doc(db, p('tasks', 'tChildOpen')), { ...completion, tokens: 2 });
+    batch.update(doc(db, p('profiles', 'pChild')), { tokens: increment(2), tokensFrom: 'tChildOpen' });
+    await assertSucceeds(batch.commit());
+  });
+
+  it('the owner can remove a member', async () => {
+    await lowerSizeTo(2);
+    await assertSucceeds(updateDoc(doc(as(CHILD), p('profiles', 'pChild')), { partyIds: ['a', 'b'] }));
+    await assertSucceeds(updateDoc(doc(as(CHILD), p('profiles', 'pChild')), { partyIds: ['c', 'a'] }));
+  });
+
+  it('the owner cannot swap one in, or grow', async () => {
+    await lowerSizeTo(2);
+    await assertFails(updateDoc(doc(as(CHILD), p('profiles', 'pChild')), { partyIds: ['a', 'b', 'x'] }));
+    await assertFails(updateDoc(doc(as(CHILD), p('profiles', 'pChild')), { partyIds: ['a', 'b', 'c', 'd'] }));
+  });
+
+  it('a party within the size still changes freely', async () => {
+    await assertSucceeds(updateDoc(doc(as(CHILD), p('profiles', 'pChild')), { partyIds: ['a', 'b', 'c', 'd', 'e'] }));
+  });
+});
+
+describe('retiring tasks', () => {
+  const retire = (uid: string, taskId: string, extra: Record<string, unknown> = {}) =>
+    updateDoc(doc(as(uid), p('tasks', taskId)), {
+      status: 'retired',
+      retiredAt: now,
+      retiredBy: uid === ADMIN ? 'pAdult' : uid === CHILD ? 'pChild' : 'pChild2',
+      ...extra,
+    });
+
+  it("an admin retires anyone's open task, recurring or not", async () => {
+    await assertSucceeds(retire(ADMIN, 'tChildOpen'));
+    await assertSucceeds(retire(ADMIN, 'tAdultOpen'));
+    await assertSucceeds(retire(ADMIN, 'defBig_2026-W42_pChild'));
+  });
+
+  it('a child retires its own ad hoc task made by itself', async () => {
+    await assertSucceeds(retire(CHILD, 'tChildOpen'));
+  });
+
+  it('a child cannot retire a task an adult gave, or a recurring one', async () => {
+    await seedDoc(p('tasks', 'tGiven'), openTask('pChild', { createdBy: 'pAdult' }));
+    await assertFails(retire(CHILD, 'tGiven'));
+    await assertFails(retire(CHILD, 'defBig_2026-W42_pChild'));
+  });
+
+  it("a child cannot retire someone else's task", async () => {
+    await assertFails(retire(CHILD2, 'tChildOpen'));
+    await assertFails(retire(CHILD, 'tAdultOpen'));
+  });
+
+  it('retiredBy must be the active profile, and retiredAt a timestamp', async () => {
+    await assertFails(retire(ADMIN, 'tChildOpen', { retiredBy: 'pAdult2' }));
+    await assertFails(retire(ADMIN, 'tChildOpen', { retiredAt: 'today' }));
+  });
+
+  it('nothing else changes with it', async () => {
+    await assertFails(retire(ADMIN, 'tChildOpen', { title: 'Other' }));
+    await assertFails(retire(ADMIN, 'tChildOpen', { tokens: 3 }));
+    await assertFails(retire(CHILD, 'tChildOpen', { weekKey: '2026-W42' }));
+  });
+
+  it('a done or retired task cannot be retired', async () => {
+    await assertFails(retire(ADMIN, 'tChildDone'));
+    await assertSucceeds(retire(ADMIN, 'tChildOpen'));
+    await assertFails(retire(ADMIN, 'tChildOpen', { retiredAt: Timestamp.fromMillis(Date.UTC(2026, 9, 19)) }));
+  });
+
+  it('a retired task can never be completed or edited', async () => {
+    await assertSucceeds(retire(ADMIN, 'tChildOpen'));
+    await assertFails(updateDoc(doc(as(CHILD), p('tasks', 'tChildOpen')), completion));
+    await assertFails(updateDoc(doc(as(ADMIN), p('tasks', 'tChildOpen')), { title: 'Back again' }));
+    await assertFails(updateDoc(doc(as(ADMIN), p('tasks', 'tChildOpen')), { status: 'open' }));
+  });
+
+  it('retired fields cannot be set when a task is created', async () => {
+    await assertFails(setDoc(doc(as(CHILD), p('tasks', 'tNew')), openTask('pChild', { retiredAt: now })));
+    await assertFails(setDoc(doc(as(CHILD), p('tasks', 'tNew')), openTask('pChild', { tokens: 2 })));
   });
 });
