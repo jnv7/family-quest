@@ -90,3 +90,34 @@ export function parseJoinInput(input: string): JoinTarget | null {
   const themeId = link?.[2] ?? null;
   return /^[A-Za-z0-9]+$/.test(worldId) && worldId.length >= LIMITS.worldIdMinLength ? { worldId, themeId } : null;
 }
+
+/**
+ * What an iPhone's home screen app is given to start already in its world (ADR 0014): the world code and the profile
+ * of the device it was added from, in the query of the address (`?join=<worldId>.<profileId>`). The ids are
+ * letters and digits. The code is no more exposed than in a join link: anyone who has it can already join and
+ * choose any profile (ADR 0003).
+ */
+export interface Carry {
+  worldId: WorldId;
+  profileId: string;
+}
+
+const CARRY_PARAM = 'join';
+
+export function parseCarry(search: string): Carry | null {
+  const match = /^([A-Za-z0-9]+)\.([A-Za-z0-9]+)$/.exec(new URLSearchParams(search).get(CARRY_PARAM) ?? '');
+  return match && match[1]!.length >= LIMITS.worldIdMinLength ? { worldId: match[1]!, profileId: match[2]! } : null;
+}
+
+/** `search` with the carry and the theme set, or, for `null`, with the carry taken out. Other parameters stay. */
+export function carrySearch(search: string, carry: (Carry & { themeId: string }) | null): string {
+  const params = new URLSearchParams(search);
+  if (carry) {
+    params.set(CARRY_PARAM, `${carry.worldId}.${carry.profileId}`);
+    params.set('theme', carry.themeId);
+  } else {
+    params.delete(CARRY_PARAM);
+  }
+  const text = params.toString();
+  return text ? `?${text}` : '';
+}

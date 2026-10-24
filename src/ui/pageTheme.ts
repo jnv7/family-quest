@@ -27,11 +27,12 @@ function meta(doc: Document, name: string): HTMLMetaElement {
  * a join link, the choice when creating a world, or the world itself), never
  * from the bare address, so the app is never installed with the wrong name.
  * iOS never updates an installed icon, hence this has to happen before installing.
- * `assetBase` is the app's base path, such as `/family-quest/`.
+ * `assetBase` is the app's base path, such as `/family-quest/`. `options.manifest` is false on iOS.
  */
-export function applyThemeToPage(doc: Document, theme: Theme, assetBase: string): void {
+export function applyThemeToPage(doc: Document, theme: Theme, assetBase: string, options: { manifest?: boolean } = {}): void {
   doc.title = theme.install.name;
-  link(doc, 'manifest').href = `${assetBase}${manifestPath(theme.id)}`;
+  // An iPhone's home screen app starts at the address it was added from only without a manifest (ADR 0014).
+  if (options.manifest ?? true) link(doc, 'manifest').href = `${assetBase}${manifestPath(theme.id)}`;
   link(doc, 'apple-touch-icon').href = `${assetBase}${installIconPath(theme.id, 'apple')}`;
   meta(doc, 'apple-mobile-web-app-title').content = theme.install.name;
   meta(doc, 'theme-color').content = theme.install.themeColor;

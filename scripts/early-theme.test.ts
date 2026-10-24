@@ -5,13 +5,14 @@ import { earlyThemeData, earlyThemeScript } from './early-theme';
 const data = earlyThemeData({ base: '/family-quest/', themesDir: 'src/themes', installName: 'Family Quest', themeColor: '#1f2a44' });
 
 /** Runs the inline script the way the browser does: against the page, the address and the storage. */
-function run(options: { search?: string; hash?: string; storage?: Record<string, string> | 'broken' }) {
+function run(options: { search?: string; hash?: string; storage?: Record<string, string> | 'broken'; ios?: boolean }) {
   const storage = options.storage;
   const localStorage =
     storage === 'broken'
       ? { getItem: () => { throw new Error('blocked'); } }
       : { getItem: (key: string) => (storage ?? {})[key] ?? null };
-  new Function('document', 'location', 'localStorage', earlyThemeScript(data))(document, { search: options.search ?? '', hash: options.hash ?? '' }, localStorage);
+  const navigator = { userAgent: options.ios ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)' : 'Mozilla/5.0 (Linux; Android 14)', platform: 'Linux', maxTouchPoints: 5 };
+  new Function('document', 'location', 'localStorage', 'navigator', earlyThemeScript(data))(document, { search: options.search ?? '', hash: options.hash ?? '' }, localStorage, navigator);
   const attr = (selector: string, name: string) => document.head.querySelector(selector)?.getAttribute(name);
   return {
     title: document.title,
@@ -64,6 +65,12 @@ describe('the early theme script', () => {
       document.head.replaceChildren();
       expect(run(options).manifest, JSON.stringify(options)).toBe('/family-quest/manifest.webmanifest');
     }
+  });
+
+  it('writes no manifest on an iPhone, so a home screen app starts at the address it was added from', () => {
+    const page = run({ search: '?theme=pirates', ios: true });
+    expect(page.manifest).toBeUndefined();
+    expect(page).toMatchObject({ title: 'Ilha dos Piratas', iosTitle: 'Ilha dos Piratas', icon: '/family-quest/themes/pirates/apple-touch-icon.png' });
   });
 
   it('calls the pirate app "Ilha dos Piratas"', () => {

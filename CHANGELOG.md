@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.10.11] — 2026-10-24
+
+### Added (the product owner's request, ADR 0014, *proposed*)
+
+- **iPhone: add to the home screen from the world, and open already in it.** In a Safari tab, while a world and a profile are active, the page address now carries them (`?join=`, with the theme); an app added to the home screen from that tab starts with them, joins the world, takes the profile and opens on the map, with no new join. To let the address reach the new app, the iPhone page no longer has a web app manifest (the name, icon and colour still come from the tags). A start at the join link of the world the app is already in goes to the map instead of joining again. The text of the join screen on an iPhone now says to add the page to the home screen. **Not verified on a device**; if it does not work, the app starts as before and the join screen keeps the paste.
+
 ## [0.10.10] — 2026-10-24
 
 ### Fixed (the product owner's report)

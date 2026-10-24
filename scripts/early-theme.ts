@@ -66,7 +66,9 @@ d.title=page.name;
 function put(tag,key,value,attrs){var e=d.createElement(tag);for(var k in attrs)e.setAttribute(k,attrs[k]);e.setAttribute(key,value);d.head.appendChild(e)}
 put('meta','content',page.name,{name:'apple-mobile-web-app-title'});
 put('meta','content',page.themeColor,{name:'theme-color'});
-put('link','href',page.manifest,{rel:'manifest'});
+// An iPhone's home screen app starts at the address it was added from only without a manifest (ADR 0014).
+var ios=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+if(!ios)put('link','href',page.manifest,{rel:'manifest'});
 put('link','href',page.appleIcon,{rel:'apple-touch-icon'});
 })(document,${JSON.stringify(data)});`;
 }

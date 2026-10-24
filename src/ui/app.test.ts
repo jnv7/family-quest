@@ -8,7 +8,9 @@ import { listThemes, loadTheme, type Theme } from '../theme';
 import { startApp } from './app';
 import type { Installer, InstallMode, Platform } from './install';
 import type { Build } from '../core/build';
+import type { CarryWriter } from './carry';
 import { memoryNavigation } from './navigation';
+import type { Carry } from './routes';
 import { noUpdater, type Updater } from './updates';
 import { createWorldMemory } from './worldMemory';
 
@@ -53,7 +55,7 @@ let stops: Array<() => void> = [];
 /** One device: its own store, remembered world and screen, sharing the backend. */
 async function openDevice(
   uid: string,
-  options: { theme?: Theme; firstTime?: boolean; readOnlyStorage?: boolean; hash?: string; savedWorld?: string; savedTheme?: string; launchTheme?: string; wrap?: (store: DataStore) => DataStore; installer?: Installer; updater?: Updater } = {},
+  options: { theme?: Theme; firstTime?: boolean; readOnlyStorage?: boolean; hash?: string; savedWorld?: string; savedTheme?: string; launchTheme?: string; wrap?: (store: DataStore) => DataStore; installer?: Installer; updater?: Updater; carry?: Carry | null; writeCarry?: CarryWriter } = {},
 ) {
   const storage = new Map<string, string>();
   const world = createWorldMemory({
@@ -71,7 +73,7 @@ async function openDevice(
   document.body.append(root);
   const navigation = memoryNavigation(options.hash ?? '');
   const store = (options.wrap ?? ((s) => s))(createMemoryStore(backend, { uid, clock, randomInt }));
-  stops.push(await startApp({ root, store, theme: options.theme ?? theme, baseUrl: BASE_URL, world, clock, randomInt, navigation, build, updater: options.updater ?? noUpdater, installer: options.installer ?? fakeInstaller(), assetBase: '/family-quest/', later, launchTheme: options.launchTheme ?? null }));
+  stops.push(await startApp({ root, store, theme: options.theme ?? theme, baseUrl: BASE_URL, world, clock, randomInt, navigation, build, updater: options.updater ?? noUpdater, carry: options.carry ?? null, writeCarry: options.writeCarry, installer: options.installer ?? fakeInstaller(), assetBase: '/family-quest/', later, launchTheme: options.launchTheme ?? null }));
 
   const find = (selector: string, text?: string) =>
     [...root.querySelectorAll<HTMLElement>(selector)].find((el) => text === undefined || el.textContent?.includes(text));
@@ -2210,7 +2212,7 @@ describe('installing the app', () => {
       hash: `#/join/${worldId}/minimal`,
       installer: fakeInstaller('ios', { isIos: true }),
     });
-    await safari.see('instala primeiro a app');
+    await safari.see('adiciona esta página ao ecrã principal');
     expect(safari.root.textContent).toContain('Para instalar «Família»'); // themed from the link
     expect(safari.world.get()).toBeNull();
     expect(members()).toBe(before);
@@ -2649,5 +2651,70 @@ describe('"Como instalar"', () => {
     const admin = await screenFor(fakeInstaller('none'));
     await admin.see('Abre este endereço no Chrome (Android) ou no Safari (iPhone)');
     expect(admin.root.textContent).toContain(NOTE);
+  });
+});
+
+describe('a home screen app that starts in the world it was added from (ADR 0014)', () => {
+  const IOS_TAB = () => fakeInstaller('ios', { isIos: true });
+  const IOS_APP = () => fakeInstaller('installed', { isIos: true, isStandalone: true });
+
+  async function worldWithChild() {
+    const { admin, worldId } = await createFamily();
+    await admin.click('button', 'Continuar');
+    await admin.goTo('Pessoas');
+    await admin.type('Nome', 'Sam');
+    admin.submit();
+    await admin.see('Sam');
+    const sam = [...backend.state.get(worldId)!.profiles.values()].find((p) => p.displayName === 'Sam')!;
+    const alex = [...backend.state.get(worldId)!.profiles.values()].find((p) => p.displayName === 'Alex')!;
+    return { admin, worldId, sam, alex };
+  }
+
+  it('keeps the address of an iPhone browser tab carrying its world, profile and theme, and clears it elsewhere', async () => {
+    const { worldId, alex } = await worldWithChild();
+    const written: Array<unknown> = [];
+    const tab = await openDevice('admin-device', { installer: IOS_TAB(), savedWorld: worldId, savedTheme: 'minimal', writeCarry: (c) => void written.push(c) });
+    await tab.see('Olá, Alex!');
+    await vi.waitFor(() => expect(written.at(-1)).toEqual({ worldId, profileId: alex.id, themeId: 'minimal' }));
+
+    const elsewhere: unknown[] = [];
+    const android = await openDevice('admin-device', { installer: fakeInstaller('prompt'), savedWorld: worldId, savedTheme: 'minimal', writeCarry: (c) => void elsewhere.push(c) });
+    await android.see('Olá, Alex!');
+    expect(elsewhere).toEqual([]);
+  });
+
+  it('starts the installed app in the world with the profile it carries, and takes the carry out of the address', async () => {
+    const { worldId, sam } = await worldWithChild();
+    const cleared: unknown[] = [];
+    const app = await openDevice('new-home-screen-app', { installer: IOS_APP(), launchTheme: 'minimal', carry: { worldId, profileId: sam.id }, writeCarry: (c) => void cleared.push(c) });
+    await app.see('Olá, Sam!');
+    expect(app.world.get()).toBe(worldId);
+    expect(cleared).toEqual([null]);
+    expect(app.root.textContent).not.toContain('Quem és tu?');
+  });
+
+  it('does not use the carry in an iPhone browser tab, where a join would be lost, nor when the device already has a world', async () => {
+    const { worldId, sam, alex } = await worldWithChild();
+    const tab = await openDevice('another-phone', { installer: IOS_TAB(), launchTheme: 'minimal', carry: { worldId, profileId: sam.id } });
+    await tab.see('Criar uma família'); // the theme is known from the launch address
+    expect(tab.world.get()).toBeNull();
+
+    const member = await openDevice('admin-device', { installer: IOS_APP(), savedWorld: worldId, savedTheme: 'minimal', carry: { worldId, profileId: sam.id } });
+    await member.see('Olá, Alex!');
+    expect(alex.id).not.toBe(sam.id);
+  });
+
+  it('falls back to the usual start when the carried world cannot be joined', async () => {
+    const { sam } = await worldWithChild();
+    const app = await openDevice('new-home-screen-app', { installer: IOS_APP(), launchTheme: 'minimal', carry: { worldId: 'z'.repeat(24), profileId: sam.id } });
+    await app.see('Criar uma família');
+    expect(app.world.get()).toBeNull();
+  });
+
+  it('opens straight on the map when started at the join link of the world it is already in', async () => {
+    const { worldId } = await worldWithChild();
+    const app = await openDevice('admin-device', { installer: IOS_APP(), savedWorld: worldId, savedTheme: 'minimal', hash: `#/join/${worldId}/minimal` });
+    await app.see('Olá, Alex!');
+    expect(app.navigation.hash()).toBe('#/map');
   });
 });

@@ -6,6 +6,7 @@ import { loadTheme } from './theme';
 import { startApp } from './ui/app';
 import { createInstaller } from './ui/install';
 import { createUpdater, noUpdater, RELOAD_PARAM } from './ui/updates';
+import { carrySearch, parseCarry } from './ui/routes';
 import { browserNavigation } from './ui/navigation';
 import { createWorldMemory } from './ui/worldMemory';
 
@@ -61,5 +62,11 @@ void startApp({
   // In `vite dev` there is no version.json to compare with.
   updater: import.meta.env.DEV ? noUpdater : createUpdater(window, import.meta.env.BASE_URL, __APP_BUILD__),
   launchTheme: new URLSearchParams(location.search).get('theme'),
+  carry: parseCarry(location.search),
+  writeCarry: (carry) => {
+    const url = new URL(location.href);
+    url.search = carrySearch(url.search, carry);
+    history.replaceState(history.state, '', url.toString());
+  },
   assetBase: import.meta.env.BASE_URL,
 });
