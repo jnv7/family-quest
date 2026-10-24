@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.10.7] — 2026-10-24
+
+### Release candidate
+
+- Release 0.10 is complete in code and documentation: `SPEC.md` was checked against the code, `docs/architecture.md` describes the routes, the menu, `Navigation.pushOverlay`, the updater and the build identity, and the plan has the list of what the product owner still checks on a phone (the two-phone install check, "Atualizar" after a deploy, airplane mode, and reading "Como jogar"). There is no rules change in this release: nothing to publish.
+
 ## [0.10.6] — 2026-10-24
 
 ### Changed
