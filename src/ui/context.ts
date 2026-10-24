@@ -1,7 +1,9 @@
+import type { Build } from '../core/build';
 import type { Clock, RandomInt, Uid, WorldId } from '../core/model';
 import { DataStoreError, type DataStore } from '../data/DataStore';
 import type { MessageParams, Theme } from '../theme';
 import type { Installer } from './install';
+import type { Navigation } from './navigation';
 import type { Route } from './routes';
 import type { WorldMemory } from './worldMemory';
 
@@ -21,6 +23,8 @@ export interface AppContext {
   /** Uses another theme, makes the page look like it, and redraws the current screen. */
   setTheme(themeId: string): void;
   installer: Installer;
+  /** The running build, for the version in the menu. */
+  build: Build;
   clock: Clock;
   randomInt: RandomInt;
   /** The signed-in device. */
@@ -30,6 +34,8 @@ export interface AppContext {
   world: WorldMemory;
   /** Interface text: a neutral message filled with the theme's names. */
   text(key: string, params?: MessageParams): string;
+  /** Adds a history entry for an overlay (see `Navigation.pushOverlay`). */
+  pushOverlay: Navigation['pushOverlay'];
   go(route: Route, options?: { replace?: boolean }): void;
   /** Runs `run` after `ms`; the returned function cancels it. Injected so tests control time. */
   later(run: () => void, ms: number): () => void;

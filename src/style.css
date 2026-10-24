@@ -211,13 +211,70 @@ fieldset {
   font-size: 1.4rem;
 }
 
-.bar-actions {
+.menu-button {
+  min-width: 3rem;
+  min-height: 3rem;
+  font-size: 1.4rem;
+}
+
+/* The menu: a panel from the top right, as wide as a phone screen allows (SPEC.md §7). */
+.menu {
+  position: fixed;
+  inset: env(safe-area-inset-top) env(safe-area-inset-right) auto auto;
+  width: min(22rem, 100vw);
+  max-height: 100dvh;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 0 0 0 1rem;
+  background: Canvas;
+  color: CanvasText;
+}
+
+.menu::backdrop {
+  background: rgb(0 0 0 / 0.4);
+}
+
+.menu-panel {
+  display: grid;
+  gap: 0.5rem;
+  padding: 1rem;
+}
+
+.menu-head {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.menu-head h2 {
+  margin: 0;
+}
+
+.menu-close {
+  min-width: 3rem;
+  min-height: 3rem;
+}
+
+.menu-items {
+  display: grid;
   gap: 0.5rem;
 }
 
-.bar-actions button {
-  min-height: 2.5rem;
+.menu-item {
+  min-height: 3rem;
+  text-align: left;
+}
+
+.menu-heading {
+  margin: 0.75rem 0 0;
+  font-size: 0.9rem;
+  opacity: 0.7;
+}
+
+.menu-foot .version {
+  margin: 0.75rem 0 0;
 }
 
 .map {

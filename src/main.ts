@@ -50,6 +50,7 @@ void startApp({
   randomInt: createRandomInt((array) => crypto.getRandomValues(array)),
   navigation: browserNavigation(),
   installer: createInstaller(window),
+  build: __APP_BUILD__,
   launchTheme: new URLSearchParams(location.search).get('theme'),
   assetBase: import.meta.env.BASE_URL,
 });

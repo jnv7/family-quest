@@ -7,12 +7,14 @@ import { createMemoryBackend, createMemoryStore } from '../data/memory';
 import { loadTheme, type Theme } from '../theme';
 import { startApp } from './app';
 import type { Installer, InstallMode, Platform } from './install';
+import type { Build } from '../core/build';
 import { memoryNavigation } from './navigation';
 import { createWorldMemory } from './worldMemory';
 
 const BASE_URL = 'https://example.org/family-quest/';
 const randomInt = createRandomInt((array) => crypto.getRandomValues(array));
 const theme = loadTheme('minimal');
+const build: Build = { version: '0.10.1', builtAt: Date.parse('2026-10-24T12:00:00Z'), commit: 'test' };
 
 /** One clock for every device, so tests can move time. */
 let now = Date.parse('2026-10-20T10:00:00Z');
@@ -62,18 +64,26 @@ async function openDevice(
   if (options.savedTheme) world.setTheme(options.savedTheme);
   const root = document.createElement('main');
   document.body.append(root);
+  const navigation = memoryNavigation(options.hash ?? '');
   const store = (options.wrap ?? ((s) => s))(createMemoryStore(backend, { uid, clock, randomInt }));
-  stops.push(await startApp({ root, store, theme: options.theme ?? theme, baseUrl: BASE_URL, world, clock, randomInt, navigation: memoryNavigation(options.hash ?? ''), installer: options.installer ?? fakeInstaller(), assetBase: '/family-quest/', later, launchTheme: options.launchTheme ?? null }));
+  stops.push(await startApp({ root, store, theme: options.theme ?? theme, baseUrl: BASE_URL, world, clock, randomInt, navigation, build, installer: options.installer ?? fakeInstaller(), assetBase: '/family-quest/', later, launchTheme: options.launchTheme ?? null }));
 
   const find = (selector: string, text?: string) =>
     [...root.querySelectorAll<HTMLElement>(selector)].find((el) => text === undefined || el.textContent?.includes(text));
+  const click = async (selector: string, text: string) => {
+    await vi.waitFor(() => expect(find(selector, text), `${selector} "${text}"`).toBeDefined());
+    find(selector, text)!.click();
+  };
   return {
     root,
     world,
+    navigation,
     find,
-    click: async (selector: string, text: string) => {
-      await vi.waitFor(() => expect(find(selector, text), `${selector} "${text}"`).toBeDefined());
-      find(selector, text)!.click();
+    click,
+    /** Opens the menu (⚙) on the map and taps one of its items. */
+    goTo: async (item: string) => {
+      await click('.menu-button', '⚙');
+      await click('.menu-item', item);
     },
     type: async (label: string, value: string) => {
       const field = () => [...root.querySelectorAll('label')].find((l) => l.textContent?.includes(label))?.querySelector('input');
@@ -133,7 +143,7 @@ describe('creating a world', () => {
 
     await admin.click('button', 'Continuar');
     await admin.see('Olá, Alex!');
-    expect(admin.find('button', 'Gerir')).toBeDefined(); // the creator is admin at once
+    expect(admin.find('.menu-button')).toBeDefined(); // the creator is admin at once
   });
 });
 
@@ -141,7 +151,7 @@ describe('joining a world', () => {
   it('lets a second device join by link, pick a profile and see no management', async () => {
     const { admin, worldId } = await createFamily();
     await admin.click('button', 'Continuar');
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Gerir');
     await admin.type('Nome', 'Sam');
     admin.submit();
     await admin.see('Sam');
@@ -151,7 +161,9 @@ describe('joining a world', () => {
     await vi.waitFor(() => expect(child.find('button.profile', 'Alex')).toBeDefined());
     await child.click('button.profile', 'Sam');
     await child.see('Olá, Sam!');
-    expect(child.find('button', 'Gerir')).toBeUndefined();
+    await child.click('.menu-button', '⚙');
+    await child.see('Como instalar');
+    expect(child.find('.menu-item', 'Gerir')).toBeUndefined();
     expect(child.world.get()).toBe(worldId);
   });
 
@@ -179,7 +191,7 @@ describe('managing profiles', () => {
   it('hides an archived child profile from the picker, and brings it back when reactivated', async () => {
     const { admin, worldId } = await createFamily();
     await admin.click('button', 'Continuar');
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Gerir');
     await admin.type('Nome', 'Sam');
     admin.submit();
     await admin.see('Sam');
@@ -209,7 +221,7 @@ describe('managing recurring tasks', () => {
   async function openRecurring() {
     const { admin, worldId } = await createFamily();
     await admin.click('button', 'Continuar');
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Gerir');
     await admin.type('Nome', 'Sam');
     admin.submit();
     await admin.see('Sam');
@@ -263,7 +275,7 @@ type Device = Awaited<ReturnType<typeof openDevice>>;
 
 /** On the map of an admin device: creates a daily recurring task for everyone, and comes back to the map. */
 async function addRecurring(device: Device, title: string) {
-  await device.click('button', 'Gerir');
+  await device.goTo('Gerir');
   await device.click('button', 'Nova tarefa');
   await device.type('O que é para fazer?', title);
   await pickPeople(device, 'Todos');
@@ -301,11 +313,11 @@ describe('recurring tasks on the board', () => {
     const sam = profileIds.find((p) => p.displayName === 'Sam')!;
     const alex = profileIds.find((p) => p.displayName === 'Alex')!;
 
-    await admin.click('button', 'Trocar de perfil');
+    await admin.goTo('Trocar de perfil');
     await admin.click('button.profile', 'Sam');
     await vi.waitFor(() => expect(tasksOf(worldId).map((t) => t.profileId)).toEqual([sam.id]));
 
-    await admin.click('button', 'Trocar de perfil');
+    await admin.goTo('Trocar de perfil');
     await admin.click('button.profile', 'Alex');
     await vi.waitFor(() => expect(tasksOf(worldId).map((t) => t.profileId).sort()).toEqual([alex.id, sam.id].sort()));
   });
@@ -343,7 +355,7 @@ describe('planning a big task', () => {
   /** A monthly big definition, so the task has until the end of the month (2026-10-31). */
   async function bigTaskFamily() {
     const { admin, worldId } = await familyWithChild();
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Gerir');
     await admin.click('button', 'Nova tarefa');
     await admin.type('O que é para fazer?', 'Limpar a garagem');
     await pickPeople(admin, 'Todos');
@@ -493,7 +505,7 @@ describe('coming back', () => {
 async function familyWithChild() {
   const { admin, worldId } = await createFamily();
   await admin.click('button', 'Continuar');
-  await admin.click('button', 'Gerir');
+  await admin.goTo('Gerir');
   await admin.type('Nome', 'Sam');
   admin.submit();
   await admin.see('Sam');
@@ -522,7 +534,7 @@ describe('the profile picker', () => {
     const { admin, worldId } = await familyWithChild();
     const sam = [...backend.state.get(worldId)!.profiles.values()].find((p) => p.displayName === 'Sam')!;
     sam.avatar.symbol = '🐬';
-    await admin.click('button', 'Trocar de perfil');
+    await admin.goTo('Trocar de perfil');
     await vi.waitFor(() => expect(admin.root.querySelectorAll('button.profile')).toHaveLength(2));
     expect(admin.find('button.profile', 'Sam')?.querySelector('.avatar')?.textContent).toBe('🐬');
     expect(admin.find('button.profile', 'Sam')?.querySelector('.name')?.textContent).toBe('Sam');
@@ -644,7 +656,7 @@ describe('the one task form', () => {
   /** A world with an adult and two children, "Sam" and "Kim"; returns the admin device. */
   async function twoChildren() {
     const { admin, worldId } = await familyWithChild();
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Gerir');
     await admin.type('Nome', 'Kim');
     admin.submit();
     await vi.waitFor(() => expect(admin.root.querySelectorAll('ul.rows li').length).toBeGreaterThanOrEqual(3));
@@ -785,7 +797,7 @@ describe('the board alert for new tasks', () => {
 describe('the adults’ view of the family', () => {
   it('lists the open and recently done tasks of a chosen profile, with no counts, and nothing of the others', async () => {
     const { admin, child } = await familyWithChild();
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Gerir');
     await admin.type('Nome', 'Kim');
     admin.submit();
     await vi.waitFor(() => expect(admin.root.querySelectorAll('ul.rows li').length).toBeGreaterThanOrEqual(3));
@@ -803,7 +815,7 @@ describe('the adults’ view of the family', () => {
     await child.see('Nada para concluir').catch(() => {});
     await vi.waitFor(() => expect([...backend.state.get(admin.world.get()!)!.tasks.values()].some((t) => t.status === 'done')).toBe(true));
 
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Gerir');
     await admin.see('Tarefas por perfil');
     expect(admin.root.textContent).not.toContain('Arrumar o quarto'); // nobody chosen yet
     await admin.click('button.chip', 'Sam');
@@ -953,7 +965,7 @@ describe('the check-in', () => {
       expect(digits(child)).not.toContain('37');
       await child.click('button', 'Voltar');
     }
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Gerir');
     await admin.see('Tarefas por perfil');
     await admin.click('button.chip', 'Sam');
     expect(digits(admin)).not.toContain('37');
@@ -1114,7 +1126,7 @@ describe('retiring a task', () => {
     expect(more(child)).toHaveLength(0); // an adult gave it: the child cannot retire it
 
     await admin.click('button', 'Voltar');
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Gerir');
     await admin.see('Tarefas por perfil');
     await admin.click('button.chip', 'Sam');
     await admin.see('Por engano');
@@ -1698,7 +1710,7 @@ describe('the showcase', () => {
     expect(state(worldId).collectibles.size).toBe(12); // nothing deleted
 
     // An admin changes the size in management, and the showcase of the other device follows.
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Gerir');
     await admin.type('Lugares', '3');
     const field = [...admin.root.querySelectorAll('label')].find((l) => l.textContent?.includes('Lugares'))!;
     field.closest('form')!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
@@ -1831,7 +1843,7 @@ describe('moorings and symbols', () => {
     (boats(child)[1] as HTMLElement).click();
     await child.see('Escolher o meu símbolo');
     await child.click('button', 'Voltar');
-    await child.click('button', 'Trocar de perfil');
+    await child.goTo('Trocar de perfil');
     await child.click('button.profile', 'Sam');
     await vi.waitFor(() => expect(boats(child).map((boat) => boat.tagName)).toEqual(['BUTTON', 'DIV']));
   });
@@ -1913,7 +1925,7 @@ describe('moorings and symbols', () => {
   it('lets an admin choose the symbol of a new profile in the management screen', async () => {
     const { worldId } = await seed([]);
     const admin = await asAdult(worldId);
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Gerir');
     await admin.type('Nome', 'Sam');
     await admin.choose('Símbolo', DOLPHIN);
     admin.submit();
@@ -1935,7 +1947,7 @@ describe('the token rules', () => {
 
   it('shows the rules of the world, saves new ones, and refuses prices that do not rise or values out of range', async () => {
     const { admin, worldId } = await familyWithChild();
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Gerir');
     await admin.see('Recompensas');
     await vi.waitFor(() => expect(inputs(admin).map((input) => input.value)).toEqual(['1', '2', '4', '5', '12', '25']));
 
@@ -1960,7 +1972,7 @@ describe('the token rules', () => {
 
   it('shows the token icon beside every value and the themed noun in the explanation', async () => {
     const { admin } = await familyWithChild();
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Gerir');
     await admin.see('Recompensas');
     expect(rulesForm(admin).querySelectorAll('.token-art')).toHaveLength(6);
     await admin.see(theme.roles.token.plural);
@@ -1985,7 +1997,7 @@ describe('restarting the universe', () => {
     expect(state(worldId).tasks.size).toBeGreaterThan(0);
     expect(state(worldId).taskDefs.size).toBe(1);
 
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Gerir');
     const last = () => [...admin.root.querySelectorAll('section')].at(-1)!;
     await vi.waitFor(() => expect(danger(admin, 'Reiniciar')).toBeDefined()); // the last thing in management
     expect(last().contains(danger(admin, 'Reiniciar')!)).toBe(true);
@@ -2012,7 +2024,7 @@ describe('restarting the universe', () => {
   it('can be cancelled, and a child never sees it', async () => {
     const { admin, child, worldId } = await familyWithChild();
     giveLegacyRewards(worldId, 'Sam', 1);
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Gerir');
     await vi.waitFor(() => expect(danger(admin, 'Reiniciar')).toBeDefined());
     danger(admin, 'Reiniciar')!.click();
     await admin.click('button', 'Cancelar');
@@ -2025,7 +2037,7 @@ describe('restarting the universe', () => {
 describe('the size of the party', () => {
   it('is saved by an admin and refuses 0 and 11', async () => {
     const { admin, worldId } = await familyWithChild();
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Gerir');
     const input = () => [...admin.root.querySelectorAll('label')].find((l) => l.textContent?.includes('Tamanho'))!.querySelector('input')!;
     const form = () => input().closest('form')!;
     await vi.waitFor(() => expect(input().value).toBe('5'));
@@ -2050,7 +2062,7 @@ describe('the size of the party', () => {
       await vi.waitFor(() => expect(profileSam(worldId).partyIds).toHaveLength(i + 1));
     }
 
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Gerir');
     const input = () => [...admin.root.querySelectorAll('label')].find((l) => l.textContent?.includes('Tamanho'))!.querySelector('input')!;
     await vi.waitFor(() => expect(input().value).toBe('5'));
     input().value = '2';
@@ -2158,7 +2170,9 @@ describe('installing the app', () => {
 
     await admin.click('button', 'Continuar');
     await admin.see('Olá, Alex!');
-    expect(admin.find('.bar-actions button', 'Instalar')).toBeDefined();
+    await admin.goTo('Como instalar');
+    await admin.click('button', 'Instalar a app');
+    expect(installer.prompt).toHaveBeenCalledTimes(2);
   });
 
   it('shows the iOS steps with the name of the themed app, and hides the offer once installed', async () => {
@@ -2172,7 +2186,8 @@ describe('installing the app', () => {
 
     const installed = await openDevice('admin-device', { installer: fakeInstaller('installed', { isIos: true, isStandalone: true }), savedWorld: admin.world.get()!, savedTheme: 'minimal' });
     await installed.see('Olá, Alex!');
-    expect(installed.find('.bar-actions button', 'Instalar')).toBeUndefined();
+    await installed.goTo('Como instalar');
+    await installed.see('já está instalada');
   });
 
   it('on iOS in a browser tab, does not join: it explains, and offers to copy the link', async () => {
@@ -2213,5 +2228,98 @@ describe('installing the app', () => {
     await viaPaste.click('button', 'Colar');
     await viaPaste.see('Quem és tu?');
     expect(viaPaste.world.get()).toBe(worldId);
+  });
+});
+
+describe('the menu', () => {
+  const openMenu = async (device: Awaited<ReturnType<typeof openDevice>>) => {
+    await device.click('.menu-button', '⚙');
+    await vi.waitFor(() => expect(device.find('dialog.menu')).toBeDefined());
+  };
+  const itemsOf = (device: Awaited<ReturnType<typeof openDevice>>) =>
+    [...device.root.querySelectorAll('.menu-item, .menu-heading')].map((el) => el.textContent);
+  const isOpen = (device: Awaited<ReturnType<typeof openDevice>>) => (device.find('dialog.menu') as HTMLDialogElement).open;
+
+  async function adultAndChild() {
+    const { admin, worldId } = await createFamily();
+    await admin.click('button', 'Continuar');
+    await admin.goTo('Gerir');
+    await admin.type('Nome', 'Sam');
+    admin.submit();
+    await admin.see('Sam');
+    const child = await openDevice('child-device', { hash: `#/join/${worldId}` });
+    await child.click('button.profile', 'Sam');
+    await child.see('Olá, Sam!');
+    return { admin, child };
+  }
+
+  it('keeps only the greeting and the gear on the map bar', async () => {
+    const { admin } = await createFamily();
+    await admin.click('button', 'Continuar');
+    await admin.see('Olá, Alex!');
+    const bar = admin.find('header.bar')!;
+    expect([...bar.children].map((el) => el.tagName)).toEqual(['H1', 'SPAN']);
+    expect(bar.querySelectorAll(':scope > span > button')).toHaveLength(1);
+    expect(bar.querySelector('button')!.getAttribute('aria-label')).toBe('Menu');
+    expect(bar.textContent).not.toContain('Trocar de perfil');
+    expect(bar.textContent).not.toContain('Gerir');
+  });
+
+  it("gives a child Como instalar and Trocar de perfil, with no Definições", async () => {
+    const { child } = await adultAndChild();
+    await openMenu(child);
+    expect(itemsOf(child)).toEqual(['Como instalar', 'Trocar de perfil']);
+    expect(child.root.textContent).toContain('Versão 0.10.1 · 24/10/2026');
+  });
+
+  it('gives an adult the settings too, with Trocar de perfil always last', async () => {
+    const { admin } = await createFamily();
+    await admin.click('button', 'Continuar');
+    await admin.see('Olá, Alex!');
+    await openMenu(admin);
+    expect(itemsOf(admin)).toEqual(['Como instalar', 'Definições', 'Gerir', 'Trocar de perfil']);
+  });
+
+  it('closes with ✕, with a tap outside, and with the back gesture, and stays on the map', async () => {
+    const { admin } = await createFamily();
+    await admin.click('button', 'Continuar');
+    await admin.see('Olá, Alex!');
+
+    await openMenu(admin);
+    expect(isOpen(admin)).toBe(true);
+    await admin.click('.menu-close', '✕');
+    expect(isOpen(admin)).toBe(false);
+
+    await openMenu(admin);
+    (admin.find('dialog.menu') as HTMLElement).click();
+    expect(isOpen(admin)).toBe(false);
+
+    await openMenu(admin);
+    admin.navigation.back();
+    expect(isOpen(admin)).toBe(false);
+
+    expect(admin.navigation.hash()).toBe('#/map');
+    await admin.see('Olá, Alex!');
+    await vi.waitFor(() => expect(admin.find('.map')).toBeDefined());
+  });
+
+  it('opens the screen of an item, and one back gesture from there returns to the map', async () => {
+    const { admin } = await createFamily();
+    await admin.click('button', 'Continuar');
+    await admin.see('Olá, Alex!');
+    await admin.goTo('Como instalar');
+    await admin.see('Instalar a app');
+    expect(admin.navigation.hash()).toBe('#/install');
+
+    admin.navigation.back();
+    await admin.see('Olá, Alex!');
+    expect(admin.navigation.hash()).toBe('#/map');
+  });
+
+  it('opens the profile picker from Trocar de perfil', async () => {
+    const { admin } = await createFamily();
+    await admin.click('button', 'Continuar');
+    await admin.goTo('Trocar de perfil');
+    await admin.see('Quem és tu?');
   });
 });

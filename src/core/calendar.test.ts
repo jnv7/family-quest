@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addDays, dateKey, isoWeekday, lastDayOfPeriod, monthKey, periodKey, weekKey } from './calendar';
+import { addDays, dateKey, formatBuildDate, isoWeekday, lastDayOfPeriod, monthKey, periodKey, weekKey } from './calendar';
 import type { IsoWeekday } from './model';
 
 const LISBON = 'Europe/Lisbon';
@@ -114,5 +114,21 @@ describe('addDays', () => {
   it('rejects what is not a date key or a whole number of days', () => {
     expect(() => addDays('2026-W43', 1)).toThrow();
     expect(() => addDays('2026-10-18', 1.5)).toThrow(RangeError);
+  });
+});
+
+describe('formatBuildDate', () => {
+  it('writes the Lisbon day as dd/mm/aaaa', () => {
+    expect(formatBuildDate(Date.parse('2026-10-24T12:00:00Z'), 'Europe/Lisbon')).toBe('24/10/2026');
+    expect(formatBuildDate(Date.parse('2026-01-05T09:00:00Z'), 'Europe/Lisbon')).toBe('05/01/2026');
+  });
+
+  it('follows the wall clock around the day the clocks change (25 October 2026)', () => {
+    // Summer time (UTC+1) ends at 01:00 UTC on 25 October.
+    expect(formatBuildDate(Date.parse('2026-10-24T22:59:00Z'), 'Europe/Lisbon')).toBe('24/10/2026');
+    expect(formatBuildDate(Date.parse('2026-10-24T23:30:00Z'), 'Europe/Lisbon')).toBe('25/10/2026'); // 00:30 summer time
+    expect(formatBuildDate(Date.parse('2026-10-25T00:30:00Z'), 'Europe/Lisbon')).toBe('25/10/2026'); // 01:30, first pass
+    expect(formatBuildDate(Date.parse('2026-10-25T23:30:00Z'), 'Europe/Lisbon')).toBe('25/10/2026'); // 23:30 winter time
+    expect(formatBuildDate(Date.parse('2026-10-26T00:30:00Z'), 'Europe/Lisbon')).toBe('26/10/2026');
   });
 });

@@ -10,7 +10,7 @@ export const renderStart: Screen = (ctx, root) => {
       h('button', { class: 'primary', onClick: () => ctx.go({ name: 'create' }) }, ctx.text('start.create')),
       h('button', { onClick: () => ctx.go({ name: 'join', worldId: null, themeId: null }) }, ctx.text('start.join')),
     ),
-    h('p', { class: 'version' }, ctx.text('app.version', { version: __APP_VERSION__ })),
+    h('p', { class: 'version' }, ctx.text('app.version', { version: ctx.build.version })),
   );
   return () => {};
 };

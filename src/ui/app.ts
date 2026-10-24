@@ -1,4 +1,5 @@
 /** Router and boot of the interface (docs/architecture.md §9). Screens render only from observers. */
+import type { Build } from '../core/build';
 import type { Clock, RandomInt } from '../core/model';
 import type { DataStore } from '../data/DataStore';
 import type { Theme } from '../theme';
@@ -38,6 +39,8 @@ export interface AppOptions {
   randomInt: RandomInt;
   navigation: Navigation;
   installer: Installer;
+  /** The running build, shown in the menu. */
+  build: Build;
   /** The theme the app was launched with (`?theme=` in the address of an installed app), if any. */
   launchTheme: string | null;
   /** Schedules a delayed call; defaults to `setTimeout`. Tests pass their own. */
@@ -50,7 +53,7 @@ const NOTICE_MS = 5000;
 
 /** Starts the interface and returns a function that stops it. */
 export async function startApp(options: AppOptions): Promise<() => void> {
-  const { root, store, baseUrl, world, clock, randomInt, navigation, installer, assetBase, launchTheme } = options;
+  const { root, store, baseUrl, world, clock, randomInt, navigation, installer, assetBase, launchTheme, build } = options;
   const later = options.later ?? ((run, ms) => {
     const id = setTimeout(run, ms);
     return () => clearTimeout(id);
@@ -94,6 +97,7 @@ export async function startApp(options: AppOptions): Promise<() => void> {
       if (useTheme(themeId)) render();
     },
     installer,
+    build,
     clock,
     randomInt,
     uid,
@@ -102,6 +106,7 @@ export async function startApp(options: AppOptions): Promise<() => void> {
     text,
     later,
     notify,
+    pushOverlay: (onBack) => navigation.pushOverlay(onBack),
     settle: (settled) => void settled.catch((error: unknown) => reportSettleError(error, notify)),
     go(route, { replace = false } = {}) {
       const hash = hashFor(route);

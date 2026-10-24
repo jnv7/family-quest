@@ -5,7 +5,7 @@ import type { WorldScreen } from '../context';
 import { artElement } from '../art';
 import { h } from '../dom';
 import type { Route } from '../routes';
-import { canOfferInstall } from '../installOffer';
+import { createMenu } from '../menu';
 import { observeSelf } from '../self';
 import type { PlaceRole } from '../../theme/types';
 import { playTransition } from '../transition';
@@ -28,7 +28,7 @@ const DESTINATIONS: Partial<Record<PlaceRole, Route>> = {
 export const renderMap: WorldScreen = (ctx, root, { worldId }) => {
   const { theme } = ctx;
   const title = h('h1');
-  const actions = h('div', { class: 'bar-actions' });
+  const menu = createMenu(ctx, worldId);
   const map = h('div', { class: 'map', style: `--ratio: ${theme.map.aspectRatio}` },
     artElement(theme, theme.map.background, 'map-art'),
   );
@@ -68,7 +68,7 @@ export const renderMap: WorldScreen = (ctx, root, { worldId }) => {
     map.append(button);
   }
 
-  root.append(h('header', { class: 'bar' }, title, actions), map);
+  root.append(h('header', { class: 'bar' }, title, menu.button), map);
 
   /**
    * One boat per profile at the theme's moorings (SPEC.md §7). Only the active profile's own boat
@@ -148,7 +148,7 @@ export const renderMap: WorldScreen = (ctx, root, { worldId }) => {
   let watchedProfile: ProfileId | null = null;
   let stopTasks = () => {};
 
-  const stopSelf = observeSelf(ctx, worldId, ({ profile, profiles, isAdmin }) => {
+  const stopSelf = observeSelf(ctx, worldId, ({ profile, profiles }) => {
     if (!profile) {
       // No active profile (yet, or the choice was refused): pick one.
       ctx.go({ name: 'profiles' }, { replace: true });
@@ -164,10 +164,6 @@ export const renderMap: WorldScreen = (ctx, root, { worldId }) => {
     drawBoats(profiles, profile.id);
     drawPlaceSymbols(profiles);
     title.textContent = ctx.text('map.hello', { name: profile.displayName });
-    const buttons = [h('button', { onClick: () => ctx.go({ name: 'profiles' }) }, ctx.text('map.switch'))];
-    if (canOfferInstall(ctx)) buttons.push(h('button', { onClick: () => ctx.go({ name: 'install' }) }, ctx.text('map.install')));
-    if (isAdmin) buttons.push(h('button', { onClick: () => ctx.go({ name: 'manage' }) }, ctx.text('map.manage')));
-    actions.replaceChildren(...buttons);
   });
   return () => {
     cancelTransition();
@@ -175,5 +171,6 @@ export const renderMap: WorldScreen = (ctx, root, { worldId }) => {
     stopDefs();
     stopWorld();
     stopSelf();
+    menu.dispose();
   };
 };

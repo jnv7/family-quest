@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.10.1] — 2026-10-24
+
+### Added
+
+- **The menu.** The map's bar now holds only the greeting and a gear (⚙). The gear opens a panel with "Como instalar" for everyone, a "Definições" section for adults (for now one item, "Gerir"), and "Trocar de perfil" always last; the buttons the bar used to have are gone. The panel closes with ✕, with a tap outside, and with the system back gesture (`Navigation.pushOverlay`); tapping an item opens its screen, and back from there returns to the map in one step. A child's menu never has "Definições".
+- **The version.** The menu's footer shows "Versão 0.10.1 · 24/10/2026" (`formatBuildDate`, in Lisbon time). Each build publishes `version.json` next to the app (ADR 0012), never cached by the service worker, and injects the same build as `__APP_BUILD__` in place of `__APP_VERSION__`.
+
 ## [0.9.11] — 2026-10-23
 
 ### Added
