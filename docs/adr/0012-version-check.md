@@ -80,3 +80,14 @@ The menu's footer shows "Versão {version} · {date}", with the date of `builtAt
   - the updater with a fake `fetch`: newer, same, older, offline, and broken JSON;
   - the menu footer with a fake updater: the button only when newer, and tapping it calls `apply`;
   - a build test that `dist/version.json` exists, matches `__APP_BUILD__`, and is not in the precache manifest.
+
+## Amendment (0.10.10, 2026-10-24): "Atualizar" no longer depends on the service worker
+
+The product owner found that "Atualizar" did nothing. §3 asked the service worker to update, waited for it to take over, and reloaded. But `version.json` is read under a new address each time (`?t=`), while `sw.js` and `index.html` are not, and GitHub Pages can serve the old ones for some minutes after a deploy. The app then knew a newer build existed, the worker found nothing to update, and the reload came back as the old build.
+
+§3 is replaced by:
+
+1. unregister the service worker and delete its caches;
+2. load the page again from the network under a new address, the same one plus `?v=<time>`, with the hash and the theme kept, so no cache in between can answer for the old page. Once loaded, the app takes `?v=` out of the address.
+
+Nothing is lost: Firestore's own persistent cache and the device's memory of its world are not touched. The new page registers a fresh worker, which caches the new shell as usual. This only runs when the person taps the button, after a check that has just proved there is a connection. The rest of the ADR holds.

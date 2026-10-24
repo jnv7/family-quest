@@ -5,7 +5,7 @@ import type { DataStore } from './data/DataStore';
 import { loadTheme } from './theme';
 import { startApp } from './ui/app';
 import { createInstaller } from './ui/install';
-import { createUpdater, noUpdater } from './ui/updates';
+import { createUpdater, noUpdater, RELOAD_PARAM } from './ui/updates';
 import { browserNavigation } from './ui/navigation';
 import { createWorldMemory } from './ui/worldMemory';
 
@@ -36,6 +36,13 @@ function localStorageOrNull(): Storage | null {
 }
 
 const theme = loadTheme(DEFAULT_THEME_ID);
+
+// "Atualizar" loads the page under a new address (`?v=`); once it is loaded, the address goes back to what it was.
+const reloaded = new URL(location.href);
+if (reloaded.searchParams.has(RELOAD_PARAM)) {
+  reloaded.searchParams.delete(RELOAD_PARAM);
+  history.replaceState(null, '', reloaded.toString());
+}
 
 const root = document.getElementById('app');
 if (!root) throw new Error('Missing #app element');

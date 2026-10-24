@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.10.10] — 2026-10-24
+
+### Fixed (the product owner's report)
+
+- **"Atualizar" did nothing.** It asked the service worker to update, but GitHub Pages can keep serving the old `sw.js` and `index.html` for a few minutes after a deploy (only `version.json` is read under a new address), so the page came back as the old build. Now it removes the service worker and its caches and loads the page again from the network under a new address (`?v=`, taken out again once loaded), keeping the hash and the theme. Nothing is lost: Firestore's cache and the device's world are untouched. ADR 0012 has the amendment.
+
 ## [0.10.9] — 2026-10-24
 
 ### Fixed (the product owner's report)

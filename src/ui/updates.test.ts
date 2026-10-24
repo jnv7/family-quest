@@ -4,16 +4,26 @@ import { createUpdater, type UpdaterWindow } from './updates';
 
 const running: Build = { version: '0.10.5', builtAt: 1_000, commit: 'aaaaaaa' };
 
-function fakeWindow(options: { fetch?: (url: string, init: RequestInit) => Promise<Response>; worker?: boolean } = {}) {
-  const reload = vi.fn();
+function fakeWindow(options: { fetch?: (url: string, init: RequestInit) => Promise<Response>; worker?: boolean; failing?: boolean; href?: string } = {}) {
+  const replace = vi.fn();
   const fetch = vi.fn(options.fetch ?? (async () => new Response(JSON.stringify({ ...running, builtAt: 2_000 }))));
-  let controllerChange: (() => void) | null = null;
-  const registration = { installing: {}, waiting: null, update: vi.fn(async () => {}) };
-  const serviceWorker = options.worker
-    ? { getRegistration: async () => registration, addEventListener: (_: string, listener: () => void) => (controllerChange = listener) }
+  const unregister = vi.fn(async () => {
+    if (options.failing) throw new Error('refused');
+    return true;
+  });
+  const deleted: string[] = [];
+  const serviceWorker = options.worker ? { getRegistrations: async () => [{ unregister }] } : undefined;
+  const caches = options.worker
+    ? {
+        keys: async () => {
+          if (options.failing) throw new Error('refused');
+          return ['workbox-precache', 'runtime'];
+        },
+        delete: async (name: string) => (deleted.push(name), true),
+      }
     : undefined;
-  const win = { fetch, location: { reload }, navigator: { serviceWorker } } as unknown as UpdaterWindow;
-  return { win, fetch, reload, registration, takeOver: () => controllerChange?.() };
+  const win = { fetch, location: { href: options.href ?? 'https://example.org/family-quest/#/map', replace }, navigator: { serviceWorker }, caches } as unknown as UpdaterWindow;
+  return { win, fetch, replace, unregister, deleted };
 }
 
 const respond = (build: unknown) => async () => new Response(JSON.stringify(build));
@@ -82,28 +92,22 @@ describe('the updater', () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
-  it('only reloads when there is no service worker', async () => {
-    const { win, reload } = fakeWindow();
+  it('removes the worker and its caches, then loads the page again under a new address, keeping the hash and the theme', async () => {
+    const { win, replace, unregister, deleted } = fakeWindow({ worker: true, href: 'https://example.org/family-quest/?theme=minimal#/map' });
     await createUpdater(win, '/', running, now).apply();
-    expect(reload).toHaveBeenCalledTimes(1);
+    expect(unregister).toHaveBeenCalledTimes(1);
+    expect(deleted).toEqual(['workbox-precache', 'runtime']);
+    expect(replace).toHaveBeenCalledTimes(1);
+    expect(replace.mock.calls[0]![0]).toBe(`https://example.org/family-quest/?theme=minimal&v=${clock}#/map`);
   });
 
-  it('updates the worker, waits for it to take over, then reloads', async () => {
-    const { win, reload, registration, takeOver } = fakeWindow({ worker: true });
-    const done = createUpdater(win, '/', running, now).apply();
-    await vi.waitFor(() => expect(registration.update).toHaveBeenCalled());
-    expect(reload).not.toHaveBeenCalled();
-    takeOver();
-    await done;
-    expect(reload).toHaveBeenCalledTimes(1);
-  });
+  it('still loads the page again when there is no worker and no caches, or when removing them fails', async () => {
+    const plain = fakeWindow();
+    await createUpdater(plain.win, '/', running, now).apply();
+    expect(plain.replace).toHaveBeenCalledTimes(1);
 
-  it('reloads after 10 seconds even if the worker never takes over', async () => {
-    vi.useFakeTimers();
-    const { win, reload } = fakeWindow({ worker: true });
-    const done = createUpdater(win, '/', running, now).apply();
-    await vi.advanceTimersByTimeAsync(10_000);
-    await done;
-    expect(reload).toHaveBeenCalledTimes(1);
+    const broken = fakeWindow({ worker: true, failing: true });
+    await createUpdater(broken.win, '/', running, now).apply();
+    expect(broken.replace).toHaveBeenCalledTimes(1);
   });
 });

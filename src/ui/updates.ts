@@ -6,7 +6,7 @@ export interface Updater {
   check(): Promise<void>;
   /** Whether the last check found a newer build. */
   available(): boolean;
-  /** Loads the newer build: updates the service worker if there is one, then reloads. */
+  /** Loads the newer build: clears the service worker and its caches, then loads the page again from the network. */
   apply(): Promise<void>;
   onChange(listener: () => void): () => void;
 }
@@ -21,10 +21,11 @@ export const noUpdater: Updater = {
 
 const MIN_GAP_MS = 60_000;
 const FETCH_TIMEOUT_MS = 5000;
-const WORKER_WAIT_MS = 10_000;
+/** The query parameter that makes the address new, so no cache in between can answer for the old page. */
+export const RELOAD_PARAM = 'v';
 
 /** What of a window the updater uses, so tests pass a fake. */
-export type UpdaterWindow = Pick<Window, 'fetch' | 'navigator' | 'location'>;
+export type UpdaterWindow = Pick<Window, 'fetch' | 'navigator' | 'location' | 'caches'>;
 
 export function createUpdater(win: UpdaterWindow, assetBase: string, running: Build, now: () => number = Date.now): Updater {
   const listeners = new Set<() => void>();
@@ -57,20 +58,24 @@ export function createUpdater(win: UpdaterWindow, assetBase: string, running: Bu
     },
     available: () => found,
     async apply() {
-      const container = win.navigator.serviceWorker;
+      // Throw away what the old worker cached and the worker itself, then load the page again from the network
+      // under a new address. Asking the worker to update is not enough: GitHub Pages may still serve the old
+      // `sw.js` and `index.html` for a few minutes after a deploy, and the page would come back as it was.
       try {
-        const registration = await container?.getRegistration();
-        if (registration) {
-          const taken = new Promise<void>((resolve) => container.addEventListener('controllerchange', () => resolve(), { once: true }));
-          await registration.update();
-          if (registration.installing || registration.waiting) {
-            await Promise.race([taken, new Promise<void>((resolve) => setTimeout(resolve, WORKER_WAIT_MS))]);
-          }
-        }
+        const registrations = (await win.navigator.serviceWorker?.getRegistrations()) ?? [];
+        await Promise.all(registrations.map((registration) => registration.unregister()));
       } catch {
-        // Without the worker's help it still reloads: the network serves the new files.
+        // No worker to remove, or it cannot be: the page still loads from the network below.
       }
-      win.location.reload();
+      try {
+        const names = (await win.caches?.keys()) ?? [];
+        await Promise.all(names.map((name) => win.caches.delete(name)));
+      } catch {
+        // Caches may be unavailable (a private window): nothing to clear.
+      }
+      const next = new URL(win.location.href);
+      next.searchParams.set(RELOAD_PARAM, String(now()));
+      win.location.replace(next.toString());
     },
     onChange(listener) {
       listeners.add(listener);
