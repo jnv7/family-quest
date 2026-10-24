@@ -1,6 +1,6 @@
 # 0015 — The join link, with an optional child profile
 
-- **Status:** Proposed (tech lead, 2026-10-24), awaiting the product owner
+- **Status:** Accepted (product owner, 2026-10-24)
 - **Date:** 2026-10-24
 - **Decided by:** product owner (the invite per child: `docs/plans/0.10-product-brief.md` §2.4); the format and the mechanism are the tech lead's proposal
 - **Refines:** ADR 0005 (the themed install flow) and ADR 0014 (a home screen app starts in its world). It replaces neither.

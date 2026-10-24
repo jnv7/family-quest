@@ -1,6 +1,6 @@
 # 0013 — The page is themed from its first line
 
-- **Status:** Proposed (the developer's fix for a bug the product owner reported on 2026-10-24; to be validated by the product owner)
+- **Status:** Accepted (product owner, 2026-10-24)
 - **Date:** 2026-10-24
 - **Decided by:** the developer's proposal; the plan for 0.10 foresaw it (`docs/plans/0.10.md`, delivery 0.10.6, "what to look at first if a phone fails") and asked for an ADR
 - **Refines:** ADR 0005 (the themed install flow)

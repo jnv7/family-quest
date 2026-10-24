@@ -1,6 +1,6 @@
 # 0014 — A home screen app on iPhone starts in its world
 
-- **Status:** Proposed (the developer's proposal for a request of the product owner on 2026-10-24; to be validated by the product owner)
+- **Status:** Accepted (product owner, 2026-10-24)
 - **Date:** 2026-10-24
 - **Decided by:** the developer's proposal, for the request: someone who is already in a world in Safari on an iPhone adds the page to the home screen, and the app should open already in that world, with no new join and no new choice of profile
 - **Refines:** ADR 0005 (the themed install flow)
