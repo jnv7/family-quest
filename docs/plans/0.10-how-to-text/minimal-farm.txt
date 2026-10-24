@@ -1,0 +1,23 @@
+As tuas tarefas
+O painel mostra o que tens para fazer. Quando tem novidades, aparece um balão por cima.
+
+Fazer uma tarefa
+Quando acabares uma tarefa, marca-a como feita no portão. Se houver uma pergunta, responde com verdade. Enganaste-te? Tens uns segundos para desfazer.
+
+Ganhar grãos
+Cada tarefa feita dá grãos: as fáceis dão 1, as médias 2 e as difíceis 4. Nunca se perdem.
+
+Abrir cestos
+No armazém trocas grãos por cestos: custam 5, 12 ou 25. Quanto mais alto o preço, mais raro o que sai. Abres já, ou juntas para um melhor: a escolha é tua.
+
+Rebanho
+Cada cesto traz um animal. Escolhes se entra no rebanho, onde lhe podes dar um nome, ou se vai para o pasto. Cabem 5 no rebanho; se não houver lugar, escolhes quem sai.
+
+Montra
+Na montra ficam os animais que alguém deixou ir, até 10. Quem quiser pode levar um animal para o rebanho. Quando não há lugar, quem lá está há mais tempo vai-se embora para sempre.
+
+Casinha
+Na casinha vês o rebanho e escolhes o teu símbolo.
+
+Para os adultos
+Criam-se tarefas no painel ou nas definições: uma vez ou a repetir, para uma ou mais pessoas. A dificuldade decide o que a tarefa dá em grãos. As definições estão na roda dentada, em cima à direita. Ninguém vê o que os outros têm, nem quanto ganharam.

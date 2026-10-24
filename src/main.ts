@@ -5,6 +5,7 @@ import type { DataStore } from './data/DataStore';
 import { formatMessage, loadTheme } from './theme';
 import { startApp } from './ui/app';
 import { createInstaller } from './ui/install';
+import { createUpdater, noUpdater } from './ui/updates';
 import { browserNavigation } from './ui/navigation';
 import { createWorldMemory } from './ui/worldMemory';
 
@@ -51,6 +52,8 @@ void startApp({
   navigation: browserNavigation(),
   installer: createInstaller(window),
   build: __APP_BUILD__,
+  // In `vite dev` there is no version.json to compare with.
+  updater: import.meta.env.DEV ? noUpdater : createUpdater(window, import.meta.env.BASE_URL, __APP_BUILD__),
   launchTheme: new URLSearchParams(location.search).get('theme'),
   assetBase: import.meta.env.BASE_URL,
 });

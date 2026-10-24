@@ -25,6 +25,7 @@ export function createMenu(ctx: AppContext, worldId: WorldId): { button: HTMLEle
 
   const itemsFor = (): Array<Item | { heading: string }> => {
     const items: Array<Item | { heading: string }> = [
+      { label: ctx.text('menu.howTo'), route: { name: 'howTo' } },
       { label: ctx.text('menu.install'), route: { name: 'install' } },
     ];
     if (isAdmin) {
@@ -56,6 +57,7 @@ export function createMenu(ctx: AppContext, worldId: WorldId): { button: HTMLEle
         ),
         h('footer', { class: 'menu-foot' },
           h('p', { class: 'version' }, ctx.text('menu.version', { version: ctx.build.version, date: formatBuildDate(ctx.build.builtAt, DEFAULT_RULESET.timezone) })),
+          ctx.updater.available() && h('button', { type: 'button', class: 'menu-update', onClick: () => void ctx.updater.apply() }, ctx.text('menu.update')),
         ),
       ),
     );
@@ -74,6 +76,7 @@ export function createMenu(ctx: AppContext, worldId: WorldId): { button: HTMLEle
       hide();
     });
     draw();
+    void ctx.updater.check();
   }
 
   /** Closed from the app (✕, the backdrop): the history entry goes too. */
@@ -105,12 +108,14 @@ export function createMenu(ctx: AppContext, worldId: WorldId): { button: HTMLEle
     isAdmin = self.isAdmin;
     draw();
   });
+  const stopUpdater = ctx.updater.onChange(draw);
   const host = h('span', { class: 'menu-host' }, button, dialog);
 
   return {
     button: host,
     dispose() {
       stopSelf();
+      stopUpdater();
       const end = endOverlay;
       endOverlay = null;
       end?.({ keepEntry: true }); // the screen is going away: leave the history to whoever navigates

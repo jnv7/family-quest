@@ -4,11 +4,12 @@ import type { Tier } from '../core/model';
 import { createRandomInt } from '../core/random';
 import { DataStoreError, type DataStore } from '../data/DataStore';
 import { createMemoryBackend, createMemoryStore } from '../data/memory';
-import { loadTheme, type Theme } from '../theme';
+import { listThemes, loadTheme, type Theme } from '../theme';
 import { startApp } from './app';
 import type { Installer, InstallMode, Platform } from './install';
 import type { Build } from '../core/build';
 import { memoryNavigation } from './navigation';
+import { noUpdater, type Updater } from './updates';
 import { createWorldMemory } from './worldMemory';
 
 const BASE_URL = 'https://example.org/family-quest/';
@@ -38,7 +39,7 @@ const runTimers = () => {
 /** An installer that lets a test choose the platform and what can be offered. */
 function fakeInstaller(mode: InstallMode = 'none', platform: Partial<Platform> = {}) {
   const installer: Installer & { prompt: ReturnType<typeof vi.fn> } = {
-    platform: { isIos: false, isStandalone: false, ...platform },
+    platform: { isIos: false, isAndroid: false, isStandalone: false, ...platform },
     mode: () => mode,
     prompt: vi.fn(async () => {}),
     onChange: () => () => {},
@@ -52,12 +53,16 @@ let stops: Array<() => void> = [];
 /** One device: its own store, remembered world and screen, sharing the backend. */
 async function openDevice(
   uid: string,
-  options: { theme?: Theme; hash?: string; savedWorld?: string; savedTheme?: string; launchTheme?: string; wrap?: (store: DataStore) => DataStore; installer?: Installer } = {},
+  options: { theme?: Theme; firstTime?: boolean; readOnlyStorage?: boolean; hash?: string; savedWorld?: string; savedTheme?: string; launchTheme?: string; wrap?: (store: DataStore) => DataStore; installer?: Installer; updater?: Updater } = {},
 ) {
   const storage = new Map<string, string>();
   const world = createWorldMemory({
-    getItem: (k) => storage.get(k) ?? null,
-    setItem: (k, v) => void storage.set(k, v),
+    // "Como jogar" opens by itself on a profile's first visit; tests skip it unless they ask for it.
+    getItem: (k) => (!options.firstTime && k.startsWith('fq.howToSeen.') ? '1' : storage.get(k) ?? null),
+    setItem: (k, v) => {
+      if (options.readOnlyStorage) throw new Error('read-only');
+      storage.set(k, v);
+    },
     removeItem: (k) => void storage.delete(k),
   });
   if (options.savedWorld) world.set(options.savedWorld);
@@ -66,7 +71,7 @@ async function openDevice(
   document.body.append(root);
   const navigation = memoryNavigation(options.hash ?? '');
   const store = (options.wrap ?? ((s) => s))(createMemoryStore(backend, { uid, clock, randomInt }));
-  stops.push(await startApp({ root, store, theme: options.theme ?? theme, baseUrl: BASE_URL, world, clock, randomInt, navigation, build, installer: options.installer ?? fakeInstaller(), assetBase: '/family-quest/', later, launchTheme: options.launchTheme ?? null }));
+  stops.push(await startApp({ root, store, theme: options.theme ?? theme, baseUrl: BASE_URL, world, clock, randomInt, navigation, build, updater: options.updater ?? noUpdater, installer: options.installer ?? fakeInstaller(), assetBase: '/family-quest/', later, launchTheme: options.launchTheme ?? null }));
 
   const find = (selector: string, text?: string) =>
     [...root.querySelectorAll<HTMLElement>(selector)].find((el) => text === undefined || el.textContent?.includes(text));
@@ -77,6 +82,7 @@ async function openDevice(
   return {
     root,
     world,
+    store,
     navigation,
     find,
     click,
@@ -2269,7 +2275,7 @@ describe('the menu', () => {
   it("gives a child Como instalar and Trocar de perfil, with no Definições", async () => {
     const { child } = await adultAndChild();
     await openMenu(child);
-    expect(itemsOf(child)).toEqual(['Como instalar', 'Trocar de perfil']);
+    expect(itemsOf(child)).toEqual(['Como jogar', 'Como instalar', 'Trocar de perfil']);
     expect(child.root.textContent).toContain('Versão 0.10.1 · 24/10/2026');
   });
 
@@ -2278,7 +2284,7 @@ describe('the menu', () => {
     await admin.click('button', 'Continuar');
     await admin.see('Olá, Alex!');
     await openMenu(admin);
-    expect(itemsOf(admin)).toEqual(['Como instalar', 'Definições', 'Pessoas', 'Tarefas', 'Regras do jogo', 'Trocar de perfil']);
+    expect(itemsOf(admin)).toEqual(['Como jogar', 'Como instalar', 'Definições', 'Pessoas', 'Tarefas', 'Regras do jogo', 'Trocar de perfil']);
   });
 
   it('closes with ✕, with a tap outside, and with the back gesture, and stays on the map', async () => {
@@ -2309,12 +2315,64 @@ describe('the menu', () => {
     await admin.click('button', 'Continuar');
     await admin.see('Olá, Alex!');
     await admin.goTo('Como instalar');
-    await admin.see('Instalar a app');
+    await admin.see('instala primeiro e só depois');
     expect(admin.navigation.hash()).toBe('#/install');
 
     admin.navigation.back();
     await admin.see('Olá, Alex!');
     expect(admin.navigation.hash()).toBe('#/map');
+  });
+
+  /** An updater a test controls: nothing is found until `found()` is called. */
+  function fakeUpdater() {
+    let isAvailable = false;
+    const listeners = new Set<() => void>();
+    const updater: Updater & { check: ReturnType<typeof vi.fn>; apply: ReturnType<typeof vi.fn>; found(): void } = {
+      check: vi.fn(async () => {}),
+      available: () => isAvailable,
+      apply: vi.fn(async () => {}),
+      onChange: (listener) => (listeners.add(listener), () => listeners.delete(listener)),
+      found() {
+        isAvailable = true;
+        listeners.forEach((listener) => listener());
+      },
+    };
+    return updater;
+  }
+
+  async function adminWith(updater: Updater) {
+    const admin = await openDevice('admin-device', { updater });
+    await admin.click('button', 'Criar um mundo');
+    await admin.type('Nome do mundo', 'Casa');
+    await admin.type('O teu nome', 'Alex');
+    admin.submit();
+    await admin.see('Convidar');
+    await admin.click('button', 'Continuar');
+    await admin.see('Olá, Alex!');
+    return admin;
+  }
+
+  it('checks for a newer version when the app starts and each time the menu opens, and shows "Atualizar" only when one is found', async () => {
+    const updater = fakeUpdater();
+    const admin = await adminWith(updater);
+    expect(updater.check).toHaveBeenCalledTimes(1);
+    await openMenu(admin);
+    expect(updater.check).toHaveBeenCalledTimes(2);
+    expect(admin.find('.menu-update')).toBeUndefined();
+
+    updater.found(); // found while the menu is open
+    await vi.waitFor(() => expect(admin.find('.menu-update', 'Atualizar')).toBeDefined());
+    admin.find('.menu-update')!.click();
+    expect(updater.apply).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows nothing about a version on the map itself, and no button without a newer one', async () => {
+    const updater = fakeUpdater();
+    const admin = await adminWith(updater);
+    updater.found();
+    expect(admin.root.textContent).not.toContain('Atualizar');
+    expect(admin.root.querySelector('.map')).not.toBeNull();
+    expect(admin.find('header.bar')!.textContent).not.toContain('Atualizar');
   });
 
   it('opens the profile picker from Trocar de perfil', async () => {
@@ -2424,5 +2482,147 @@ describe('the settings screens', () => {
     const bare = await openDevice('bare-device');
     await bare.see('Criar um mundo');
     await bare.see('Cria um mundo para começar');
+  });
+});
+
+describe('"Como jogar"', () => {
+  async function adultAndChild(options: { firstTime?: boolean } = {}) {
+    const admin = await openDevice('admin-device', { firstTime: options.firstTime });
+    await admin.click('button', 'Criar um mundo');
+    await admin.type('Nome do mundo', 'Casa');
+    await admin.type('O teu nome', 'Alex');
+    admin.submit();
+    await admin.see('Convidar');
+    const worldId = admin.world.get()!;
+    await admin.click('button', 'Continuar');
+    return { admin, worldId };
+  }
+
+  it('opens by itself once per profile and device, and a second profile on the same device sees it once too', async () => {
+    const { admin } = await adultAndChild({ firstTime: true });
+    await admin.see('As tuas tarefas');
+    expect(admin.navigation.hash()).toBe('#/how-to');
+
+    admin.navigation.back();
+    await admin.see('Olá, Alex!');
+    await admin.goTo('Pessoas');
+    await admin.type('Nome', 'Sam');
+    admin.submit();
+    await admin.see('Sam');
+    await admin.click('button', 'Voltar');
+    await admin.see('Olá, Alex!'); // not again
+    expect(admin.navigation.hash()).toBe('#/map');
+
+    await admin.goTo('Trocar de perfil');
+    await admin.click('button.profile', 'Sam');
+    await admin.see('As tuas tarefas'); // Sam's first time
+    admin.navigation.back();
+    await admin.see('Olá, Sam!');
+    await admin.goTo('Trocar de perfil');
+    await admin.click('button.profile', 'Alex');
+    await admin.see('Olá, Alex!');
+    expect(admin.navigation.hash()).toBe('#/map');
+  });
+
+  it('is always in the menu, shows the real numbers of the ruleset, and the adults\' part only to an adult', async () => {
+    const { admin, worldId } = await adultAndChild();
+    await admin.goTo('Como jogar');
+    await admin.see('Para os adultos');
+    await admin.see('as fáceis dão 1, as médias 2 e as difíceis 4');
+    await admin.see('custam 5, 12 ou 25');
+    await admin.see('Cabem 5 na equipa');
+
+    await admin.store.worlds.setTokenRules(worldId, { tokensPerLevel: { low: 2, mid: 3, high: 6 }, tokenPrices: { low: 7, mid: 14, high: 30 } }).settled;
+    await admin.see('as fáceis dão 2, as médias 3 e as difíceis 6');
+    await admin.see('custam 7, 14 ou 30');
+
+    admin.navigation.back();
+    await admin.goTo('Pessoas');
+    await admin.type('Nome', 'Sam');
+    admin.submit();
+    await admin.see('Sam');
+    const child = await openDevice('child-device', { hash: `#/join/${worldId}` });
+    await child.click('button.profile', 'Sam');
+    await child.see('Olá, Sam!');
+    await child.goTo('Como jogar');
+    await child.see('As tuas tarefas');
+    expect(child.root.textContent).not.toContain('Para os adultos');
+  });
+
+  it('does not open by itself when storage cannot be written', async () => {
+    const admin = await openDevice('admin-device', { firstTime: true, readOnlyStorage: true });
+    await admin.click('button', 'Criar um mundo');
+    await admin.type('Nome do mundo', 'Casa');
+    await admin.type('O teu nome', 'Alex');
+    admin.submit();
+    await admin.see('Convidar');
+    await admin.click('button', 'Continuar');
+    await admin.see('Olá, Alex!');
+    expect(admin.navigation.hash()).toBe('#/map');
+  });
+
+  it.each(listThemes().map((t) => [t.id, t.name] as const))('reads well in the %s theme (text kept for the product owner)', async (id, name) => {
+    const admin = await openDevice('admin-device');
+    await admin.click('button', 'Criar um mundo');
+    await admin.choose('Tema', name);
+    await admin.type('Nome d', 'Casa');
+    await admin.type('O teu nome', 'Alex');
+    admin.submit();
+    await admin.see('Convidar');
+    await admin.click('button', 'Continuar');
+    await admin.goTo('Como jogar');
+    await admin.see('Para os adultos');
+    const text = [...admin.root.querySelectorAll('.how-to-section')].map((el) => `${el.querySelector('h2')!.textContent}\n${el.querySelector('p')!.textContent}`).join('\n\n');
+    await expect(`${text}\n`).toMatchFileSnapshot(`../../docs/plans/0.10-how-to-text/${id}.txt`);
+  });
+});
+
+describe('"Como instalar"', () => {
+  const NOTE = 'instala primeiro e só depois abre o link de convite';
+  async function screenFor(installer: Installer) {
+    const admin = await openDevice('admin-device', { installer });
+    await admin.click('button', 'Criar um mundo');
+    await admin.type('Nome do mundo', 'Casa');
+    await admin.type('O teu nome', 'Alex');
+    admin.submit();
+    await admin.see('Convidar');
+    await admin.click('button', 'Continuar');
+    await admin.goTo('Como instalar');
+    await admin.see('Como instalar');
+    return admin;
+  }
+
+  it('says the app is already installed', async () => {
+    const admin = await screenFor(fakeInstaller('installed', { isStandalone: true }));
+    await admin.see('já está instalada neste telemóvel');
+    expect(admin.find('button', 'Instalar a app')).toBeUndefined();
+    expect(admin.root.textContent).toContain(NOTE);
+  });
+
+  it('offers the browser dialog with one line of help', async () => {
+    const installer = fakeInstaller('prompt');
+    const admin = await screenFor(installer);
+    await admin.see('O navegador pede confirmação');
+    await admin.click('button', 'Instalar a app');
+    expect(installer.prompt).toHaveBeenCalledTimes(1);
+    expect(admin.root.textContent).toContain(NOTE);
+  });
+
+  it('shows the Safari steps with the name of the themed app', async () => {
+    const admin = await screenFor(fakeInstaller('ios', { isIos: true }));
+    await admin.see('Para instalar «Família»: toca em Partilhar');
+    expect(admin.root.textContent).toContain(NOTE);
+  });
+
+  it('shows the steps of the browser menu on Android without the dialog', async () => {
+    const admin = await screenFor(fakeInstaller('android', { isAndroid: true }));
+    await admin.see('Toca em ⋮ e depois em «Instalar app»');
+    expect(admin.root.textContent).toContain(NOTE);
+  });
+
+  it('tells anything else to open the address in Chrome or Safari', async () => {
+    const admin = await screenFor(fakeInstaller('none'));
+    await admin.see('Abre este endereço no Chrome (Android) ou no Safari (iPhone)');
+    expect(admin.root.textContent).toContain(NOTE);
   });
 });

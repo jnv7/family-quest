@@ -12,6 +12,13 @@ export interface WorldMemory {
    */
   getLastSeen(worldId: WorldId, profileId: ProfileId): Millis | null;
   setLastSeen(worldId: WorldId, profileId: ProfileId, at: Millis): void;
+  /** Whether "Como jogar" already opened by itself for this profile on this device. */
+  hasSeenHowTo(worldId: WorldId, profileId: ProfileId): boolean;
+  /**
+   * Remembers that it did. Returns false when storage cannot be written, so the caller does not open it by
+   * itself: a private window is not nagged on every start.
+   */
+  setSeenHowTo(worldId: WorldId, profileId: ProfileId): boolean;
   /** Forgets the world and its theme. */
   clear(): void;
 }
@@ -20,6 +27,7 @@ type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 const KEY = 'familyQuest.worldId';
 const THEME_KEY = 'familyQuest.themeId';
+const howToKey = (worldId: WorldId, profileId: ProfileId) => `fq.howToSeen.${worldId}.${profileId}`;
 const lastSeenKey = (worldId: WorldId, profileId: ProfileId) => `fq.lastSeen.${worldId}.${profileId}`;
 
 /**
@@ -32,6 +40,7 @@ export function createWorldMemory(storage: StorageLike | null): WorldMemory {
   let theme: string | null = null;
   /** Last-seen times kept in memory too, for storage that cannot be written. */
   const lastSeen = new Map<string, Millis>();
+  const seenHowTo = new Set<string>();
   try {
     current = storage?.getItem(KEY) ?? null;
     theme = storage?.getItem(THEME_KEY) ?? null;
@@ -70,6 +79,26 @@ export function createWorldMemory(storage: StorageLike | null): WorldMemory {
       const key = lastSeenKey(worldId, profileId);
       lastSeen.set(key, at);
       persist((s) => s.setItem(key, String(at)));
+    },
+    hasSeenHowTo(worldId, profileId) {
+      const key = howToKey(worldId, profileId);
+      if (seenHowTo.has(key)) return true;
+      try {
+        return storage?.getItem(key) != null;
+      } catch {
+        return false;
+      }
+    },
+    setSeenHowTo(worldId, profileId) {
+      const key = howToKey(worldId, profileId);
+      seenHowTo.add(key);
+      try {
+        if (!storage) return false;
+        storage.setItem(key, '1');
+        return true;
+      } catch {
+        return false;
+      }
     },
     clear() {
       current = null;

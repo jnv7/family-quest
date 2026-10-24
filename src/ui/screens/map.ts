@@ -161,6 +161,12 @@ export const renderMap: WorldScreen = (ctx, root, { worldId }) => {
       tasks = [];
       stopTasks = ctx.store.tasks.observeTasks(worldId, profile.id, (value) => ((tasks = value), light()), unlit);
     }
+    // "Como jogar" opens by itself once per profile and device. It is marked first, so a device whose storage
+    // cannot be written is not sent there on every start.
+    if (!ctx.world.hasSeenHowTo(worldId, profile.id) && ctx.world.setSeenHowTo(worldId, profile.id)) {
+      ctx.go({ name: 'howTo' });
+      return;
+    }
     drawBoats(profiles, profile.id);
     drawPlaceSymbols(profiles);
     title.textContent = ctx.text('map.hello', { name: profile.displayName });

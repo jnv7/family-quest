@@ -67,4 +67,20 @@ describe('createWorldMemory', () => {
     broken.setLastSeen('w', 'p', 99);
     expect(broken.getLastSeen('w', 'p')).toBe(99);
   });
+
+  it('remembers per world and profile that "Como jogar" opened, and says when it cannot be written', () => {
+    const storage = fakeStorage();
+    const memory = createWorldMemory(storage);
+    expect(memory.hasSeenHowTo('w', 'a')).toBe(false);
+    expect(memory.setSeenHowTo('w', 'a')).toBe(true);
+    expect(memory.hasSeenHowTo('w', 'a')).toBe(true);
+    expect(memory.hasSeenHowTo('w', 'b')).toBe(false);
+    expect(createWorldMemory(storage).hasSeenHowTo('w', 'a')).toBe(true);
+    expect(storage.data.has('fq.howToSeen.w.a')).toBe(true);
+
+    const blocked = createWorldMemory({ getItem: () => null, setItem: () => { throw new Error('full'); }, removeItem: () => {} });
+    expect(blocked.setSeenHowTo('w', 'a')).toBe(false);
+    expect(blocked.hasSeenHowTo('w', 'a')).toBe(true); // not twice in one session either
+    expect(createWorldMemory(null).setSeenHowTo('w', 'a')).toBe(false);
+  });
 });

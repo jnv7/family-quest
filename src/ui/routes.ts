@@ -18,6 +18,7 @@ export type Route =
   | { name: 'people' }
   | { name: 'tasks' }
   | { name: 'rules' }
+  | { name: 'howTo' }
   /** Only redirects to the map, so old bookmarks and history entries still work. */
   | { name: 'manage' }
   | { name: 'share' }
@@ -37,6 +38,7 @@ const SEGMENTS = {
   people: 'people',
   tasks: 'tasks',
   rules: 'rules',
+  howTo: 'how-to',
   share: 'share',
   install: 'install',
 } as const;

@@ -4,6 +4,7 @@ import { DataStoreError, type DataStore } from '../data/DataStore';
 import type { MessageParams, Theme } from '../theme';
 import type { Installer } from './install';
 import type { Navigation } from './navigation';
+import type { Updater } from './updates';
 import type { Route } from './routes';
 import type { WorldMemory } from './worldMemory';
 
@@ -23,6 +24,8 @@ export interface AppContext {
   /** Uses another theme, makes the page look like it, and redraws the current screen. */
   setTheme(themeId: string): void;
   installer: Installer;
+  /** Looks for a newer build and loads it (ADR 0012). */
+  updater: Updater;
   /** The running build, for the version in the menu. */
   build: Build;
   clock: Clock;

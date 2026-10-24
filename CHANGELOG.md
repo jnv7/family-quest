@@ -6,6 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.10.6] — 2026-10-24
+
+### Changed
+
+- **The installed pirate app** is now called "Ilha dos Piratas" under its icon (the theme's own `name`, "Piratas do Farol", is unchanged), and its icon is the parrot's face, cut from the pirate `board` art (`assets/icons/parrot.svg`, made for this repository, MIT). The four install icons (192, 512, maskable 512 with the face inside the safe zone, and the 180 Apple icon, all opaque) are made by `npm run art:prepare`, which gained an `icon` kind with exact sizes (tests included). The manifest `id` does not change, so an installed Android app updates its name and icon by itself; an iPhone must remove the app and install it again. **To check on two phones** (steps in `docs/plans/0.10.md`, delivery 0.10.6).
+
+## [0.10.5] — 2026-10-24
+
+### Added
+
+- **"Atualizar"** (ADR 0012). The app reads `version.json` without any cache when it starts, and again each time the menu opens (at most once a minute). If the published build is newer, the menu's footer shows an "Atualizar" button, which updates the service worker (waiting up to 10 seconds for it to take over) and reloads. Offline, on a bad response or after 5 seconds there is no button and no message, and the next check tries again. Nothing on the map changes. `vite dev` does nothing. New: `isNewerBuild` (`src/core/build.ts`) and the injected `Updater` (`src/ui/updates.ts`).
+
+### Changed
+
+- Interface messages may now have up to 400 characters (was 200), for the paragraphs of "Como jogar" (`schemas/locale.schema.json`).
+
+## [0.10.4] — 2026-10-24
+
+### Changed
+
+- **"Como instalar"** (was "Instalar a app"): the screen now chooses one case for the device. Already installed says so; a browser that offers its dialog gets the "Instalar a app" button and one line of help; an iPhone or iPad gets the Safari steps with the theme's app name; and the new **Android** case (`Installer` mode `android`, from the user agent) shows the steps of Chrome's menu when the browser has not offered its dialog yet; anything else is told to open the address in Chrome or Safari. Every case ends with: "Para outra pessoa entrar: instala primeiro e só depois abre o link de convite." The install offers in the join flow and at first launch are unchanged.
+
+## [0.10.3] — 2026-10-24
+
+### Added
+
+- **"Como jogar"**, first in the menu for everyone: one read-only screen with a heading and a paragraph per section (tasks, doing one, earning, opening, the party, the reserve, the home), and "Para os adultos" for an adult profile only. The text is in the locale file with the theme's terms, and its numbers (tokens per level, prices, party and reserve sizes) come from the world's `ruleset`, so they are always the real ones. It shows no count about people.
+- **It opens by itself once** per profile and device, when the map first shows that profile (`WorldMemory.hasSeenHowTo` and `setSeenHowTo`, key `fq.howToSeen.{worldId}.{profileId}`); back returns to the map. Profiles already in use see it once after the update. If the device cannot save that, it never opens by itself, so a private window is not nagged.
+- The rendered text in the pirate theme and in `minimal` is kept in `docs/plans/0.10-how-to-text/`, as a test snapshot, for the product owner's reading on a phone.
+
 ## [0.10.2] — 2026-10-24
 
 ### Changed

@@ -15,6 +15,8 @@ import { hashFor, parseHash, type Route } from './routes';
 import { renderCreate } from './screens/create';
 import { renderBoard } from './screens/board';
 import { renderCheckin } from './screens/checkin';
+import type { Updater } from './updates';
+import { renderHowTo } from './screens/howTo';
 import { renderInstall } from './screens/install';
 import { renderJoin } from './screens/join';
 import { renderPeople } from './screens/people';
@@ -43,6 +45,8 @@ export interface AppOptions {
   installer: Installer;
   /** The running build, shown in the menu. */
   build: Build;
+  /** Looks for a newer build (ADR 0012). */
+  updater: Updater;
   /** The theme the app was launched with (`?theme=` in the address of an installed app), if any. */
   launchTheme: string | null;
   /** Schedules a delayed call; defaults to `setTimeout`. Tests pass their own. */
@@ -55,7 +59,7 @@ const NOTICE_MS = 5000;
 
 /** Starts the interface and returns a function that stops it. */
 export async function startApp(options: AppOptions): Promise<() => void> {
-  const { root, store, baseUrl, world, clock, randomInt, navigation, installer, assetBase, launchTheme, build } = options;
+  const { root, store, baseUrl, world, clock, randomInt, navigation, installer, assetBase, launchTheme, build, updater } = options;
   const later = options.later ?? ((run, ms) => {
     const id = setTimeout(run, ms);
     return () => clearTimeout(id);
@@ -100,6 +104,7 @@ export async function startApp(options: AppOptions): Promise<() => void> {
     },
     installer,
     build,
+    updater,
     clock,
     randomInt,
     uid,
@@ -158,6 +163,8 @@ export async function startApp(options: AppOptions): Promise<() => void> {
         return needsWorld(renderShowcase);
       case 'newTask':
         return needsWorld(renderTaskForm(route.defId, route.from));
+      case 'howTo':
+        return needsWorld(renderHowTo);
       case 'people':
         return needsWorld(renderPeople);
       case 'tasks':
@@ -214,6 +221,7 @@ export async function startApp(options: AppOptions): Promise<() => void> {
   if (launchTheme) useTheme(launchTheme); // an installed app starts with its own theme
   if (world.get() !== null && rememberedTheme) useTheme(rememberedTheme); // the world's theme wins, from the first frame
   await resumeSession(ctx, navigation);
+  void updater.check();
   render();
   return () => {
     stopListening();

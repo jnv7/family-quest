@@ -9,3 +9,8 @@ export interface Build {
   /** The short commit id, or `local` outside CI. */
   commit: string;
 }
+
+/** Whether `published` is a build made after the running one, so an older file (a cache in between) never offers to go back. */
+export function isNewerBuild(running: Build, published: Build): boolean {
+  return published.builtAt > running.builtAt;
+}

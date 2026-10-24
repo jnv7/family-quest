@@ -1197,3 +1197,8 @@ button.danger:disabled {
   flex: 1 1 8rem;
   min-height: 2.5rem;
 }
+
+/* "Como jogar": plain sections of text. */
+.how-to-section h2 {
+  margin-top: 1.25rem;
+}
