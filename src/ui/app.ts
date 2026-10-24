@@ -8,6 +8,7 @@ import { reportSettleError, type AppContext, type Dispose, type Screen, type Wor
 import { h } from './dom';
 import { createCarryKeeper, type CarryWriter } from './carry';
 import { createGenerator } from './generation';
+import { joinAndChoose } from './joining';
 import type { Installer } from './install';
 import type { Navigation } from './navigation';
 import { createReserveKeeper } from './reserve';
@@ -149,7 +150,7 @@ export async function startApp(options: AppOptions): Promise<() => void> {
       case 'create':
         return renderCreate;
       case 'join':
-        return renderJoin(route.worldId);
+        return renderJoin(route);
       case 'install':
         return needsWorld(renderInstall);
       case 'profiles':
@@ -276,7 +277,11 @@ async function resumeSession(ctx: AppContext, navigation: Navigation): Promise<v
       ctx.world.clear(); // this device is no longer a member of that world
       return;
     }
-    navigation.replace(hashFor({ name: membership.profileId ? 'map' : 'profiles' }));
+    // Already in this world and started at a child's link, with no profile yet: the link's profile applies (ADR 0015).
+    const next = route.name === 'join' && route.profileId && !membership.profileId
+      ? await joinAndChoose(ctx, worldId, route.profileId, { childOnly: true })
+      : membership.profileId ? 'map' : 'profiles';
+    navigation.replace(hashFor({ name: next }));
   } catch (error) {
     // Offline with nothing cached: trust the saved world; the screens read from the cache.
     console.warn('Could not check the membership', error);
@@ -295,8 +300,8 @@ async function adoptCarry(ctx: AppContext, carry: Carry | null, write?: CarryWri
   const inBrowserTab = platform.isIos && !platform.isStandalone;
   if (ctx.world.get() === null && !inBrowserTab) {
     try {
-      await ctx.store.worlds.joinWorld(carry.worldId);
-      await ctx.store.worlds.chooseProfile(carry.worldId, carry.profileId).settled;
+      // The carry is this device's own profile, an adult's too, so it is not limited to children (ADR 0015 §4).
+      await joinAndChoose(ctx, carry.worldId, carry.profileId, { childOnly: false });
       ctx.world.set(carry.worldId);
     } catch (error) {
       console.warn('Could not start in the carried world', error);

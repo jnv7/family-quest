@@ -157,6 +157,24 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
       });
     });
 
+    describe('getProfile', () => {
+      it('reads a profile, archived ones included, and null for an unknown id', async () => {
+        const { admin, worldId, adminProfileId, childProfileId } = await setup();
+        expect(await admin.worlds.getProfile(worldId, adminProfileId)).toMatchObject({ id: adminProfileId, kind: 'adult', archived: false });
+        await admin.worlds.setProfileArchived(worldId, childProfileId, true).settled;
+        expect(await admin.worlds.getProfile(worldId, childProfileId)).toMatchObject({ id: childProfileId, kind: 'child', archived: true });
+        expect(await admin.worlds.getProfile(worldId, 'noSuchProfile')).toBeNull();
+      });
+
+      it('is refused to a device that is not a member', async () => {
+        const { worldId, childProfileId } = await setup();
+        const { newcomer: stranger } = await makeDevices({ clock }); // never joined this world
+        const refused = await stranger.worlds.getProfile(worldId, childProfileId).then(() => null, (e: unknown) => e);
+        expect(refused).toBeInstanceOf(DataStoreError);
+        expect((refused as DataStoreError).code).toBe('permission-denied');
+      });
+    });
+
     describe('join', () => {
       it('joins with no profile, and joining again is a no-op', async () => {
         const { newcomer, worldId } = await setup();

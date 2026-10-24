@@ -2,14 +2,16 @@ import { DataStoreError } from '../../data/DataStore';
 import type { Screen } from '../context';
 import { h } from '../dom';
 import { mountInstallOffer } from '../installOffer';
-import { joinLink, parseJoinInput } from '../routes';
+import { joinAndChoose } from '../joining';
+import { joinLink, parseJoinInput, type Route } from '../routes';
 
 /**
  * Joins with the code from a link, or asks for the code to be typed or pasted.
  * On iOS in a browser tab it does not join: the installed app has its own storage,
  * so joining here would be lost. It offers the installation instead (ADR 0005).
  */
-export function renderJoin(worldId: string | null): Screen {
+export function renderJoin(route: Extract<Route, { name: 'join' }>): Screen {
+  const { worldId, profileId } = route;
   return (ctx, root) => {
     const message = h('p', { class: 'message', role: 'status' });
     let disposed = false;
@@ -18,11 +20,12 @@ export function renderJoin(worldId: string | null): Screen {
     const join = async (id: string) => {
       message.textContent = ctx.text('join.joining');
       try {
-        await ctx.store.worlds.joinWorld(id);
+        // A child's link (ADR 0015) saves the choice of profile on the first entry; any other link, or any trouble with it, shows the picker.
+        const next = await joinAndChoose(ctx, id, profileId, { childOnly: true });
         if (disposed) return;
         ctx.world.set(id);
         ctx.world.setTheme(ctx.theme.id);
-        ctx.go({ name: 'profiles' }, { replace: true });
+        ctx.go({ name: next }, { replace: true });
       } catch (error) {
         if (disposed) return;
         const notFound = error instanceof DataStoreError && error.code === 'not-found';
@@ -39,7 +42,7 @@ export function renderJoin(worldId: string | null): Screen {
         // Install first, then join from the installed app.
         const offer = h('div', { class: 'stack' });
         disposers.push(mountInstallOffer(ctx, offer));
-        const link = joinLink(ctx.baseUrl, worldId, ctx.theme.id);
+        const link = joinLink(ctx.baseUrl, worldId, ctx.theme.id, profileId);
         const copy = h('button', {
           class: 'primary',
           onClick: async () => {
@@ -61,7 +64,7 @@ export function renderJoin(worldId: string | null): Screen {
       const go = (text: string) => {
         const target = parseJoinInput(text);
         if (target === null) message.textContent = ctx.text('error.codeInvalid');
-        else ctx.go({ name: 'join', worldId: target.worldId, themeId: target.themeId });
+        else ctx.go({ name: 'join', worldId: target.worldId, themeId: target.themeId, profileId: target.profileId });
       };
       const form = h('form', { class: 'stack' },
         h('label', {}, ctx.text('join.codeLabel'), code),

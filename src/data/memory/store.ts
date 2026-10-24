@@ -335,6 +335,15 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
         return structuredClone(member);
       },
 
+      async getProfile(worldId, profileId) {
+        const uid = requireUid();
+        await Promise.resolve();
+        const ws = localView().get(worldId);
+        if (!ws?.members.has(uid)) throw denied('Only a member reads a profile');
+        const profile = ws.profiles.get(profileId);
+        return profile ? structuredClone(profile) : null;
+      },
+
       async getMembership(worldId) {
         const uid = requireUid();
         await Promise.resolve();

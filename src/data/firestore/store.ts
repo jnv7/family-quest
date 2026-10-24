@@ -253,6 +253,15 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
 
       getMembership,
 
+      async getProfile(worldId, profileId) {
+        try {
+          const snapshot = await getDoc(profileDoc(db, worldId, profileId));
+          return snapshot.exists() ? decodeProfile(snapshot) : null;
+        } catch (error) {
+          throw toDataStoreError(error);
+        }
+      },
+
       observeWorld: (worldId, onValue, onError) => observeDoc(worldDoc(db, worldId), decodeWorld, onValue, onError),
 
       observeMembers: (worldId, onValue, onError) =>

@@ -23,16 +23,21 @@ describe('parseHash', () => {
     ['#/nowhere', { name: 'start' }],
     ['#/manage', { name: 'manage' }],
     ['#/share', { name: 'share' }],
-    ['#/join', { name: 'join', worldId: null, themeId: null }],
-    [`#/join/${ID}`, { name: 'join', worldId: ID, themeId: null }],
-    [`#/join/${ID}/minimal-farm`, { name: 'join', worldId: ID, themeId: 'minimal-farm' }],
+    ['#/join', { name: 'join', worldId: null, themeId: null, profileId: null }],
+    [`#/join/${ID}`, { name: 'join', worldId: ID, themeId: null, profileId: null }],
+    [`#/join/${ID}/minimal-farm`, { name: 'join', worldId: ID, themeId: 'minimal-farm', profileId: null }],
+    [`#/join/${ID}/minimal-farm/kid42`, { name: 'join', worldId: ID, themeId: 'minimal-farm', profileId: 'kid42' }],
+    [`#/join/${ID}/minimal-farm/kid42/later/parts`, { name: 'join', worldId: ID, themeId: 'minimal-farm', profileId: 'kid42' }],
+    [`#/join/${ID}/minimal-farm/ki%20d`, { name: 'join', worldId: ID, themeId: 'minimal-farm', profileId: null }],
+    [`#/join/${ID}/minimal-farm/`, { name: 'join', worldId: ID, themeId: 'minimal-farm', profileId: null }],
+    [`#/join/${ID}//kid42`, { name: 'join', worldId: ID, themeId: null, profileId: null }],
     ['#/install', { name: 'install' }],
   ])('%s', (hash, route) => {
     expect(parseHash(hash)).toEqual(route);
   });
 
   it('round-trips with hashFor', () => {
-    const routes: Route[] = [{ name: 'start' }, { name: 'map' }, { name: 'newTask', defId: null, from: 'board' }, { name: 'newTask', defId: null, from: 'tasks' }, { name: 'checkin' }, { name: 'newTask', defId: 'abc123', from: 'tasks' }, { name: 'people' }, { name: 'tasks' }, { name: 'rules' }, { name: 'join', worldId: ID, themeId: null }, { name: 'join', worldId: ID, themeId: 'minimal-farm' }, { name: 'join', worldId: null, themeId: null }];
+    const routes: Route[] = [{ name: 'start' }, { name: 'map' }, { name: 'newTask', defId: null, from: 'board' }, { name: 'newTask', defId: null, from: 'tasks' }, { name: 'checkin' }, { name: 'newTask', defId: 'abc123', from: 'tasks' }, { name: 'people' }, { name: 'tasks' }, { name: 'rules' }, { name: 'join', worldId: ID, themeId: null, profileId: null }, { name: 'join', worldId: ID, themeId: 'minimal-farm', profileId: null }, { name: 'join', worldId: null, themeId: null, profileId: null }, { name: 'join', worldId: ID, themeId: 'minimal-farm', profileId: 'kid42' }];
     for (const route of routes) expect(parseHash(hashFor(route))).toEqual(route);
   });
 });
@@ -43,13 +48,21 @@ describe('joinLink and parseJoinInput', () => {
   it('builds the link with the code and the theme in the fragment', () => {
     expect(joinLink(BASE, ID, 'minimal-farm')).toBe(`${BASE}#/join/${ID}/minimal-farm`);
     expect(joinLink(BASE, ID, null)).toBe(`${BASE}#/join/${ID}`);
+    expect(joinLink(BASE, ID, 'minimal-farm', 'kid42')).toBe(`${BASE}#/join/${ID}/minimal-farm/kid42`);
+  });
+
+  it('never writes a profile without its theme part', () => {
+    expect(() => joinLink(BASE, ID, null, 'kid42')).toThrow('theme part');
   });
 
   it('reads a bare code, or a whole link with or without a theme, with surrounding spaces', () => {
-    expect(parseJoinInput(ID)).toEqual({ worldId: ID, themeId: null });
-    expect(parseJoinInput(`  ${ID} \n`)).toEqual({ worldId: ID, themeId: null });
-    expect(parseJoinInput(joinLink(BASE, ID, null))).toEqual({ worldId: ID, themeId: null });
-    expect(parseJoinInput(joinLink(BASE, ID, 'minimal-farm'))).toEqual({ worldId: ID, themeId: 'minimal-farm' });
+    expect(parseJoinInput(ID)).toEqual({ worldId: ID, themeId: null, profileId: null });
+    expect(parseJoinInput(`  ${ID} \n`)).toEqual({ worldId: ID, themeId: null, profileId: null });
+    expect(parseJoinInput(joinLink(BASE, ID, null))).toEqual({ worldId: ID, themeId: null, profileId: null });
+    expect(parseJoinInput(joinLink(BASE, ID, 'minimal-farm'))).toEqual({ worldId: ID, themeId: 'minimal-farm', profileId: null });
+    expect(parseJoinInput(joinLink(BASE, ID, 'minimal-farm', 'kid42'))).toEqual({ worldId: ID, themeId: 'minimal-farm', profileId: 'kid42' });
+    expect(parseJoinInput(`${joinLink(BASE, ID, 'minimal-farm', 'kid42')}/later/parts`)).toEqual({ worldId: ID, themeId: 'minimal-farm', profileId: 'kid42' });
+    expect(parseJoinInput(`${joinLink(BASE, ID, 'minimal-farm')}/not-a-profile`)).toEqual({ worldId: ID, themeId: 'minimal-farm', profileId: null });
   });
 
   it('rejects text that cannot be a world id', () => {

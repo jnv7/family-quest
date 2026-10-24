@@ -1279,3 +1279,8 @@ button.danger:disabled {
   width: auto;
   font-size: 1.1rem;
 }
+
+/* A child's own invite, shown in their row of Pessoas. */
+.row-invite {
+  flex: 1 1 100%;
+}

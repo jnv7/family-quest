@@ -37,6 +37,8 @@
     "share.continue": "Continuar",
     "profiles.title": "Quem és tu?",
     "people.title": "Pessoas",
+    "people.childInvite": "Convidar",
+    "people.childInviteExplain": "Este link abre a app já no perfil de {name}. Serve só para entrar pela primeira vez.",
     "people.rename": "Mudar nome",
     "people.renameSave": "Guardar",
     "people.renameCancel": "Cancelar",

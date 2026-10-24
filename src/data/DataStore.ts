@@ -163,6 +163,12 @@ export interface WorldStore {
   /** This device's membership, or null if it is not a member. */
   getMembership(worldId: WorldId): Promise<Member | null>;
 
+  /**
+   * One profile, archived ones included, or null if it does not exist. Read from the server when online and from the
+   * cache otherwise. Members only: `permission-denied` for a device that is not a member (ADR 0015).
+   */
+  getProfile(worldId: WorldId, profileId: ProfileId): Promise<Profile | null>;
+
   observeWorld(worldId: WorldId, onValue: Observer<World>, onError?: ObserverError): Unsubscribe;
   observeMembers(worldId: WorldId, onValue: Observer<Member[]>, onError?: ObserverError): Unsubscribe;
 

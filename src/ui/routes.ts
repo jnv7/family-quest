@@ -1,11 +1,11 @@
 /** Hash routes (docs/architecture.md §7): GitHub Pages cannot rewrite paths, so there is no History API. */
-import { LIMITS, type WorldId } from '../core/model';
+import { LIMITS, type ProfileId, type WorldId } from '../core/model';
 
 export type Route =
   | { name: 'start' }
   | { name: 'create' }
-  /** `worldId` is null when the person still has to type the code. */
-  | { name: 'join'; worldId: WorldId | null; themeId: string | null }
+  /** `worldId` is null when the person still has to type the code. `profileId` is a child's shortcut for the first entry (ADR 0015). */
+  | { name: 'join'; worldId: WorldId | null; themeId: string | null; profileId: ProfileId | null }
   | { name: 'profiles' }
   | { name: 'map' }
   | { name: 'board' }
@@ -44,9 +44,16 @@ const SEGMENTS = {
 /** Anything unknown is the start page. */
 export function parseHash(hash: string): Route {
   const path = hash.replace(/^#\/?/, '');
-  const [first = '', second, third] = path.split('/');
+  // Parts after the ones known are ignored, so a later part never makes a link unusable (ADR 0015).
+  const [first = '', second, third, fourth] = path.split('/');
   if (first === 'join') {
-    return { name: 'join', worldId: second ? decodeURIComponent(second) : null, themeId: third ? decodeURIComponent(third) : null };
+    return {
+      name: 'join',
+      worldId: second ? decodeURIComponent(second) : null,
+      themeId: third ? decodeURIComponent(third) : null,
+      // Anything but letters and digits is no profile.
+      profileId: third && fourth && /^[A-Za-z0-9]+$/.test(fourth) ? fourth : null,
+    };
   }
   if (first === 'new-task') return { name: 'newTask', defId: second ? decodeURIComponent(second) : null, from: second ? 'tasks' : 'board' };
   if (first === 'tasks' && second === 'new') return { name: 'newTask', defId: null, from: 'tasks' };
@@ -59,7 +66,9 @@ export function hashFor(route: Route): string {
   if (route.name === 'join') {
     if (!route.worldId) return '#/join';
     const world = `#/join/${encodeURIComponent(route.worldId)}`;
-    return route.themeId ? `${world}/${encodeURIComponent(route.themeId)}` : world;
+    if (!route.themeId) return world;
+    const theme = `${world}/${encodeURIComponent(route.themeId)}`;
+    return route.profileId ? `${theme}/${encodeURIComponent(route.profileId)}` : theme;
   }
   if (route.name === 'newTask') {
     if (route.defId) return `#/new-task/${encodeURIComponent(route.defId)}`;
@@ -69,26 +78,30 @@ export function hashFor(route: Route): string {
 }
 
 /**
- * `<app URL>#/join/<worldId>/<themeId>` (SPEC.md §5). The code sits in the fragment, so no
+ * `<app URL>#/join/<worldId>/<themeId>[/<profileId>]` (SPEC.md §5, ADR 0015). The code sits in the fragment, so no
  * server log sees it. The theme id is not secret: it lets the page look like the world
  * before anyone joins, and lets the app offer to install itself with the right name and icon.
  */
-export function joinLink(baseUrl: string, worldId: WorldId, themeId: string | null): string {
-  return `${baseUrl}${hashFor({ name: 'join', worldId, themeId })}`;
+export function joinLink(baseUrl: string, worldId: WorldId, themeId: string | null, profileId: ProfileId | null = null): string {
+  if (profileId && !themeId) throw new Error('A join link with a profile needs its theme part (ADR 0015)');
+  return `${baseUrl}${hashFor({ name: 'join', worldId, themeId, profileId })}`;
 }
 
 export interface JoinTarget {
   worldId: WorldId;
   themeId: string | null;
+  profileId: ProfileId | null;
 }
 
 /** Accepts a bare code or a whole join link; returns null if it cannot be a world id. */
 export function parseJoinInput(input: string): JoinTarget | null {
   const text = input.trim();
-  const link = /#\/join\/([A-Za-z0-9]+)(?:\/([a-z][a-z0-9-]*))?\s*$/.exec(text);
+  // The profile part needs the theme part before it, and parts after it are ignored (ADR 0015).
+  const link = /#\/join\/([A-Za-z0-9]+)(?:\/([a-z][a-z0-9-]*)(?:\/([A-Za-z0-9]+))?)?(?:\/[^\s]*)?\s*$/.exec(text);
   const worldId = link?.[1] ?? text;
   const themeId = link?.[2] ?? null;
-  return /^[A-Za-z0-9]+$/.test(worldId) && worldId.length >= LIMITS.worldIdMinLength ? { worldId, themeId } : null;
+  const profileId = link?.[3] ?? null;
+  return /^[A-Za-z0-9]+$/.test(worldId) && worldId.length >= LIMITS.worldIdMinLength ? { worldId, themeId, profileId } : null;
 }
 
 /**

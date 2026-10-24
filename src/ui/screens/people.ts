@@ -12,6 +12,8 @@ export const renderPeople: WorldScreen = (ctx, root, { worldId }) => {
   let profiles: readonly Profile[] = [];
   /** The profile being renamed, if any; kept while the list is drawn again. */
   let renaming: string | null = null;
+  /** The child whose own invite is shown in their row, if any. */
+  let inviting: string | null = null;
 
   const name = h('input', { type: 'text', required: true, maxLength: LIMITS.displayName, autocomplete: 'off' });
   const kind = h('select', {},
@@ -63,11 +65,15 @@ export const renderPeople: WorldScreen = (ctx, root, { worldId }) => {
           : h('li', {},
               h('span', {}, profile.displayName, profile.archived && ` (${ctx.text('people.archivedTag')})`),
               h('button', { onClick: () => ((renaming = profile.id), draw()) }, ctx.text('people.rename')),
+              // A child's own invite (ADR 0015): never for an adult, who would be handed admin rights, nor an archived profile.
+              profile.kind === 'child' && !profile.archived &&
+                h('button', { onClick: () => ((inviting = inviting === profile.id ? null : profile.id), draw()) }, ctx.text('people.childInvite')),
               // Only child profiles can be archived, so a world always keeps an admin (SPEC.md §4).
               profile.kind === 'child' &&
                 h('button', {
                   onClick: () => ctx.settle(ctx.store.worlds.setProfileArchived(worldId, profile.id, !profile.archived).settled),
                 }, ctx.text(profile.archived ? 'people.unarchive' : 'people.archive')),
+              inviting === profile.id && !profile.archived && h('div', { class: 'row-invite' }, createInvite(ctx, worldId, profile)),
             ),
       ),
     );

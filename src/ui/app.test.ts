@@ -2718,3 +2718,121 @@ describe('a home screen app that starts in the world it was added from (ADR 0014
     expect(app.navigation.hash()).toBe('#/map');
   });
 });
+
+describe('the invite of one child (ADR 0015)', () => {
+  const IOS_TAB = () => fakeInstaller('ios', { isIos: true });
+  const IOS_APP = () => fakeInstaller('installed', { isIos: true, isStandalone: true });
+
+  /** A world made by "Alex" (an adult), with the children Sam and Robin, and an archived child. */
+  async function family() {
+    const { admin, worldId } = await createFamily();
+    await admin.click('button', 'Continuar');
+    await admin.see('Olá, Alex!');
+    const make = async (displayName: string) => {
+      const created = admin.store.worlds.createProfile(worldId, { displayName, kind: 'child' });
+      await created.settled;
+      return created.result.profileId;
+    };
+    const sam = await make('Sam');
+    const robin = await make('Robin');
+    const old = await make('Antigo');
+    await admin.store.worlds.setProfileArchived(worldId, old, true).settled;
+    const alex = [...backend.state.get(worldId)!.profiles.values()].find((p) => p.displayName === 'Alex')!.id;
+    const link = (profileId: string | null) => `#/join/${worldId}/minimal${profileId ? `/${profileId}` : ''}`;
+    return { admin, worldId, sam, robin, old, alex, link };
+  }
+  const memberProfile = (worldId: string, uid: string) => backend.state.get(worldId)!.members.get(uid)?.profileId;
+
+  it('puts a new device on the child of the link, with no picker, and the general link still shows the picker', async () => {
+    const { worldId, sam, link } = await family();
+    const phone = await openDevice('new-phone', { hash: link(sam) });
+    await phone.see('Olá, Sam!');
+    expect(phone.navigation.hash()).toBe('#/map');
+    expect(phone.root.textContent).not.toContain('Quem és tu?');
+    expect(memberProfile(worldId, 'new-phone')).toBe(sam);
+
+    const general = await openDevice('other-phone', { hash: link(null) });
+    await general.see('Quem és tu?');
+    expect(memberProfile(worldId, 'other-phone')).toBeNull();
+  });
+
+  it('does the same from the paste form, and from an iPhone app started at the link', async () => {
+    const { worldId, sam, link } = await family();
+    const pasted = await openDevice('pasting-phone', { hash: '#/join' });
+    await pasted.type('Link ou código', `https://example.org/family-quest/${link(sam)}`);
+    pasted.submit();
+    await pasted.see('Olá, Sam!');
+    expect(memberProfile(worldId, 'pasting-phone')).toBe(sam);
+
+    const app = await openDevice('home-screen-app', { installer: IOS_APP(), hash: link(sam) });
+    await app.see('Olá, Sam!');
+    expect(memberProfile(worldId, 'home-screen-app')).toBe(sam);
+  });
+
+  it('keeps the profile of a device that already has one, and chooses for a member with none', async () => {
+    const { worldId, sam, robin, link } = await family();
+    const member = await openDevice('admin-device', { savedWorld: worldId, savedTheme: 'minimal', hash: link(sam) });
+    await member.see('Olá, Alex!'); // a sibling's link never switches anyone
+    expect(memberProfile(worldId, 'admin-device')).not.toBe(sam);
+
+    const first = await openDevice('undecided', { hash: link(null) });
+    await first.see('Quem és tu?');
+    stops.pop()!();
+    const again = await openDevice('undecided', { savedWorld: worldId, savedTheme: 'minimal', hash: link(robin) });
+    await again.see('Olá, Robin!');
+    expect(memberProfile(worldId, 'undecided')).toBe(robin);
+  });
+
+  it('shows the usual picker, with no message, for an archived, unknown or adult profile, and for a malformed part', async () => {
+    const { worldId, old, alex, link } = await family();
+    let n = 0;
+    for (const hash of [link(old), link('NoSuchProfile'), link(alex), `${link(null)}/not%20a%20profile`]) {
+      const phone = await openDevice(`phone-${n++}`, { hash });
+      await phone.see('Quem és tu?');
+      expect(phone.root.textContent, hash).not.toContain('Não foi possível');
+      expect(memberProfile(worldId, `phone-${n - 1}`), hash).toBeNull();
+    }
+  });
+
+  it('still asks an iPhone in Safari to install first, and copies the link with the profile', async () => {
+    const { sam, link } = await family();
+    const copied: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t: string) => void copied.push(t) }, configurable: true });
+    const safari = await openDevice('iphone', { installer: IOS_TAB(), hash: link(sam) });
+    await safari.see('adiciona esta página ao ecrã principal');
+    expect(safari.world.get()).toBeNull();
+    await safari.click('button', 'Copiar o link');
+    await safari.see('Link copiado');
+    expect(copied[0]).toContain(link(sam));
+  });
+
+  it('keeps the carry of ADR 0014 working through the same code, an adult profile included', async () => {
+    const { worldId, alex } = await family();
+    const app = await openDevice('home-screen-app', { installer: IOS_APP(), launchTheme: 'minimal', carry: { worldId, profileId: alex } });
+    await app.see('Olá, Alex!');
+    expect(memberProfile(worldId, 'home-screen-app')).toBe(alex);
+  });
+
+  it('gives each non-archived child an invite in Pessoas, with the QR code and no code to type, and the general invite stays', async () => {
+    const { admin, worldId, sam, link } = await family();
+    await admin.goTo('Pessoas');
+    const row = (name: string) => [...admin.root.querySelectorAll('ul.rows li')].find((li) => li.textContent?.includes(name))!;
+    const invite = (name: string) => [...row(name).querySelectorAll('button')].find((b) => b.textContent === 'Convidar');
+    expect(invite('Sam')).toBeDefined();
+    expect(invite('Robin')).toBeDefined();
+    expect(invite('Alex')).toBeUndefined(); // an adult's link would hand out admin rights
+    expect(invite('Antigo')).toBeUndefined(); // archived
+
+    const copied: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t: string) => void copied.push(t) }, configurable: true });
+    invite('Sam')!.click();
+    await admin.see('Este link abre a app já no perfil de Sam');
+    expect(row('Sam').querySelector('svg[role="img"]')).not.toBeNull();
+    expect(admin.root.textContent).not.toContain(`Código: ${worldId}`);
+    (row('Sam').querySelector('.row-invite') as HTMLElement).querySelectorAll('button')[0]!.click();
+    await vi.waitFor(() => expect(copied[0]).toContain(`${BASE_URL}${link(sam)}`));
+
+    await admin.click('header.screen-bar button', 'Convidar'); // the general invite
+    await admin.see(`Código: ${worldId}`);
+  });
+});

@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.10.12] — 2026-10-24
+
+### Added (the product owner's request, ADR 0015)
+
+- **The invite of one child.** The join link may end with a child's profile id, `#/join/<world>/<theme>/<profile>`. A new device that opens or pastes it lands on the map already on that child's profile, with no picker; the general link still shows the picker. It is a shortcut for the first entry only, not a login: it is used only when the device has no active profile in that world (a sibling's link never switches anyone), and only for a child profile that exists and is not archived. An adult, archived, unknown or malformed profile gives the usual picker, with no message. No Firestore rules change: nothing to publish.
+- **In Pessoas**, each non-archived child has their own "Convidar": the link with the profile, its QR code and the copy button, and no code to type (it would lose the profile). The child's name shows only on the adult's screen, never in the link. The general invite is unchanged.
+- **On iPhone in Safari**, "Copiar o link" copies the link with the profile, and an app started at that link uses it.
+- **One mechanism.** `joinAndChoose` (`src/ui/joining.ts`) serves the join screen and the carry of ADR 0014 (which still takes an adult's profile). `worlds.getProfile` (both adapters, with contract tests) tells whether the profile qualifies. The parsers ignore parts after the ones they know, so a later part never makes a link unusable.
+
 ## [0.10.11] — 2026-10-24
 
 ### Added (the product owner's request, ADR 0014, *proposed*)

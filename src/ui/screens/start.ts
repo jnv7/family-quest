@@ -8,7 +8,7 @@ export const renderStart: Screen = (ctx, root) => {
     h('p', {}, ctx.text(ctx.themeKnown ? 'start.intro' : 'start.introNeutral')),
     h('div', { class: 'stack' },
       h('button', { class: 'primary', onClick: () => ctx.go({ name: 'create' }) }, ctx.text(ctx.themeKnown ? 'start.create' : 'start.createNeutral')),
-      h('button', { onClick: () => ctx.go({ name: 'join', worldId: null, themeId: null }) }, ctx.text('start.join')),
+      h('button', { onClick: () => ctx.go({ name: 'join', worldId: null, themeId: null, profileId: null }) }, ctx.text('start.join')),
     ),
     h('p', { class: 'version' }, ctx.text('app.version', { version: ctx.build.version })),
   );
