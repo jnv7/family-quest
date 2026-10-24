@@ -18,3 +18,4 @@ Each major decision (`GOVERNANCE.md` §1) is recorded here as `NNNN-short-title.
 | [0012](0012-version-check.md) | Showing the version and loading a newer one | Accepted |
 | [0013](0013-the-page-is-themed-from-its-first-line.md) | The page is themed from its first line | Proposed |
 | [0014](0014-home-screen-app-starts-in-its-world.md) | A home screen app on iPhone starts in its world | Proposed |
+| [0015](0015-join-link-with-a-child-profile.md) | The join link, with an optional child profile | Proposed |
