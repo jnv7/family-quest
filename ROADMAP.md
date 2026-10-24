@@ -4,7 +4,7 @@ Each release is one minor version, developed on its own `release/0.x` branch (`G
 
 The behaviour each release implements is specified in `SPEC.md`.
 
-**Last closed release: 0.9 — Rewards that last** (2026-10-23, tag `v0.9`; [release notes](docs/release-notes/0.9.md)). **Current release:** none; the next one is 0.10 — Settings and configuration (not yet planned).
+**Last closed release: 0.9 — Rewards that last** (2026-10-23, tag `v0.9`; [release notes](docs/release-notes/0.9.md)). **Current release:** 0.10 — Settings and configuration ([product brief](docs/plans/0.10-product-brief.md)), on `release/0.10`.
 
 ## Release plan
 
@@ -141,13 +141,23 @@ Exit criteria:
 - two devices of the same profile never spend the same tokens;
 - a real family week with tokens, without touching the code.
 
-### 0.10 — Settings and configuration (not yet planned)
+### 0.10 — Settings and configuration
 
-Noted by the product owner on 2026-10-21; to be detailed later. Candidate scope:
+Noted by the product owner on 2026-10-21; scope decided on 2026-10-24. Product brief: [docs/plans/0.10-product-brief.md](docs/plans/0.10-product-brief.md). The delivery plan is to be written by the tech lead.
 
-- one place for definitions and configuration, in a menu meant to stay out of the main interface;
-- a check of new versions;
-- similar housekeeping.
+Scope:
+
+- a settings menu behind a gear in the map's top right corner, with "Trocar de perfil" last;
+- management split into three screens for adults: people (with renaming a profile), tasks (one-off and repeating together), and the game's rules (tokens, limits including `pendingDays`, and restarting the world);
+- restarting says "mundo", never the theme's word;
+- "Como jogar", opened by itself once per profile and device, and "Como instalar";
+- the version and build date in the menu, with "Atualizar" when a newer version is published;
+- the installed app's theme icon and name checked on both phones; the pirate app becomes "Ilha dos Piratas", with the parrot's face as its icon.
+
+Exit criteria:
+
+- every exit criterion in the product brief (§9);
+- the product owner reviews the menu and every settings screen on a phone.
 
 ### Later — Avatar and hardening (not yet planned)
 
