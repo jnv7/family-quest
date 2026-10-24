@@ -1,6 +1,6 @@
 # Specification — Family Quest
 
-Last revised: 2026-10-23.
+Last revised: 2026-10-24.
 
 Tags: **[decided]** came from the product owner; **[proposal]** is a design suggestion that may change; **[open]** is still to be decided.
 
@@ -66,16 +66,16 @@ All collections live under `worlds/{worldId}`. Every document has `schemaVersion
 
 `ruleset` (defaults):
 
-- `partySize`: 5. **[decided]** From 0.9 an admin can change it in management (1 to 10). Lowering it never removes anyone from a `party`: a `party` above the new size keeps its members, and nobody can join it until it is below the size. **[decided]** (product owner, 2026-10-23)
-- `showcaseSize`: 10. **[decided]** (product owner, 2026-10-21; it was 30.) An admin can change it in management (0.8), which is also how an existing world, created with 30, gets 10.
+- `partySize`: 5. **[decided]** From 0.9 an admin can change it (1 to 10), in "Regras do jogo" from 0.10. Lowering it never removes anyone from a `party`: a `party` above the new size keeps its members, and nobody can join it until it is below the size. **[decided]** (product owner, 2026-10-23)
+- `showcaseSize`: 10. **[decided]** (product owner, 2026-10-21; it was 30.) An admin can change it in management (0.8; "Regras do jogo" from 0.10), which is also how an existing world, created with 30, gets 10.
 - `childDailyTaskLimit`: 3 ad hoc tasks created by a child for themselves per day. **[decided]**
 - `timezone`: `Europe/Lisbon`; `weekStartsOn`: Monday.
-- `pendingDays`: how many days a newly obtained collectible stays in its owner's pending list before moving to the reserve; default 1. **[decided]** (value is configurable)
+- `pendingDays`: how many days a newly obtained collectible stays in its owner's pending list before moving to the reserve; default 1. **[decided]** An admin sets it in "Regras do jogo", as a whole number from 1 to 7 (from 0.10). **[decided]**
 - `tokensPerLevel` (from 0.9): the tokens a completed task earns, by its `level`: `low` 1, `mid` 2, `high` 4. **[decided]** (product owner, 2026-10-23)
 - `tokenPrices` (from 0.9): the price of a reward, by `tier`: `low` 5, `mid` 12, `high` 25. **[decided]** Whole numbers, strictly increasing from `low` to `high`.
 - `guarantee`: weekly minimum rule per person. **[open]** Defaults to `null` (off). The code provides the extension point (from 0.9, in `tokensFor`) but implements no rule until the product owner decides.
 
-An admin edits `tokensPerLevel` and `tokenPrices` in management (section 7.8). A change applies only to later completions and purchases. A world created before 0.9 has neither field; it reads them as the defaults until an admin saves them.
+An admin edits `tokensPerLevel` and `tokenPrices` in "Regras do jogo" (section 7.8). A change applies only to later completions and purchases. A world created before 0.9 has neither field; it reads them as the defaults until an admin saves them.
 
 `openingDay` and `tierOdds` were removed in 0.9: there is no opening day, and the tier of a reward is chosen, not drawn. Worlds created before 0.9 still store them; the app ignores them.
 
@@ -189,7 +189,7 @@ There is therefore at most one open task per `taskDef` and profile. Completing a
 
 Known edge case: the "no open task" check runs on the local cache, so a device whose cache misses an open task (for example, a fresh install that has not synced yet) can still create a second open task for a new period. The `board` shows only the oldest open task per `taskDef` and profile; any extra task stays stored and appears once the first is completed. **[proposal]**
 
-**One way to create a task** (from 0.8). **[decided]** Adults use a single form, opened from the `board` and from management:
+**One way to create a task** (from 0.8). **[decided]** Adults use a single form, opened from the `board` and from "Tarefas" in the settings (management before 0.10):
 
 - **For whom:** one or more profiles, or "everyone".
 - **Repeats:** once, daily, weekly or monthly.
@@ -214,7 +214,7 @@ Tokens are earned only by completing: "no" to the question, "undo" within the 4 
 
 **"I think I did better".** **[decided]** (product owner, 2026-10-21) This is no longer a button. The `checkin` shows a static line before the list of tasks ("if you think you did a task better than expected, talk to your parents"), so the conversation happens out loud. The `talkFlag` field and its store operation remain in the data, but the interface does not set it, so it stays `false`. There are no points, states or multipliers.
 
-**Restarting the universe** (from 0.9). **[decided]** (product owner, 2026-10-23, ADR 0011) The last thing in management is a button, in another colour, that restarts the universe. It is for admins only. It deletes every task (open, done and retired), every task definition, every reward (so the purchase history) and every collectible of the world, and clears every profile's token balance and party. The profiles, their symbols, the devices and the `ruleset` stay. It first says what will go and that it cannot be undone, then asks the person to type a word before the final button works. It needs a connection and says so without one. It is the one place in the game that deletes. Afterwards everyone starts at zero, and the recurring tasks are gone with their definitions.
+**Restarting the universe** (from 0.9). **[decided]** (product owner, 2026-10-23, ADR 0011) The last block of "Regras do jogo" (of management, before 0.10) is a button, in another colour, that restarts the universe. Its texts say "mundo" ("Reiniciar o mundo"), never the theme's word for the world (from 0.10). **[decided]** It is for admins only. It deletes every task (open, done and retired), every task definition, every reward (so the purchase history) and every collectible of the world, and clears every profile's token balance and party. The profiles, their symbols, the devices and the `ruleset` stay. It first says what will go and that it cannot be undone, then asks the person to type a word before the final button works. It needs a connection and says so without one. It is the one place in the game that deletes. Afterwards everyone starts at zero, and the recurring tasks are gone with their definitions.
 
 **Retiring a task** (from 0.9). **[decided]** (product owner, 2026-10-21: a "delete task" button in the `checkin`) An open task can be retired:
 
@@ -271,6 +271,15 @@ A newly obtained collectible is pending. It stays in its owner's list, where the
 
 The main screen is a **map** with five tappable places. Each tap starts a short animation to that place. The position, drawing and animation of each place belong to the theme. The avatar cannot be moved freely. **[decided]**
 
+**The map's bar and the menu** (from 0.10). **[decided]** (product owner, 2026-10-24) The map's bar holds only the greeting on the left and a gear (⚙) on the right; it is the only control on the map besides the places and the own boat. The gear opens a panel over the map, which closes with ✕, a tap outside it or the system back gesture. Its items, in this order:
+
+- **Como jogar** and **Como instalar**, for everyone;
+- under the heading **Definições**, for adults only (the admin rule of ADR 0003): **Pessoas**, **Tarefas** and **Regras do jogo** (item 8);
+- **Trocar de perfil**, for everyone, always last;
+- a footer with the running version and its build date, and **Atualizar** when a newer version is published (ADR 0012). Offline, or if the check fails, only the version shows. Nothing outside the menu says that a new version exists.
+
+Tapping an item closes the panel and opens the screen; its back button returns to the map.
+
 **Moorings: the family on the map.** **[decided]** (product owner, 2026-10-20) A theme may declare moorings: fixed spots on the map, per profile `kind`. The engine draws one boat (`homeVariants[kind]`) at each mooring, one per non-archived profile of that kind.
 
 - **Order:** profiles fill the moorings in creation order (`createdAt`, then `id`), so every device draws the same layout.
@@ -281,7 +290,7 @@ The main screen is a **map** with five tappable places. Each tap starts a short 
 
 The pirate theme declares moorings for children only, at the pier. Adults keep the large ship, which is the `home` place art. The symbols of the non-archived adults (up to three, in creation order, smaller as they grow in number) are drawn on its sail for everyone, so a child also sees whose ship it is.
 
-1. **First launch.** Create a world (choosing its theme, when there is more than one), which shows the join link and QR code, or join with a link or code. Then pick a profile. Once the theme is known, the app offers to install itself (never from the bare address).
+1. **First launch.** Create a world (choosing its theme, when there is more than one), which shows the join link and QR code, or join with a link or code. Until a theme is known, these screens call the world "mundo" (from 0.10). Then pick a profile. Once the theme is known, the app offers to install itself (never from the bare address).
 2. **Profile picker.** Netflix-style list of the world's non-archived profiles. Reachable later to switch profile.
 3. **`board`.** All open tasks of the active profile, including those from past periods, as task cards (from 0.8 the same card and order as the `checkin`). The order is:
    1. due;
@@ -304,8 +313,12 @@ The pirate theme declares moorings for children only, at the pier. Adults keep t
      - or leave without choosing: it stays pending (`pendingDays`), so it is never lost by accident.
    - **"Recent":** the pending collectibles, with the same choices as the `home`.
 7. **`showcase`.** The latest `showcaseSize` (10) from the reserve, from everyone, as a grid of art and name. Tapping one shows it larger, with its name and tier name. It never shows the owner, a date or a count. An admin can also rename any of them (moderation). Anyone who taps one can take it into their own `party`, whoever it came from (ADR 0010). **[decided]**
-8. **Management (`admin` only).** Create and archive profiles (optionally choosing the new profile's symbol), list, edit and deactivate `taskDefs` (creating goes through the single task form), edit the tokens per level, the prices per tier, `partySize` (from 0.9; the reward odds editor is gone) and `showcaseSize`, **view tasks per profile** (open tasks, and those done in the last 7 days, as lists with the day, never counts or totals; built in 0.8), show the join link and QR code again. Profiles and worlds are always created through the app, with generated ids, never by editing data by hand. **[decided]**
-
+8. **Settings (`admin` only)** (from 0.10, replacing the "Gerir" screen). **[decided]** Three screens, reached from the menu. Profiles and worlds are always created through the app, with generated ids, never by editing data by hand. **[decided]**
+   - **Pessoas:** the profiles, with archive and reactivate (child profiles only), renaming any profile (trimmed, not empty, at most 40 characters; from 0.10), the form for a new profile (optionally choosing its symbol), and the invite (the join link and QR code).
+   - **Tarefas:** "Nova tarefa" (the single task form); tasks per profile (open tasks with retire, and those done in the last 7 days, as lists with the day, never counts or totals), where a task from a repeating definition carries its repetition; and the repeating definitions, with edit and deactivate.
+   - **Regras do jogo:** tokens per level and prices per tier; the limits (`partySize`, `showcaseSize`, `pendingDays`), each with its own save and validation; and, last and set apart, "Reiniciar o mundo" (section 6).
+9. **Como jogar** (from 0.10). **[decided]** One read-only screen for everyone that explains the game, from the locale files, with the theme's terms and the world's real numbers from the `ruleset`. A section for adults shows only to an adult profile. It shows no count about people. It opens by itself once, the first time a profile reaches the map on a device (remembered on the device, per profile), and is always in the menu.
+10. **Como instalar** (from 0.10). **[decided]** What the screen shows depends on the device: already installed; the browser's install button (Android, desktop Chrome); the Safari steps with the theme's app name (iPhone, iPad); the steps of Chrome's menu on Android when the browser has not offered its dialog **[proposal]**; otherwise, to open the address in Chrome or Safari. It always ends by saying that another person installs first and only then opens the invite link (ADR 0005).
 Adults play like everyone else. The theme can give an adult's `home` a different look (in the pirate theme, a luxury ship).
 
 ## 8. Theme package and interface text
@@ -346,7 +359,7 @@ Folder `src/themes/{themeId}/` with:
   - from 0.9, the `token`: its name (a glossary role, with singular, plural and gender) and its icon (`tokenArt`);
   - from 0.9, `vault`: per tier, the line that invites going deeper (`invite`); optionally a background with its aspect ratio and one spot per tier, in percent, like map places. Without spots, the engine stacks the tiers from the entrance (`low`) to the deep end (`high`);
   - `homeVariants` per `kind`;
-  - `install`: the name and colours of the installed app and its icons, from which one manifest per theme is built (ADR 0005);
+  - `install`: the name and colours of the installed app and its icons, from which one manifest per theme is built (ADR 0005). The name under the icon always comes from the theme, never from a family's world name. In the pirate theme it is "Ilha dos Piratas" and the icon is the parrot's face (from 0.10), while the theme's own `name` stays "Piratas do Farol";
   - the `checkin` character's lines (greeting, congratulations, doubt, farewell), short and fixed in number.
 - `catalog`: a list of slots, each with `slot`, `tier`, `name` and art file.
 - `assets/`: art.
@@ -376,7 +389,7 @@ firebase.json   Firebase CLI configuration (at the root, where the CLI expects i
 
 ## 10. Offline, concurrency and idempotency
 
-- The app shell is cached by a service worker, so the installed app opens without a network (from 0.2).
+- The app shell is cached by a service worker, so the installed app opens without a network (from 0.2). Each build also publishes `version.json`, never cached; the menu reads it to offer "Atualizar", and any failure to read it is silent (from 0.10, ADR 0012).
 - Firestore uses a persistent local cache with multi-tab support (`persistentLocalCache` with `persistentMultipleTabManager`; confirm the exact name in the installed SDK version). Writes are queued and resent automatically.
 - **Do not use transactions for anything that must work offline:** they do not run without a network. Completing and opening are `writeBatch` operations. Uniqueness comes from deterministic ids plus "create, never replace" rules (section 5). If two devices complete or open the same task, the second batch is rejected as a whole and the client refreshes its state from the server.
 - "Already exists" rejections while generating recurring tasks are expected and silent.
