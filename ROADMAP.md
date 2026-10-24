@@ -148,7 +148,7 @@ Noted by the product owner on 2026-10-21; scope decided on 2026-10-24. Product b
 Scope:
 
 - a settings menu behind a gear in the map's top right corner, with "Trocar de perfil" last;
-- management split into three screens for adults: people (with renaming a profile), tasks (one-off and repeating together), and the game's rules (tokens, limits including `pendingDays`, and restarting the world);
+- management split into three screens for adults: people (with renaming a profile, and an invite link and QR code per child that opens on that child's profile), tasks (one-off and repeating together), and the game's rules (tokens, limits including `pendingDays`, and restarting the world);
 - restarting says "mundo", never the theme's word;
 - "Como jogar", opened by itself once per profile and device, and "Como instalar";
 - the version and build date in the menu, with "Atualizar" when a newer version is published;
