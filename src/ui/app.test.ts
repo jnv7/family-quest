@@ -2501,9 +2501,12 @@ describe('"Como jogar"', () => {
   it('opens by itself once per profile and device, and a second profile on the same device sees it once too', async () => {
     const { admin } = await adultAndChild({ firstTime: true });
     await admin.see('As tuas tarefas');
-    expect(admin.navigation.hash()).toBe('#/how-to');
+    expect(admin.navigation.hash()).toBe('#/map'); // a popup over the map, not a screen
+    expect(admin.root.querySelector('.map')).not.toBeNull();
+    expect((admin.find('dialog.menu') as HTMLDialogElement).open).toBe(true);
 
     admin.navigation.back();
+    expect((admin.find('dialog.menu') as HTMLDialogElement).open).toBe(false);
     await admin.see('Olá, Alex!');
     await admin.goTo('Pessoas');
     await admin.type('Nome', 'Sam');
@@ -2549,6 +2552,28 @@ describe('"Como jogar"', () => {
     expect(child.root.textContent).not.toContain('Para os adultos');
   });
 
+  it('is a popup over the map with the art of the game beside each explanation, and a way back to the menu', async () => {
+    const { admin } = await adultAndChild();
+    await admin.goTo('Como jogar');
+    await admin.see('Para os adultos');
+    expect(admin.root.querySelector('.map')).not.toBeNull();
+    const sections = [...admin.root.querySelectorAll('.how-to-section')];
+    expect(sections.length).toBe(8);
+    for (const section of sections) expect(section.querySelector('.how-to-art')).not.toBeNull();
+    // the tokens earned per level, and the three tiers with their prices
+    expect(admin.root.querySelectorAll('.how-to-earn .token-art')).toHaveLength(1 + 2 + 4);
+    expect(admin.root.querySelectorAll('.how-to-open .how-to-reward')).toHaveLength(3);
+    expect(admin.root.querySelector('.how-to-open')!.textContent).toContain('12');
+    // every picture is decoration: nothing the text does not say
+    expect(admin.root.querySelectorAll('.how-to-popup [role="img"]').length).toBe(0);
+
+    await admin.click('.menu-back', 'Menu');
+    await admin.see('Como instalar');
+    expect(admin.root.querySelector('.how-to-popup')).toBeNull();
+    admin.navigation.back();
+    expect((admin.find('dialog.menu') as HTMLDialogElement).open).toBe(false);
+  });
+
   it('does not open by itself when storage cannot be written', async () => {
     const admin = await openDevice('admin-device', { firstTime: true, readOnlyStorage: true });
     await admin.click('button', 'Criar um mundo');
@@ -2572,7 +2597,7 @@ describe('"Como jogar"', () => {
     await admin.click('button', 'Continuar');
     await admin.goTo('Como jogar');
     await admin.see('Para os adultos');
-    const text = [...admin.root.querySelectorAll('.how-to-section')].map((el) => `${el.querySelector('h2')!.textContent}\n${el.querySelector('p')!.textContent}`).join('\n\n');
+    const text = [...admin.root.querySelectorAll('.how-to-section')].map((el) => `${el.querySelector('h3')!.textContent}\n${el.querySelector('p')!.textContent}`).join('\n\n');
     await expect(`${text}\n`).toMatchFileSnapshot(`../../docs/plans/0.10-how-to-text/${id}.txt`);
   });
 });

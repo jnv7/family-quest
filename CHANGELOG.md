@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.10.8] — 2026-10-24
+
+### Changed (the product owner's request)
+
+- **"Como jogar" is now a popup over the map**, not a screen: it opens from the menu's first item (with a "‹ Menu" way back) and by itself, once per profile and device, with the map behind it. It closes with ✕, a tap outside it or the back gesture. The `#/how-to` route is gone.
+- **It has pictures from the game** beside each section, from the theme's own art: the board, the check-in place, the vault, the reserve and the home or the crew's boat; the tokens each difficulty gives; and the three reward tiers with their prices. Same text, no new words. The pictures are decoration: nothing is only in a picture.
+
 ## [0.10.7] — 2026-10-24
 
 ### Release candidate

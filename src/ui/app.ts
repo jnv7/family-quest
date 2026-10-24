@@ -16,7 +16,6 @@ import { renderCreate } from './screens/create';
 import { renderBoard } from './screens/board';
 import { renderCheckin } from './screens/checkin';
 import type { Updater } from './updates';
-import { renderHowTo } from './screens/howTo';
 import { renderInstall } from './screens/install';
 import { renderJoin } from './screens/join';
 import { renderPeople } from './screens/people';
@@ -163,8 +162,6 @@ export async function startApp(options: AppOptions): Promise<() => void> {
         return needsWorld(renderShowcase);
       case 'newTask':
         return needsWorld(renderTaskForm(route.defId, route.from));
-      case 'howTo':
-        return needsWorld(renderHowTo);
       case 'people':
         return needsWorld(renderPeople);
       case 'tasks':

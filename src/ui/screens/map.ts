@@ -161,11 +161,10 @@ export const renderMap: WorldScreen = (ctx, root, { worldId }) => {
       tasks = [];
       stopTasks = ctx.store.tasks.observeTasks(worldId, profile.id, (value) => ((tasks = value), light()), unlit);
     }
-    // "Como jogar" opens by itself once per profile and device. It is marked first, so a device whose storage
-    // cannot be written is not sent there on every start.
+    // "Como jogar" opens by itself, as a popup, once per profile and device. It is marked first, and only opens if
+    // that could be saved, so a device whose storage cannot be written is not nagged on every start.
     if (!ctx.world.hasSeenHowTo(worldId, profile.id) && ctx.world.setSeenHowTo(worldId, profile.id)) {
-      ctx.go({ name: 'howTo' });
-      return;
+      menu.openHowTo();
     }
     drawBoats(profiles, profile.id);
     drawPlaceSymbols(profiles);

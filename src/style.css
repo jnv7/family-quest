@@ -1198,7 +1198,84 @@ button.danger:disabled {
   min-height: 2.5rem;
 }
 
-/* "Como jogar": plain sections of text. */
-.how-to-section h2 {
-  margin-top: 1.25rem;
+/* "Como jogar": a popup over the map, with the theme's art beside each explanation. */
+.menu.how-to-popup {
+  inset: 0;
+  margin: auto;
+  width: min(34rem, 100vw);
+  height: fit-content;
+  max-height: min(90dvh, 100dvh - 2rem);
+  border-radius: 1rem;
+}
+
+.how-to-popup .menu-head {
+  gap: 0.5rem;
+}
+
+.how-to-popup .menu-head h2 {
+  flex: 1;
+  text-align: center;
+}
+
+.how-to-section {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.how-to-section h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.how-to-section p {
+  margin: 0;
+}
+
+.how-to-art {
+  display: flex;
+  justify-content: center;
+}
+
+.how-to-image {
+  max-height: 7rem;
+  max-width: 100%;
+  object-fit: contain;
+  font-size: 4rem;
+  line-height: 1;
+}
+
+.how-to-row {
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.how-to-chip {
+  display: grid;
+  justify-items: center;
+  gap: 0.25rem;
+  min-width: 4.5rem;
+  font-size: 0.9rem;
+}
+
+.how-to-reward {
+  height: 3.5rem;
+  width: auto;
+  font-size: 2.5rem;
+  line-height: 1;
+}
+
+.how-to-tokens {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.how-to-tokens .token-art {
+  height: 1.25rem;
+  width: auto;
+  font-size: 1.1rem;
 }
