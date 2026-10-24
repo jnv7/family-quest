@@ -16,3 +16,4 @@ Each major decision (`GOVERNANCE.md` §1) is recorded here as `NNNN-short-title.
 | [0010](0010-taking-from-the-reserve.md) | Anyone can take a collectible from the reserve | Accepted |
 | [0011](0011-restarting-the-universe.md) | Restarting the universe | Accepted |
 | [0012](0012-version-check.md) | Showing the version and loading a newer one | Accepted |
+| [0013](0013-the-page-is-themed-from-its-first-line.md) | The page is themed from its first line | Proposed |

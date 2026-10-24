@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.10.9] — 2026-10-24
+
+### Fixed (the product owner's report)
+
+- **The page title** is now the installed app's name ("Ilha dos Piratas" in the pirate theme), not "Missões na ilha". Before a theme is known it is "Family Quest".
+- **iPhone: the name on the home screen** was "Family Quest" with the right icon. The page is now themed from its first line (ADR 0013, *proposed*, to be validated): a small inline script at the start of `<head>` picks the theme from the launch address, a join link or the remembered world, and writes the title, `apple-mobile-web-app-title`, the theme colour, the manifest link and the icon link before anything else is parsed. `index.html` and the build no longer carry a generic copy of them. **To see it on an iPhone, remove the app and add it again.**
+
 ## [0.10.8] — 2026-10-24
 
 ### Changed (the product owner's request)

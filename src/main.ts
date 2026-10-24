@@ -2,7 +2,7 @@
 import './style.css';
 import { createRandomInt } from './core/random';
 import type { DataStore } from './data/DataStore';
-import { formatMessage, loadTheme } from './theme';
+import { loadTheme } from './theme';
 import { startApp } from './ui/app';
 import { createInstaller } from './ui/install';
 import { createUpdater, noUpdater } from './ui/updates';
@@ -36,7 +36,6 @@ function localStorageOrNull(): Storage | null {
 }
 
 const theme = loadTheme(DEFAULT_THEME_ID);
-document.title = formatMessage(theme, 'app.name');
 
 const root = document.getElementById('app');
 if (!root) throw new Error('Missing #app element');

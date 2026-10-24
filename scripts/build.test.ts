@@ -33,6 +33,14 @@ describe('a real build', () => {
     const code = scripts.map((name) => readFileSync(join(out, 'assets', name), 'utf8')).join('\n');
     expect(code).toContain(String(published.builtAt));
 
+    // The page writes its own title, manifest and icon from its first line (ADR 0013): none is left static.
+    const page = readFileSync(join(out, 'index.html'), 'utf8');
+    expect(page.indexOf('<script>')).toBeGreaterThan(-1);
+    expect(page.indexOf('<script>')).toBeLessThan(page.indexOf('<meta charset'.toUpperCase()) === -1 ? page.indexOf('<meta') : page.indexOf('<meta'));
+    expect(page).not.toMatch(/<link rel="manifest"/);
+    expect(page).not.toMatch(/<link rel="apple-touch-icon"/);
+    expect(page).not.toMatch(/<meta name="(apple-mobile-web-app-title|theme-color)"/);
+
     const worker = readFileSync(join(out, 'sw.js'), 'utf8');
     expect(worker).not.toContain('version.json');
   }, 120_000);

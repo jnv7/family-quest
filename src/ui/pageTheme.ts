@@ -1,5 +1,4 @@
 import { installIconPath, manifestPath } from '../theme/installPaths';
-import { formatMessage } from '../theme';
 import type { Theme } from '../theme/types';
 
 function link(doc: Document, rel: string): HTMLLinkElement {
@@ -23,7 +22,7 @@ function meta(doc: Document, name: string): HTMLMetaElement {
 }
 
 /**
- * Makes the page look like the theme: the title, the manifest and icon an
+ * Makes the page look like the theme: the title (the name the installed app has), the manifest and icon an
  * installation would use, and the colours. Called once the theme is known (from
  * a join link, the choice when creating a world, or the world itself), never
  * from the bare address, so the app is never installed with the wrong name.
@@ -31,7 +30,7 @@ function meta(doc: Document, name: string): HTMLMetaElement {
  * `assetBase` is the app's base path, such as `/family-quest/`.
  */
 export function applyThemeToPage(doc: Document, theme: Theme, assetBase: string): void {
-  doc.title = formatMessage(theme, 'app.name');
+  doc.title = theme.install.name;
   link(doc, 'manifest').href = `${assetBase}${manifestPath(theme.id)}`;
   link(doc, 'apple-touch-icon').href = `${assetBase}${installIconPath(theme.id, 'apple')}`;
   meta(doc, 'apple-mobile-web-app-title').content = theme.install.name;
