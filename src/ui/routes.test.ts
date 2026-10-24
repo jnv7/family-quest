@@ -13,8 +13,12 @@ describe('parseHash', () => {
     ['#/map', { name: 'map' }],
     ['#/board', { name: 'board' }],
     ['#/checkin', { name: 'checkin' }],
-    ['#/new-task', { name: 'newTask', defId: null }],
-    ['#/new-task/abc123', { name: 'newTask', defId: 'abc123' }],
+    ['#/new-task', { name: 'newTask', defId: null, from: 'board' }],
+    ['#/tasks/new', { name: 'newTask', defId: null, from: 'tasks' }],
+    ['#/new-task/abc123', { name: 'newTask', defId: 'abc123', from: 'tasks' }],
+    ['#/people', { name: 'people' }],
+    ['#/tasks', { name: 'tasks' }],
+    ['#/rules', { name: 'rules' }],
     ['#/home', { name: 'home' }],
     ['#/nowhere', { name: 'start' }],
     ['#/manage', { name: 'manage' }],
@@ -28,7 +32,7 @@ describe('parseHash', () => {
   });
 
   it('round-trips with hashFor', () => {
-    const routes: Route[] = [{ name: 'start' }, { name: 'map' }, { name: 'newTask', defId: null }, { name: 'checkin' }, { name: 'newTask', defId: 'abc123' }, { name: 'join', worldId: ID, themeId: null }, { name: 'join', worldId: ID, themeId: 'minimal-farm' }, { name: 'join', worldId: null, themeId: null }];
+    const routes: Route[] = [{ name: 'start' }, { name: 'map' }, { name: 'newTask', defId: null, from: 'board' }, { name: 'newTask', defId: null, from: 'tasks' }, { name: 'checkin' }, { name: 'newTask', defId: 'abc123', from: 'tasks' }, { name: 'people' }, { name: 'tasks' }, { name: 'rules' }, { name: 'join', worldId: ID, themeId: null }, { name: 'join', worldId: ID, themeId: 'minimal-farm' }, { name: 'join', worldId: null, themeId: null }];
     for (const route of routes) expect(parseHash(hashFor(route))).toEqual(route);
   });
 });

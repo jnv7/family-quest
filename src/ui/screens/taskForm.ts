@@ -17,7 +17,7 @@ const REPEATS: readonly Repeat[] = ['once', ...CADENCES];
  * of normal difficulty and without a question, and limited per day, which the rules cannot enforce
  * (SPEC.md §5 and §6).
  */
-export const renderTaskForm = (defId: string | null): WorldScreen => (ctx, root, { worldId }) => {
+export const renderTaskForm = (defId: string | null, from: 'board' | 'tasks' = 'board'): WorldScreen => (ctx, root, { worldId }) => {
   const editing = defId !== null;
 
   const title = h('input', { type: 'text', required: true, maxLength: LIMITS.title, autocomplete: 'off' });
@@ -91,7 +91,7 @@ export const renderTaskForm = (defId: string | null): WorldScreen => (ctx, root,
     bigField,
   ];
 
-  const heading = screenBar(ctx, { title: ctx.text(editing ? 'recurring.edit' : 'newTask.heading'), back: { name: editing ? 'manage' : 'board' } });
+  const heading = screenBar(ctx, { title: ctx.text(editing ? 'recurring.edit' : 'newTask.heading'), back: { name: editing ? 'tasks' : from } });
   const extra = h('div', { class: 'stack' });
   const submit = h('button', { class: 'primary', type: 'submit', disabled: true }, ctx.text(editing ? 'recurring.save' : 'newTask.submit'));
   const limitMessage = h('div');
@@ -175,12 +175,12 @@ export const renderTaskForm = (defId: string | null): WorldScreen => (ctx, root,
         ctx.settle(ctx.store.tasks.createAdhocTask(worldId, { profileId, title: text, level: level.get(), question: asked, big: big.checked }).settled);
       }
       ctx.notify('notice.taskCreated');
-      ctx.go({ name: 'board' });
+      ctx.go({ name: from });
       return;
     }
     const input = { title: text, cadence, level: level.get() as TaskLevel, assignedTo: everyone ? [] : [...chosen], question: asked, big: big.checked };
     ctx.settle((editing ? ctx.store.taskDefs.updateTaskDef(worldId, defId, input) : ctx.store.taskDefs.createTaskDef(worldId, input)).settled);
-    ctx.go({ name: 'manage' });
+    ctx.go({ name: 'tasks' });
   });
 
   const stopWorld = observeWithRetry(ctx, worldProblem, (onError) =>

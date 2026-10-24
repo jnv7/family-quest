@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.10.2] — 2026-10-24
+
+### Changed
+
+- **Three settings screens replace "Gerir"**, reached from the menu in two taps: **Pessoas** (profiles with archive and reactivate, the new-profile form, and "Convidar", which shows the link and QR code in place), **Tarefas** (a profile's open and recent tasks with retire, the repeating definitions with edit and deactivate, and "Nova tarefa") and **Regras do jogo** (the token rules, the limits, and "Reiniciar o mundo" last). The `manage` route only redirects to the map. The task form returns to where it was opened from (`#/tasks/new`). A child who opens a settings address lands on the map.
+- "Reiniciar o mundo" says "mundo" in plain words, with no theme term, even in its warning. Before a theme is known, the start and create screens say "mundo" too ("Criar um mundo"); once the theme is known they keep its word.
+
+### Added
+
+- **Rename a profile** (adults only, any profile): "Mudar nome" on every row of Pessoas. `worlds.renameProfile` in both adapters, with contract tests; the existing rules already allow it, and a rules test now covers it.
+- **Dias à espera** (`pendingDays`, 1 to 7) in Regras do jogo: `worlds.setPendingDays`, with contract tests and a rules test. No rules change: nothing to publish.
+
 ## [0.10.1] — 2026-10-24
 
 ### Added

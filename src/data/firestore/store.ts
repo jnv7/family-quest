@@ -55,6 +55,7 @@ import {
   type Uid,
   type World,
   type WorldId,
+  isPendingDays,
   isShowcaseSize,
 } from '../../core/model';
 import { randomWorldId } from '../../core/random';
@@ -290,6 +291,12 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
           await updateDoc(worldDoc(db, worldId), { 'ruleset.partySize': size });
         }),
 
+      setPendingDays: (worldId, days) =>
+        write(undefined, async () => {
+          if (!isPendingDays(days)) throw invalid(`The pending days must be a whole number from 1 to ${LIMITS.pendingDaysMax}`);
+          await updateDoc(worldDoc(db, worldId), { 'ruleset.pendingDays': days });
+        }),
+
       restartUniverse: (worldId) =>
         write(undefined, async () => {
           // The server is read, not the cache, so nothing left behind is missed; without a connection this fails.
@@ -345,6 +352,13 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
 
       setProfileArchived: (worldId, profileId, archived) =>
         write(undefined, () => updateDoc(profileDoc(db, worldId, profileId), { archived })),
+
+      renameProfile: (worldId, profileId, displayName) =>
+        write(undefined, async () => {
+          const name = displayName.trim();
+          checkText('Display name', name, LIMITS.displayName);
+          await updateDoc(profileDoc(db, worldId, profileId), { displayName: name });
+        }),
 
       chooseProfile: (worldId, profileId) =>
         write(undefined, async () => {

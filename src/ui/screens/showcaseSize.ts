@@ -15,12 +15,12 @@ export interface ShowcaseSizeSection {
 export function createShowcaseSizeSection(ctx: AppContext, worldId: WorldId): ShowcaseSizeSection {
   const problem = h('div');
   const size = h('input', { type: 'number', inputMode: 'numeric', min: 1, max: LIMITS.showcaseSizeMax, step: 1, required: true });
-  const message = h('p', { class: 'message', role: 'alert', hidden: true }, ctx.text('manage.reserveSizeInvalid'));
+  const message = h('p', { class: 'message', role: 'alert', hidden: true }, ctx.text('rules.reserveSizeInvalid'));
   const form = h('form', { class: 'stack' },
-    h('label', {}, ctx.text('manage.reserveSize'), size),
-    h('small', {}, ctx.text('manage.reserveSizeHint')),
+    h('label', {}, ctx.text('rules.reserveSize'), size),
+    h('small', {}, ctx.text('rules.reserveSizeHint')),
     message,
-    h('button', { class: 'primary', type: 'submit' }, ctx.text('manage.reserveSizeSave')),
+    h('button', { class: 'primary', type: 'submit' }, ctx.text('rules.reserveSizeSave')),
   );
   form.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -36,5 +36,5 @@ export function createShowcaseSizeSection(ctx: AppContext, worldId: WorldId): Sh
       if (document.activeElement !== size) size.value = String(world.ruleset.showcaseSize);
     }, onError),
   );
-  return { element: h('section', { class: 'stack' }, h('h2', {}, ctx.text('manage.reserveSize')), problem, form), dispose: stop };
+  return { element: h('section', { class: 'stack' }, h('h3', {}, ctx.text('rules.reserveSize')), problem, form), dispose: stop };
 }

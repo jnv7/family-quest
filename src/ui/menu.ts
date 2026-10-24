@@ -30,7 +30,9 @@ export function createMenu(ctx: AppContext, worldId: WorldId): { button: HTMLEle
     if (isAdmin) {
       items.push(
         { heading: ctx.text('menu.settings') },
-        { label: ctx.text('map.manage'), route: { name: 'manage' } }, // replaced by the three settings screens in 0.10.2
+        { label: ctx.text('menu.people'), route: { name: 'people' } },
+        { label: ctx.text('menu.tasks'), route: { name: 'tasks' } },
+        { label: ctx.text('menu.rules'), route: { name: 'rules' } },
       );
     }
     items.push({ label: ctx.text('map.switch'), route: { name: 'profiles' } });

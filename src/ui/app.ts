@@ -17,7 +17,9 @@ import { renderBoard } from './screens/board';
 import { renderCheckin } from './screens/checkin';
 import { renderInstall } from './screens/install';
 import { renderJoin } from './screens/join';
-import { renderManage } from './screens/manage';
+import { renderPeople } from './screens/people';
+import { renderRules } from './screens/rules';
+import { renderTasks } from './screens/tasks';
 import { renderMap } from './screens/map';
 import { renderTaskForm } from './screens/taskForm';
 import { renderProfiles } from './screens/profiles';
@@ -155,9 +157,18 @@ export async function startApp(options: AppOptions): Promise<() => void> {
       case 'showcase':
         return needsWorld(renderShowcase);
       case 'newTask':
-        return needsWorld(renderTaskForm(route.defId));
+        return needsWorld(renderTaskForm(route.defId, route.from));
+      case 'people':
+        return needsWorld(renderPeople);
+      case 'tasks':
+        return needsWorld(renderTasks);
+      case 'rules':
+        return needsWorld(renderRules);
       case 'manage':
-        return needsWorld(renderManage);
+        return (c) => {
+          c.go({ name: 'map' }, { replace: true }); // the screen is gone; old links land on the map
+          return () => {};
+        };
       case 'share':
         return needsWorld(renderShare);
     }

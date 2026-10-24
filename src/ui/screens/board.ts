@@ -26,7 +26,7 @@ export const renderBoard: WorldScreen = (ctx, root, { worldId }) => {
     screenBar(ctx, {
       title: ctx.text('board.title'),
       back: { name: 'map' },
-      action: h('button', { onClick: () => ctx.go({ name: 'newTask', defId: null }) }, ctx.text('board.new')),
+      action: h('button', { onClick: () => ctx.go({ name: 'newTask', defId: null, from: 'board' }) }, ctx.text('board.new')),
     }),
     problem,
     list,

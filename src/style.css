@@ -1184,3 +1184,16 @@ button.danger:disabled {
   padding-top: 1rem;
   border-top: 2px solid #b3261e;
 }
+
+/* Renaming a profile in place (Pessoas). */
+.rename {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.rename input {
+  flex: 1 1 8rem;
+  min-height: 2.5rem;
+}

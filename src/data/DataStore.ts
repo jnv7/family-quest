@@ -189,6 +189,13 @@ export interface WorldStore {
   setShowcaseSize(worldId: WorldId, size: number): Write;
 
   /**
+   * Admin only. Sets how many days a new collectible waits, pending, before it goes to the reserve
+   * (`ruleset.pendingDays`): a whole number from 1 to `LIMITS.pendingDaysMax`, otherwise `invalid-argument`
+   * before any write. Only `ruleset.pendingDays` changes.
+   */
+  setPendingDays(worldId: WorldId, days: number): Write;
+
+  /**
    * Admin only (ADR 0011). Restarts the universe: deletes every task, task definition, reward and collectible of the
    * world, and clears every profile's token balance and party. The profiles, the devices and the `ruleset` stay.
    * The one operation that deletes. It needs a connection (`unavailable` without one) and cannot be undone; running
@@ -200,6 +207,12 @@ export interface WorldStore {
   createProfile(worldId: WorldId, input: CreateProfileInput): Write<{ profileId: ProfileId }>;
   /** Admin only, and only child profiles. Profiles are never deleted. */
   setProfileArchived(worldId: WorldId, profileId: ProfileId, archived: boolean): Write;
+
+  /**
+   * Admin only, any profile (adults included). The name is trimmed; empty, or longer than `LIMITS.displayName`, is
+   * `invalid-argument` before any write. Only `displayName` changes.
+   */
+  renameProfile(worldId: WorldId, profileId: ProfileId, displayName: string): Write;
 
   /**
    * Owner or admin. `symbol` must be one of the theme's `profileSymbols`, or null; otherwise

@@ -13,8 +13,12 @@ export type Route =
   | { name: 'vault' }
   | { name: 'home' }
   | { name: 'showcase' }
-  /** `defId` is set when editing a recurring definition. */
-  | { name: 'newTask'; defId: string | null }
+  /** `defId` is set when editing a recurring definition. `from` is where back and save return to. */
+  | { name: 'newTask'; defId: string | null; from: 'board' | 'tasks' }
+  | { name: 'people' }
+  | { name: 'tasks' }
+  | { name: 'rules' }
+  /** Only redirects to the map, so old bookmarks and history entries still work. */
   | { name: 'manage' }
   | { name: 'share' }
   | { name: 'install' };
@@ -30,6 +34,9 @@ const SEGMENTS = {
   home: 'home',
   showcase: 'showcase',
   manage: 'manage',
+  people: 'people',
+  tasks: 'tasks',
+  rules: 'rules',
   share: 'share',
   install: 'install',
 } as const;
@@ -41,7 +48,8 @@ export function parseHash(hash: string): Route {
   if (first === 'join') {
     return { name: 'join', worldId: second ? decodeURIComponent(second) : null, themeId: third ? decodeURIComponent(third) : null };
   }
-  if (first === 'new-task') return { name: 'newTask', defId: second ? decodeURIComponent(second) : null };
+  if (first === 'new-task') return { name: 'newTask', defId: second ? decodeURIComponent(second) : null, from: second ? 'tasks' : 'board' };
+  if (first === 'tasks' && second === 'new') return { name: 'newTask', defId: null, from: 'tasks' };
   const simple = (Object.keys(SEGMENTS) as Array<keyof typeof SEGMENTS>).find((name) => SEGMENTS[name] === first);
   return simple ? { name: simple } : { name: 'start' };
 }
@@ -53,7 +61,10 @@ export function hashFor(route: Route): string {
     const world = `#/join/${encodeURIComponent(route.worldId)}`;
     return route.themeId ? `${world}/${encodeURIComponent(route.themeId)}` : world;
   }
-  if (route.name === 'newTask') return route.defId ? `#/new-task/${encodeURIComponent(route.defId)}` : '#/new-task';
+  if (route.name === 'newTask') {
+    if (route.defId) return `#/new-task/${encodeURIComponent(route.defId)}`;
+    return route.from === 'tasks' ? '#/tasks/new' : '#/new-task';
+  }
   return `#/${SEGMENTS[route.name]}`;
 }
 
