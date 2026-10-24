@@ -1,8 +1,8 @@
 # 0012 — Showing the version and loading a newer one
 
-- **Status:** Proposed (tech lead, 2026-10-24), awaiting the product owner
+- **Status:** Accepted (product owner, 2026-10-24)
 - **Date:** 2026-10-24
-- **Decided by:** product owner (the behaviour: `docs/plans/0.10-product-brief.md` §7); the mechanism is the tech lead's proposal
+- **Decided by:** product owner (the behaviour: `docs/plans/0.10-product-brief.md` §7); the mechanism is the tech lead's proposal, accepted with it
 - **Refines:** ADR 0004 (installable app and offline app shell)
 
 ## Context
