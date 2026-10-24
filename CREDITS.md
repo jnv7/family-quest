@@ -32,6 +32,7 @@ Emoji are drawn by each phone's system font and need no credit.
 - `assets/icons/icon-192.png`: [MIT](https://opensource.org/license/mit), [source](https://github.com/jnv7/family-quest)
 - `assets/icons/icon-512.png`: [MIT](https://opensource.org/license/mit), [source](https://github.com/jnv7/family-quest)
 - `assets/icons/icon-maskable-512.png`: [MIT](https://opensource.org/license/mit), [source](https://github.com/jnv7/family-quest)
+- `assets/icons/parrot.svg`: [MIT](https://opensource.org/license/mit), [source](https://github.com/jnv7/family-quest)
 - `assets/places/board.svg`: [MIT](https://opensource.org/license/mit), [source](https://github.com/jnv7/family-quest)
 - `assets/places/checkin.svg`: [MIT](https://opensource.org/license/mit), [source](https://github.com/jnv7/family-quest)
 - `assets/places/showcase.svg`: [MIT](https://opensource.org/license/mit), [source](https://github.com/jnv7/family-quest)
