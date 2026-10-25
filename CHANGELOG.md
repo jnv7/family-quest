@@ -6,6 +6,102 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.10.13] — 2026-10-25
+
+### Changed (the product owner's decision, ADR 0015 amended)
+
+- **A device that entered by a child's own link stays on that child:** it has no "Trocar de perfil" in the menu, and the profile picker address leads to the map. It is a remedy against mistakes, not security: the lock lives only on that device. Only clearing the app's data frees it, and it frees itself if the profile is archived. It applies only to the child's link: the general link, an adult's profile and the carry of an app added to an iPhone's home screen keep "Trocar de perfil". No Firestore rules change.
+
+## [0.10.12] — 2026-10-24
+
+### Added (the product owner's request, ADR 0015)
+
+- **The invite of one child.** The join link may end with a child's profile id, `#/join/<world>/<theme>/<profile>`. A new device that opens or pastes it lands on the map already on that child's profile, with no picker; the general link still shows the picker. It is a shortcut for the first entry only, not a login: it is used only when the device has no active profile in that world (a sibling's link never switches anyone), and only for a child profile that exists and is not archived. An adult, archived, unknown or malformed profile gives the usual picker, with no message. No Firestore rules change: nothing to publish.
+- **In Pessoas**, each non-archived child has their own "Convidar": the link with the profile, its QR code and the copy button, and no code to type (it would lose the profile). The child's name shows only on the adult's screen, never in the link. The general invite is unchanged.
+- **On iPhone in Safari**, "Copiar o link" copies the link with the profile, and an app started at that link uses it.
+- **One mechanism.** `joinAndChoose` (`src/ui/joining.ts`) serves the join screen and the carry of ADR 0014 (which still takes an adult's profile). `worlds.getProfile` (both adapters, with contract tests) tells whether the profile qualifies. The parsers ignore parts after the ones they know, so a later part never makes a link unusable.
+
+## [0.10.11] — 2026-10-24
+
+### Added (the product owner's request, ADR 0014, *proposed*)
+
+- **iPhone: add to the home screen from the world, and open already in it.** In a Safari tab, while a world and a profile are active, the page address now carries them (`?join=`, with the theme); an app added to the home screen from that tab starts with them, joins the world, takes the profile and opens on the map, with no new join. To let the address reach the new app, the iPhone page no longer has a web app manifest (the name, icon and colour still come from the tags). A start at the join link of the world the app is already in goes to the map instead of joining again. The text of the join screen on an iPhone now says to add the page to the home screen. **Not verified on a device**; if it does not work, the app starts as before and the join screen keeps the paste.
+
+## [0.10.10] — 2026-10-24
+
+### Fixed (the product owner's report)
+
+- **"Atualizar" did nothing.** It asked the service worker to update, but GitHub Pages can keep serving the old `sw.js` and `index.html` for a few minutes after a deploy (only `version.json` is read under a new address), so the page came back as the old build. Now it removes the service worker and its caches and loads the page again from the network under a new address (`?v=`, taken out again once loaded), keeping the hash and the theme. Nothing is lost: Firestore's cache and the device's world are untouched. ADR 0012 has the amendment.
+
+## [0.10.9] — 2026-10-24
+
+### Fixed (the product owner's report)
+
+- **The page title** is now the installed app's name ("Ilha dos Piratas" in the pirate theme), not "Missões na ilha". Before a theme is known it is "Family Quest".
+- **iPhone: the name on the home screen** was "Family Quest" with the right icon. The page is now themed from its first line (ADR 0013, *proposed*, to be validated): a small inline script at the start of `<head>` picks the theme from the launch address, a join link or the remembered world, and writes the title, `apple-mobile-web-app-title`, the theme colour, the manifest link and the icon link before anything else is parsed. `index.html` and the build no longer carry a generic copy of them. **To see it on an iPhone, remove the app and add it again.**
+
+## [0.10.8] — 2026-10-24
+
+### Changed (the product owner's request)
+
+- **"Como jogar" is now a popup over the map**, not a screen: it opens from the menu's first item (with a "‹ Menu" way back) and by itself, once per profile and device, with the map behind it. It closes with ✕, a tap outside it or the back gesture. The `#/how-to` route is gone.
+- **It has pictures from the game** beside each section, from the theme's own art: the board, the check-in place, the vault, the reserve and the home or the crew's boat; the tokens each difficulty gives; and the three reward tiers with their prices. Same text, no new words. The pictures are decoration: nothing is only in a picture.
+
+## [0.10.7] — 2026-10-24
+
+### Release candidate
+
+- Release 0.10 is complete in code and documentation: `SPEC.md` was checked against the code, `docs/architecture.md` describes the routes, the menu, `Navigation.pushOverlay`, the updater and the build identity, and the plan has the list of what the product owner still checks on a phone (the two-phone install check, "Atualizar" after a deploy, airplane mode, and reading "Como jogar"). There is no rules change in this release: nothing to publish.
+
+## [0.10.6] — 2026-10-24
+
+### Changed
+
+- **The installed pirate app** is now called "Ilha dos Piratas" under its icon (the theme's own `name`, "Piratas do Farol", is unchanged), and its icon is the parrot's face, cut from the pirate `board` art (`assets/icons/parrot.svg`, made for this repository, MIT). The four install icons (192, 512, maskable 512 with the face inside the safe zone, and the 180 Apple icon, all opaque) are made by `npm run art:prepare`, which gained an `icon` kind with exact sizes (tests included). The manifest `id` does not change, so an installed Android app updates its name and icon by itself; an iPhone must remove the app and install it again. **To check on two phones** (steps in `docs/plans/0.10.md`, delivery 0.10.6).
+
+## [0.10.5] — 2026-10-24
+
+### Added
+
+- **"Atualizar"** (ADR 0012). The app reads `version.json` without any cache when it starts, and again each time the menu opens (at most once a minute). If the published build is newer, the menu's footer shows an "Atualizar" button, which updates the service worker (waiting up to 10 seconds for it to take over) and reloads. Offline, on a bad response or after 5 seconds there is no button and no message, and the next check tries again. Nothing on the map changes. `vite dev` does nothing. New: `isNewerBuild` (`src/core/build.ts`) and the injected `Updater` (`src/ui/updates.ts`).
+
+### Changed
+
+- Interface messages may now have up to 400 characters (was 200), for the paragraphs of "Como jogar" (`schemas/locale.schema.json`).
+
+## [0.10.4] — 2026-10-24
+
+### Changed
+
+- **"Como instalar"** (was "Instalar a app"): the screen now chooses one case for the device. Already installed says so; a browser that offers its dialog gets the "Instalar a app" button and one line of help; an iPhone or iPad gets the Safari steps with the theme's app name; and the new **Android** case (`Installer` mode `android`, from the user agent) shows the steps of Chrome's menu when the browser has not offered its dialog yet; anything else is told to open the address in Chrome or Safari. Every case ends with: "Para outra pessoa entrar: instala primeiro e só depois abre o link de convite." The install offers in the join flow and at first launch are unchanged.
+
+## [0.10.3] — 2026-10-24
+
+### Added
+
+- **"Como jogar"**, first in the menu for everyone: one read-only screen with a heading and a paragraph per section (tasks, doing one, earning, opening, the party, the reserve, the home), and "Para os adultos" for an adult profile only. The text is in the locale file with the theme's terms, and its numbers (tokens per level, prices, party and reserve sizes) come from the world's `ruleset`, so they are always the real ones. It shows no count about people.
+- **It opens by itself once** per profile and device, when the map first shows that profile (`WorldMemory.hasSeenHowTo` and `setSeenHowTo`, key `fq.howToSeen.{worldId}.{profileId}`); back returns to the map. Profiles already in use see it once after the update. If the device cannot save that, it never opens by itself, so a private window is not nagged.
+- The rendered text in the pirate theme and in `minimal` is kept in `docs/plans/0.10-how-to-text/`, as a test snapshot, for the product owner's reading on a phone.
+
+## [0.10.2] — 2026-10-24
+
+### Changed
+
+- **Three settings screens replace "Gerir"**, reached from the menu in two taps: **Pessoas** (profiles with archive and reactivate, the new-profile form, and "Convidar", which shows the link and QR code in place), **Tarefas** (a profile's open and recent tasks with retire, the repeating definitions with edit and deactivate, and "Nova tarefa") and **Regras do jogo** (the token rules, the limits, and "Reiniciar o mundo" last). The `manage` route only redirects to the map. The task form returns to where it was opened from (`#/tasks/new`). A child who opens a settings address lands on the map.
+- "Reiniciar o mundo" says "mundo" in plain words, with no theme term, even in its warning. Before a theme is known, the start and create screens say "mundo" too ("Criar um mundo"); once the theme is known they keep its word.
+
+### Added
+
+- **Rename a profile** (adults only, any profile): "Mudar nome" on every row of Pessoas. `worlds.renameProfile` in both adapters, with contract tests; the existing rules already allow it, and a rules test now covers it.
+- **Dias à espera** (`pendingDays`, 1 to 7) in Regras do jogo: `worlds.setPendingDays`, with contract tests and a rules test. No rules change: nothing to publish.
+
+## [0.10.1] — 2026-10-24
+
+### Added
+
+- **The menu.** The map's bar now holds only the greeting and a gear (⚙). The gear opens a panel with "Como instalar" for everyone, a "Definições" section for adults (for now one item, "Gerir"), and "Trocar de perfil" always last; the buttons the bar used to have are gone. The panel closes with ✕, with a tap outside, and with the system back gesture (`Navigation.pushOverlay`); tapping an item opens its screen, and back from there returns to the map in one step. A child's menu never has "Definições".
+- **The version.** The menu's footer shows "Versão 0.10.1 · 24/10/2026" (`formatBuildDate`, in Lisbon time). Each build publishes `version.json` next to the app (ADR 0012), never cached by the service worker, and injects the same build as `__APP_BUILD__` in place of `__APP_VERSION__`.
+
 ## [0.9.11] — 2026-10-23
 
 ### Added

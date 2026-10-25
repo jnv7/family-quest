@@ -8,7 +8,8 @@
  *   { "theme": "pirates",
  *     "items": [ { "source": "ships/ship_large.png", "target": "assets/home/adult.webp", "kind": "art" } ] }
  *
- * `kind` is `map`, `art` (places, home variants, the character, reward art) or `collectible`.
+ * `kind` is `map`, `art` (places, home variants, the character, reward art), `collectible`, or `icon` (an install icon: a PNG
+ * of an exact `size` on an opaque `background`, with the picture inside the middle `safe` share; see `prepareIcon`).
  * Each image is fitted inside the budget of its kind, converted to sRGB WebP, and written with
  * no metadata at all (EXIF, XMP, ICC). If a file is still too heavy, quality is lowered until it fits.
  */
@@ -18,12 +19,18 @@ import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { BUDGETS } from './theme-assets.ts';
 
-export type PrepareKind = keyof typeof BUDGETS;
+export type PrepareKind = keyof typeof BUDGETS | 'icon';
 
 export interface ArtItem {
   source: string;
   target: string;
   kind: PrepareKind;
+  /** `icon` only: the exact side of the square PNG, such as 192, 512 or 180. */
+  size?: number;
+  /** `icon` only: the opaque background, as `#rrggbb`. */
+  background?: string;
+  /** `icon` only: the share of the side the picture fits in; 0.8 keeps a maskable icon inside its safe zone. Default 0.9. */
+  safe?: number;
 }
 
 export interface ArtMapping {
@@ -40,8 +47,31 @@ export class ArtPrepareError extends Error {
 
 const QUALITIES = [82, 70, 58, 46, 34];
 
+export interface IconOptions {
+  size: number;
+  background: string;
+  safe?: number;
+}
+
+/**
+ * An install icon: a square PNG of exactly `size`, opaque, with the picture fitted in the middle `safe` share of
+ * it on `background`, and no metadata. The picture may be a vector (SVG) or a raster.
+ */
+export async function prepareIcon(source: Buffer, { size, background, safe = 0.9 }: IconOptions): Promise<Buffer> {
+  if (!Number.isInteger(size) || size < 16 || size > 1024) throw new ArtPrepareError('an icon "size" must be a whole number from 16 to 1024');
+  if (!/^#[0-9a-fA-F]{6}$/.test(background)) throw new ArtPrepareError('an icon "background" must be a colour such as #14324a');
+  if (!(safe > 0 && safe <= 1)) throw new ArtPrepareError('an icon "safe" must be a share above 0 and up to 1');
+  const inner = Math.round(size * safe);
+  const picture = await sharp(source, { density: 384 }).resize({ width: inner, height: inner, fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
+  return sharp({ create: { width: size, height: size, channels: 3, background } })
+    .composite([{ input: picture, gravity: 'centre' }])
+    .toColourspace('srgb')
+    .png() // no metadata is written unless asked for
+    .toBuffer();
+}
+
 /** Fits one image in the budget of its kind and encodes it as WebP without metadata. */
-export async function prepareImage(source: Buffer, kind: PrepareKind): Promise<Buffer> {
+export async function prepareImage(source: Buffer, kind: Exclude<PrepareKind, 'icon'>): Promise<Buffer> {
   const budget = BUDGETS[kind];
   for (const quality of QUALITIES) {
     const output = await sharp(source)
@@ -69,9 +99,14 @@ function readMapping(folder: string): ArtMapping {
   items.forEach((item, index) => {
     const where = `${file}: items[${index}]`;
     if (typeof item?.source !== 'string' || typeof item?.target !== 'string') throw new ArtPrepareError(`${where} needs "source" and "target"`);
-    if (!(item.kind in BUDGETS)) throw new ArtPrepareError(`${where}: "kind" must be one of ${Object.keys(BUDGETS).join(', ')}`);
-    if (!/^assets\/[A-Za-z0-9._/-]+\.webp$/.test(item.target) || item.target.includes('..')) {
-      throw new ArtPrepareError(`${where}: "target" must be a .webp path under assets/`);
+    if (!(item.kind in BUDGETS) && item.kind !== 'icon') throw new ArtPrepareError(`${where}: "kind" must be one of ${[...Object.keys(BUDGETS), 'icon'].join(', ')}`);
+    const extension = item.kind === 'icon' ? 'png' : 'webp';
+    const folderRule = item.kind === 'icon' ? 'assets/icons/' : 'assets/';
+    if (!new RegExp(`^${folderRule}[A-Za-z0-9._/-]+\\.${extension}$`).test(item.target) || item.target.includes('..')) {
+      throw new ArtPrepareError(`${where}: "target" must be a .${extension} path under ${folderRule}`);
+    }
+    if (item.kind === 'icon' && (item.size === undefined || item.background === undefined)) {
+      throw new ArtPrepareError(`${where}: an icon needs "size" and "background"`);
     }
     if (isAbsolute(item.source) || relative(folder, resolve(folder, item.source)).startsWith('..')) {
       throw new ArtPrepareError(`${where}: "source" must stay inside the art folder`);
@@ -98,7 +133,7 @@ export async function prepareArt(folder: string, themesDir = join('src', 'themes
     }
     let output: Buffer;
     try {
-      output = await prepareImage(source, item.kind);
+      output = item.kind === 'icon' ? await prepareIcon(source, { size: item.size!, background: item.background!, safe: item.safe }) : await prepareImage(source, item.kind);
     } catch (error) {
       if (error instanceof ArtPrepareError) throw new ArtPrepareError(`${item.source} ${error.message}`);
       throw new ArtPrepareError(`${item.source} is not an image sharp can read`);

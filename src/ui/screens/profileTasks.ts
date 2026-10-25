@@ -40,9 +40,9 @@ export function createProfileTasksSection(ctx: AppContext, worldId: WorldId): Pr
   const doneList = h('ul', { class: 'rows' });
   const body = h('div', { class: 'stack', hidden: true });
   body.append(
-    h('h3', {}, ctx.text('manage.tasksOpen')),
+    h('h3', {}, ctx.text('tasks.open')),
     openList,
-    h('h3', {}, ctx.text('manage.tasksDone')),
+    h('h3', {}, ctx.text('tasks.done')),
     doneList,
   );
 
@@ -78,7 +78,7 @@ export function createProfileTasksSection(ctx: AppContext, worldId: WorldId): Pr
     const open = sortForBoard(tasks, ctx.clock(), timeZone);
     openList.replaceChildren(
       ...(open.length === 0
-        ? [h('li', {}, h('span', {}, ctx.text('manage.tasksNoneOpen')))]
+        ? [h('li', {}, h('span', {}, ctx.text('tasks.noneOpen')))]
         : open.map((task) => {
             const retiring = retire.parts(task, active);
             return taskCard(ctx, { task, def: task.defId === null ? undefined : defs.get(task.defId), timeZone, corner: retiring?.corner, below: [retiring?.below] });
@@ -87,7 +87,7 @@ export function createProfileTasksSection(ctx: AppContext, worldId: WorldId): Pr
     const recent = doneRecently(tasks, ctx.clock(), RECENT_DAYS);
     doneList.replaceChildren(
       ...(recent.length === 0
-        ? [h('li', {}, h('span', {}, ctx.text('manage.tasksNoneDone')))]
+        ? [h('li', {}, h('span', {}, ctx.text('tasks.noneDone')))]
         : recent.map((task) => h('li', {}, h('span', {}, task.title), h('small', {}, dayLabel(dateKey(task.doneAt!, timeZone)))))),
     );
   }
@@ -100,7 +100,7 @@ export function createProfileTasksSection(ctx: AppContext, worldId: WorldId): Pr
   );
 
   return {
-    element: h('section', { class: 'stack' }, h('h2', {}, ctx.text('manage.tasksTitle')), problem, choice, body),
+    element: h('section', { class: 'stack' }, h('h2', {}, ctx.text('tasks.perProfile')), problem, choice, body),
     setProfiles(value) {
       profiles = value;
       if (chosen !== null && !value.some((p) => p.id === chosen)) chosen = null;

@@ -157,6 +157,24 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
       });
     });
 
+    describe('getProfile', () => {
+      it('reads a profile, archived ones included, and null for an unknown id', async () => {
+        const { admin, worldId, adminProfileId, childProfileId } = await setup();
+        expect(await admin.worlds.getProfile(worldId, adminProfileId)).toMatchObject({ id: adminProfileId, kind: 'adult', archived: false });
+        await admin.worlds.setProfileArchived(worldId, childProfileId, true).settled;
+        expect(await admin.worlds.getProfile(worldId, childProfileId)).toMatchObject({ id: childProfileId, kind: 'child', archived: true });
+        expect(await admin.worlds.getProfile(worldId, 'noSuchProfile')).toBeNull();
+      });
+
+      it('is refused to a device that is not a member', async () => {
+        const { worldId, childProfileId } = await setup();
+        const { newcomer: stranger } = await makeDevices({ clock }); // never joined this world
+        const refused = await stranger.worlds.getProfile(worldId, childProfileId).then(() => null, (e: unknown) => e);
+        expect(refused).toBeInstanceOf(DataStoreError);
+        expect((refused as DataStoreError).code).toBe('permission-denied');
+      });
+    });
+
     describe('join', () => {
       it('joins with no profile, and joining again is a no-op', async () => {
         const { newcomer, worldId } = await setup();
@@ -975,6 +993,54 @@ export function runDataStoreContract(name: string, makeDevices: MakeDevices): vo
         const { admin, child, worldId } = await setup();
         await rejectsWith(child.worlds.setShowcaseSize(worldId, 12), 'permission-denied');
         for (const size of [0, 31, 2.5, Number.NaN]) await rejectsWith(admin.worlds.setShowcaseSize(worldId, size), 'invalid-argument');
+      });
+    });
+
+    describe('pending days', () => {
+      it('is changed by an admin, touches only itself, and every device sees it', async () => {
+        const { admin, child, worldId } = await setup();
+        await admin.worlds.setPendingDays(worldId, 3).settled;
+        const world = new Watch<World>((v, e) => child.worlds.observeWorld(worldId, v, e));
+        await eventually(() => expect(world.value?.ruleset.pendingDays).toBe(3));
+        expect(world.value?.ruleset.showcaseSize).toBe(DEFAULT_RULESET.showcaseSize);
+        expect(world.value?.ruleset.partySize).toBe(DEFAULT_RULESET.partySize);
+        world.close();
+      });
+
+      it('is refused to a child, and must be a whole number from 1 to 7, before any write', async () => {
+        const { admin, child, worldId } = await setup();
+        await rejectsWith(child.worlds.setPendingDays(worldId, 3), 'permission-denied');
+        for (const days of [0, 8, 2.5, Number.NaN]) await rejectsWith(admin.worlds.setPendingDays(worldId, days), 'invalid-argument');
+      });
+    });
+
+    describe('renaming a profile', () => {
+      it('is done by an admin, for a child and for an adult, and changes only the name', async () => {
+        const { admin, worldId, adminProfileId, childProfileId } = await setup();
+        const profiles = new Watch<Profile[]>((v, e) => admin.worlds.observeProfiles(worldId, v, e));
+        await eventually(() => expect(profiles.value?.find((p) => p.id === childProfileId)).toBeDefined());
+        const before = profiles.value!.find((p) => p.id === childProfileId)!;
+
+        await admin.worlds.renameProfile(worldId, childProfileId, '  Robin  ').settled;
+        await admin.worlds.renameProfile(worldId, adminProfileId, 'Sam').settled;
+        await eventually(() => expect(profiles.value?.find((p) => p.id === childProfileId)?.displayName).toBe('Robin'));
+        await eventually(() => expect(profiles.value?.find((p) => p.id === adminProfileId)?.displayName).toBe('Sam'));
+        const after = profiles.value!.find((p) => p.id === childProfileId)!;
+        expect({ ...after, displayName: before.displayName }).toEqual(before);
+        profiles.close();
+      });
+
+      it('is refused to a child, themselves included', async () => {
+        const { child, worldId, adminProfileId, childProfileId } = await setup();
+        await rejectsWith(child.worlds.renameProfile(worldId, childProfileId, 'Mine'), 'permission-denied');
+        await rejectsWith(child.worlds.renameProfile(worldId, adminProfileId, 'Theirs'), 'permission-denied');
+      });
+
+      it('refuses an empty name and a name of 41 characters, before any write', async () => {
+        const { admin, worldId, childProfileId } = await setup();
+        await rejectsWith(admin.worlds.renameProfile(worldId, childProfileId, '   '), 'invalid-argument');
+        await rejectsWith(admin.worlds.renameProfile(worldId, childProfileId, 'x'.repeat(41)), 'invalid-argument');
+        await admin.worlds.renameProfile(worldId, childProfileId, 'x'.repeat(40)).settled;
       });
     });
 

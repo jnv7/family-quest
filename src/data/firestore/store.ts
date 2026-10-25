@@ -55,6 +55,7 @@ import {
   type Uid,
   type World,
   type WorldId,
+  isPendingDays,
   isShowcaseSize,
 } from '../../core/model';
 import { randomWorldId } from '../../core/random';
@@ -252,6 +253,15 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
 
       getMembership,
 
+      async getProfile(worldId, profileId) {
+        try {
+          const snapshot = await getDoc(profileDoc(db, worldId, profileId));
+          return snapshot.exists() ? decodeProfile(snapshot) : null;
+        } catch (error) {
+          throw toDataStoreError(error);
+        }
+      },
+
       observeWorld: (worldId, onValue, onError) => observeDoc(worldDoc(db, worldId), decodeWorld, onValue, onError),
 
       observeMembers: (worldId, onValue, onError) =>
@@ -288,6 +298,12 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
         write(undefined, async () => {
           if (!isPartySize(size)) throw invalid(`The party size must be a whole number from 1 to ${LIMITS.partySizeMax}`);
           await updateDoc(worldDoc(db, worldId), { 'ruleset.partySize': size });
+        }),
+
+      setPendingDays: (worldId, days) =>
+        write(undefined, async () => {
+          if (!isPendingDays(days)) throw invalid(`The pending days must be a whole number from 1 to ${LIMITS.pendingDaysMax}`);
+          await updateDoc(worldDoc(db, worldId), { 'ruleset.pendingDays': days });
         }),
 
       restartUniverse: (worldId) =>
@@ -345,6 +361,13 @@ export function createFirestoreStore(options: FirestoreStoreOptions): DataStore 
 
       setProfileArchived: (worldId, profileId, archived) =>
         write(undefined, () => updateDoc(profileDoc(db, worldId, profileId), { archived })),
+
+      renameProfile: (worldId, profileId, displayName) =>
+        write(undefined, async () => {
+          const name = displayName.trim();
+          checkText('Display name', name, LIMITS.displayName);
+          await updateDoc(profileDoc(db, worldId, profileId), { displayName: name });
+        }),
 
       chooseProfile: (worldId, profileId) =>
         write(undefined, async () => {

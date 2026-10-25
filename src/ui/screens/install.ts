@@ -1,18 +1,28 @@
 import type { WorldScreen } from '../context';
 import { h } from '../dom';
-import { canOfferInstall, mountInstallOffer } from '../installOffer';
 import { screenBar } from '../bar';
 
-/** How to install the app, with the world's theme (ADR 0005). */
+/**
+ * "Como instalar" (SPEC.md §7.10, ADR 0005): one case for the device, chosen from `Installer.mode()`, and
+ * always the note about the invite link, which matters on iPhone where a join made in Safari is lost.
+ */
 export const renderInstall: WorldScreen = (ctx, root) => {
-  const offer = h('div', { class: 'stack' });
-  const none = h('p', { class: 'message' });
-  root.append(
-    screenBar(ctx, { title: ctx.text('install.title'), back: { name: 'map' } }),
-    offer,
-    none,
-  );
-  const stop = mountInstallOffer(ctx, offer);
-  none.textContent = canOfferInstall(ctx) ? '' : ctx.text('install.nothing');
-  return stop;
+  const body = h('div', { class: 'stack' });
+  root.append(screenBar(ctx, { title: ctx.text('install.title'), back: { name: 'map' } }), body);
+
+  const draw = () => {
+    const mode = ctx.installer.mode();
+    const shown =
+      mode === 'installed' ? [h('p', {}, ctx.text('install.done'))]
+      : mode === 'prompt' ? [
+          h('button', { class: 'primary', onClick: () => void ctx.installer.prompt() }, ctx.text('install.button')),
+          h('p', {}, ctx.text('install.promptHelp')),
+        ]
+      : mode === 'ios' ? [h('p', { class: 'install-steps' }, ctx.text('install.ios', { appName: ctx.theme.install.name }))]
+      : mode === 'android' ? [h('p', { class: 'install-steps' }, ctx.text('install.android'))]
+      : [h('p', {}, ctx.text('install.other'))];
+    body.replaceChildren(...shown, h('p', { class: 'message' }, ctx.text('install.inviteNote')));
+  };
+  draw();
+  return ctx.installer.onChange(draw);
 };

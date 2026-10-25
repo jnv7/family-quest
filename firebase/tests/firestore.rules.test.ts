@@ -214,6 +214,11 @@ describe('worlds', () => {
     await assertFails(updateDoc(doc(as(CHILD), p()), { name: 'Renamed' }));
   });
 
+  it('an admin changes a rule of the world (pendingDays); a child cannot', async () => {
+    await assertSucceeds(updateDoc(doc(as(ADMIN), p()), { 'ruleset.pendingDays': 3 }));
+    await assertFails(updateDoc(doc(as(CHILD), p()), { 'ruleset.pendingDays': 3 }));
+  });
+
   it('nobody deletes a world', async () => {
     await assertFails(deleteDoc(doc(as(ADMIN), p())));
   });
@@ -290,6 +295,14 @@ describe('profiles', () => {
     await assertSucceeds(updateDoc(doc(db, p('profiles', 'pChild')), { partyIds: ['a', 'b'] }));
     await assertFails(updateDoc(doc(db, p('profiles', 'pChild')), { displayName: 'Changed' }));
     await assertFails(updateDoc(doc(db, p('profiles', 'pChild2')), { partyIds: ['a'] }));
+  });
+
+  it('an admin renames any profile; the owner cannot rename their own', async () => {
+    await assertSucceeds(updateDoc(doc(as(ADMIN), p('profiles', 'pChild')), { displayName: 'Robin' }));
+    await assertSucceeds(updateDoc(doc(as(ADMIN), p('profiles', 'pAdult2')), { displayName: 'Sam' }));
+    await assertFails(updateDoc(doc(as(CHILD), p('profiles', 'pChild')), { displayName: 'Mine' }));
+    await assertFails(updateDoc(doc(as(ADMIN), p('profiles', 'pChild')), { displayName: '' }));
+    await assertFails(updateDoc(doc(as(ADMIN), p('profiles', 'pChild')), { displayName: 'x'.repeat(41) }));
   });
 
   it('the owner writes avatar.symbol without any rules change, and another child cannot', async () => {

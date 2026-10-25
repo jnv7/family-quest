@@ -1,4 +1,4 @@
 /// <reference types="vite/client" />
 
-/** Set from `package.json` by `vite.config.ts`. */
-declare const __APP_VERSION__: string;
+/** Set at build time by `vite.config.ts` (ADR 0012 §1). */
+declare const __APP_BUILD__: import('./core/build').Build;

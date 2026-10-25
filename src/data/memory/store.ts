@@ -38,6 +38,7 @@ import {
   type Uid,
   type World,
   type WorldId,
+  isPendingDays,
   isShowcaseSize,
 } from '../../core/model';
 import { randomId, randomWorldId } from '../../core/random';
@@ -334,6 +335,15 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
         return structuredClone(member);
       },
 
+      async getProfile(worldId, profileId) {
+        const uid = requireUid();
+        await Promise.resolve();
+        const ws = localView().get(worldId);
+        if (!ws?.members.has(uid)) throw denied('Only a member reads a profile');
+        const profile = ws.profiles.get(profileId);
+        return profile ? structuredClone(profile) : null;
+      },
+
       async getMembership(worldId) {
         const uid = requireUid();
         await Promise.resolve();
@@ -385,6 +395,17 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
           return {
             ops: [{ worldId, collection: 'world', id: worldId, patch: { ruleset } }],
             check: (state) => (accessOf(state, worldId, uid)?.isAdmin ? null : denied('Only an admin changes the party size')),
+          };
+        }),
+
+      setPendingDays: (worldId, days) =>
+        submit(undefined, (view, uid) => {
+          const ws = requireWorld(view, worldId);
+          if (!isPendingDays(days)) throw invalid(`The pending days must be a whole number from 1 to ${LIMITS.pendingDaysMax}`);
+          const ruleset = { ...ws.world.ruleset, pendingDays: days };
+          return {
+            ops: [{ worldId, collection: 'world', id: worldId, patch: { ruleset } }],
+            check: (state) => (accessOf(state, worldId, uid)?.isAdmin ? null : denied('Only an admin changes the pending days')),
           };
         }),
 
@@ -459,6 +480,21 @@ export function createMemoryStore(backend: MemoryBackend, options: MemoryStoreOp
               if (!target) return notFound(`Profile ${profileId} does not exist`);
               if (target.kind === 'adult') return denied('Adult profiles are never archived');
               return null;
+            },
+          };
+        }),
+
+      renameProfile: (worldId, profileId, displayName) =>
+        submit(undefined, (view, uid) => {
+          const name = displayName.trim();
+          checkText('Display name', name, LIMITS.displayName);
+          if (!requireWorld(view, worldId).profiles.has(profileId)) throw notFound(`Profile ${profileId} does not exist`);
+          return {
+            ops: [{ worldId, collection: 'profiles', id: profileId, patch: { displayName: name } }],
+            check: (state) => {
+              const access = accessOf(state, worldId, uid);
+              if (!access?.isAdmin) return denied('Only an admin renames profiles');
+              return access.ws.profiles.has(profileId) ? null : notFound(`Profile ${profileId} does not exist`);
             },
           };
         }),

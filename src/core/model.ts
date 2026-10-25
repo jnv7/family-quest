@@ -89,10 +89,15 @@ export const LIMITS = {
   tokenPriceMax: 200,
   /** `partySize` is a whole number from 1 to this. */
   partySizeMax: 10,
+  /** `pendingDays` is a whole number from 1 to this (SPEC.md §4). */
+  pendingDaysMax: 7,
 } as const;
 
 /** Whether `size` is a valid `showcaseSize`: a whole number from 1 to `LIMITS.showcaseSizeMax`. */
 export const isShowcaseSize = (size: number): boolean => Number.isInteger(size) && size >= 1 && size <= LIMITS.showcaseSizeMax;
+
+/** Whether `days` is a valid `pendingDays`: a whole number from 1 to `LIMITS.pendingDaysMax`. */
+export const isPendingDays = (days: number): boolean => Number.isInteger(days) && days >= 1 && days <= LIMITS.pendingDaysMax;
 
 // ---------------------------------------------------------------------------
 // Documents. Every stored document carries these two fields.

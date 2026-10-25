@@ -44,6 +44,12 @@
       "licence": "MIT"
     },
     {
+      "file": "assets/icons/parrot.svg",
+      "author": "Family Quest",
+      "source": "https://github.com/jnv7/family-quest",
+      "licence": "MIT"
+    },
+    {
       "file": "assets/map.webp",
       "author": "Kenney (kenney.nl)",
       "source": "https://kenney.nl/assets/pirate-pack",

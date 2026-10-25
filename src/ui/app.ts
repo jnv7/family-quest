@@ -1,22 +1,28 @@
 /** Router and boot of the interface (docs/architecture.md §9). Screens render only from observers. */
+import type { Build } from '../core/build';
 import type { Clock, RandomInt } from '../core/model';
 import type { DataStore } from '../data/DataStore';
 import type { Theme } from '../theme';
 import { formatMessage, hasTheme, loadTheme } from '../theme';
 import { reportSettleError, type AppContext, type Dispose, type Screen, type WorldScreen } from './context';
 import { h } from './dom';
+import { createCarryKeeper, type CarryWriter } from './carry';
 import { createGenerator } from './generation';
+import { joinAndChoose } from './joining';
 import type { Installer } from './install';
 import type { Navigation } from './navigation';
 import { createReserveKeeper } from './reserve';
 import { applyThemeToPage } from './pageTheme';
-import { hashFor, parseHash, type Route } from './routes';
+import { hashFor, parseHash, type Carry, type Route } from './routes';
 import { renderCreate } from './screens/create';
 import { renderBoard } from './screens/board';
 import { renderCheckin } from './screens/checkin';
+import type { Updater } from './updates';
 import { renderInstall } from './screens/install';
 import { renderJoin } from './screens/join';
-import { renderManage } from './screens/manage';
+import { renderPeople } from './screens/people';
+import { renderRules } from './screens/rules';
+import { renderTasks } from './screens/tasks';
 import { renderMap } from './screens/map';
 import { renderTaskForm } from './screens/taskForm';
 import { renderProfiles } from './screens/profiles';
@@ -38,6 +44,14 @@ export interface AppOptions {
   randomInt: RandomInt;
   navigation: Navigation;
   installer: Installer;
+  /** The running build, shown in the menu. */
+  build: Build;
+  /** Looks for a newer build (ADR 0012). */
+  updater: Updater;
+  /** What the launch address carries (ADR 0014): the world and profile a home screen app starts in. */
+  carry?: Carry | null;
+  /** Puts the carry in the page's address (on iOS, in a browser tab). Defaults to doing nothing. */
+  writeCarry?: CarryWriter;
   /** The theme the app was launched with (`?theme=` in the address of an installed app), if any. */
   launchTheme: string | null;
   /** Schedules a delayed call; defaults to `setTimeout`. Tests pass their own. */
@@ -50,7 +64,8 @@ const NOTICE_MS = 5000;
 
 /** Starts the interface and returns a function that stops it. */
 export async function startApp(options: AppOptions): Promise<() => void> {
-  const { root, store, baseUrl, world, clock, randomInt, navigation, installer, assetBase, launchTheme } = options;
+  const { root, store, baseUrl, world, clock, randomInt, navigation, installer, assetBase, launchTheme, build, updater } = options;
+  const carry = options.carry ?? null;
   const later = options.later ?? ((run, ms) => {
     const id = setTimeout(run, ms);
     return () => clearTimeout(id);
@@ -78,7 +93,7 @@ export async function startApp(options: AppOptions): Promise<() => void> {
     const changed = themeId !== theme.id || !themeKnown;
     theme = loadTheme(themeId);
     themeKnown = true;
-    applyThemeToPage(document, theme, assetBase);
+    applyThemeToPage(document, theme, assetBase, { manifest: !installer.platform.isIos });
     return changed;
   }
 
@@ -94,6 +109,8 @@ export async function startApp(options: AppOptions): Promise<() => void> {
       if (useTheme(themeId)) render();
     },
     installer,
+    build,
+    updater,
     clock,
     randomInt,
     uid,
@@ -102,6 +119,7 @@ export async function startApp(options: AppOptions): Promise<() => void> {
     text,
     later,
     notify,
+    pushOverlay: (onBack) => navigation.pushOverlay(onBack),
     settle: (settled) => void settled.catch((error: unknown) => reportSettleError(error, notify)),
     go(route, { replace = false } = {}) {
       const hash = hashFor(route);
@@ -132,7 +150,7 @@ export async function startApp(options: AppOptions): Promise<() => void> {
       case 'create':
         return renderCreate;
       case 'join':
-        return renderJoin(route.worldId);
+        return renderJoin(route);
       case 'install':
         return needsWorld(renderInstall);
       case 'profiles':
@@ -150,9 +168,18 @@ export async function startApp(options: AppOptions): Promise<() => void> {
       case 'showcase':
         return needsWorld(renderShowcase);
       case 'newTask':
-        return needsWorld(renderTaskForm(route.defId));
+        return needsWorld(renderTaskForm(route.defId, route.from));
+      case 'people':
+        return needsWorld(renderPeople);
+      case 'tasks':
+        return needsWorld(renderTasks);
+      case 'rules':
+        return needsWorld(renderRules);
       case 'manage':
-        return needsWorld(renderManage);
+        return (c) => {
+          c.go({ name: 'map' }, { replace: true }); // the screen is gone; old links land on the map
+          return () => {};
+        };
       case 'share':
         return needsWorld(renderShare);
     }
@@ -162,6 +189,8 @@ export async function startApp(options: AppOptions): Promise<() => void> {
   const generator = createGenerator(ctx);
   // Old pending collectibles go to the reserve when the app opens, whichever screen is showing.
   const keeper = createReserveKeeper(ctx);
+  // A browser tab on iOS keeps its address ready to start a home screen app in this world (ADR 0014).
+  const carrier = createCarryKeeper(ctx, options.writeCarry ?? (() => {}));
 
   // The world's own theme is the truth: follow it, and remember it for the next launch.
   let watchedWorld: string | null = null;
@@ -190,6 +219,7 @@ export async function startApp(options: AppOptions): Promise<() => void> {
     followWorldTheme();
     generator.follow(world.get());
     keeper.follow(world.get());
+    carrier.follow(world.get());
     dispose = screenFor(route)(ctx, root);
   }
 
@@ -197,13 +227,16 @@ export async function startApp(options: AppOptions): Promise<() => void> {
   const rememberedTheme = world.getTheme();
   if (launchTheme) useTheme(launchTheme); // an installed app starts with its own theme
   if (world.get() !== null && rememberedTheme) useTheme(rememberedTheme); // the world's theme wins, from the first frame
+  await adoptCarry(ctx, carry, options.writeCarry);
   await resumeSession(ctx, navigation);
+  void updater.check();
   render();
   return () => {
     stopListening();
     stopWatchingWorld();
     generator.stop();
     keeper.stop();
+    carrier.stop();
     dispose();
     root.replaceChildren();
   };
@@ -234,17 +267,45 @@ async function signInWithRetry(
 /** A device that already belongs to a world skips the start page. */
 async function resumeSession(ctx: AppContext, navigation: Navigation): Promise<void> {
   const worldId = ctx.world.get();
-  if (worldId === null || parseHash(navigation.hash()).name !== 'start') return;
+  if (worldId === null) return;
+  const route = parseHash(navigation.hash());
+  // A home screen app starts at the address it was added from, which may be a join link to the world it is already in.
+  if (route.name !== 'start' && !(route.name === 'join' && route.worldId === worldId)) return;
   try {
     const membership = await ctx.store.worlds.getMembership(worldId);
     if (membership === null) {
       ctx.world.clear(); // this device is no longer a member of that world
       return;
     }
-    navigation.replace(hashFor({ name: membership.profileId ? 'map' : 'profiles' }));
+    // Already in this world and started at a child's link, with no profile yet: the link's profile applies (ADR 0015).
+    const next = route.name === 'join' && route.profileId && !membership.profileId
+      ? await joinAndChoose(ctx, worldId, route.profileId, { childOnly: true, fix: true })
+      : membership.profileId ? 'map' : 'profiles';
+    navigation.replace(hashFor({ name: next }));
   } catch (error) {
     // Offline with nothing cached: trust the saved world; the screens read from the cache.
     console.warn('Could not check the membership', error);
     navigation.replace(hashFor({ name: 'map' }));
   }
+}
+
+/**
+ * A home screen app added on an iPhone from a browser tab where the world was already open starts with that world
+ * and profile in its address (ADR 0014): it joins and takes the profile by itself, so nobody does it twice. Only a
+ * device with no world does this, and only outside an iPhone's browser tab. Any failure leaves the usual start.
+ */
+async function adoptCarry(ctx: AppContext, carry: Carry | null, write?: CarryWriter): Promise<void> {
+  if (!carry) return;
+  const { platform } = ctx.installer;
+  const inBrowserTab = platform.isIos && !platform.isStandalone;
+  if (ctx.world.get() === null && !inBrowserTab) {
+    try {
+      // The carry is this device's own profile, an adult's too, so it is not limited to children (ADR 0015 §4).
+      await joinAndChoose(ctx, carry.worldId, carry.profileId, { childOnly: false, fix: false });
+      ctx.world.set(carry.worldId);
+    } catch (error) {
+      console.warn('Could not start in the carried world', error);
+    }
+  }
+  if (!inBrowserTab) write?.(null); // the address goes back to what it was
 }

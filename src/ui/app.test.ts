@@ -4,15 +4,20 @@ import type { Tier } from '../core/model';
 import { createRandomInt } from '../core/random';
 import { DataStoreError, type DataStore } from '../data/DataStore';
 import { createMemoryBackend, createMemoryStore } from '../data/memory';
-import { loadTheme, type Theme } from '../theme';
+import { listThemes, loadTheme, type Theme } from '../theme';
 import { startApp } from './app';
 import type { Installer, InstallMode, Platform } from './install';
+import type { Build } from '../core/build';
+import type { CarryWriter } from './carry';
 import { memoryNavigation } from './navigation';
+import type { Carry } from './routes';
+import { noUpdater, type Updater } from './updates';
 import { createWorldMemory } from './worldMemory';
 
 const BASE_URL = 'https://example.org/family-quest/';
 const randomInt = createRandomInt((array) => crypto.getRandomValues(array));
 const theme = loadTheme('minimal');
+const build: Build = { version: '0.10.1', builtAt: Date.parse('2026-10-24T12:00:00Z'), commit: 'test' };
 
 /** One clock for every device, so tests can move time. */
 let now = Date.parse('2026-10-20T10:00:00Z');
@@ -36,7 +41,7 @@ const runTimers = () => {
 /** An installer that lets a test choose the platform and what can be offered. */
 function fakeInstaller(mode: InstallMode = 'none', platform: Partial<Platform> = {}) {
   const installer: Installer & { prompt: ReturnType<typeof vi.fn> } = {
-    platform: { isIos: false, isStandalone: false, ...platform },
+    platform: { isIos: false, isAndroid: false, isStandalone: false, ...platform },
     mode: () => mode,
     prompt: vi.fn(async () => {}),
     onChange: () => () => {},
@@ -50,30 +55,44 @@ let stops: Array<() => void> = [];
 /** One device: its own store, remembered world and screen, sharing the backend. */
 async function openDevice(
   uid: string,
-  options: { theme?: Theme; hash?: string; savedWorld?: string; savedTheme?: string; launchTheme?: string; wrap?: (store: DataStore) => DataStore; installer?: Installer } = {},
+  options: { theme?: Theme; firstTime?: boolean; readOnlyStorage?: boolean; hash?: string; savedWorld?: string; savedTheme?: string; launchTheme?: string; wrap?: (store: DataStore) => DataStore; installer?: Installer; updater?: Updater; carry?: Carry | null; writeCarry?: CarryWriter; storage?: Map<string, string> } = {},
 ) {
-  const storage = new Map<string, string>();
+  const storage = options.storage ?? new Map<string, string>();
   const world = createWorldMemory({
-    getItem: (k) => storage.get(k) ?? null,
-    setItem: (k, v) => void storage.set(k, v),
+    // "Como jogar" opens by itself on a profile's first visit; tests skip it unless they ask for it.
+    getItem: (k) => (!options.firstTime && k.startsWith('fq.howToSeen.') ? '1' : storage.get(k) ?? null),
+    setItem: (k, v) => {
+      if (options.readOnlyStorage) throw new Error('read-only');
+      storage.set(k, v);
+    },
     removeItem: (k) => void storage.delete(k),
   });
   if (options.savedWorld) world.set(options.savedWorld);
   if (options.savedTheme) world.setTheme(options.savedTheme);
   const root = document.createElement('main');
   document.body.append(root);
+  const navigation = memoryNavigation(options.hash ?? '');
   const store = (options.wrap ?? ((s) => s))(createMemoryStore(backend, { uid, clock, randomInt }));
-  stops.push(await startApp({ root, store, theme: options.theme ?? theme, baseUrl: BASE_URL, world, clock, randomInt, navigation: memoryNavigation(options.hash ?? ''), installer: options.installer ?? fakeInstaller(), assetBase: '/family-quest/', later, launchTheme: options.launchTheme ?? null }));
+  stops.push(await startApp({ root, store, theme: options.theme ?? theme, baseUrl: BASE_URL, world, clock, randomInt, navigation, build, updater: options.updater ?? noUpdater, carry: options.carry ?? null, writeCarry: options.writeCarry, installer: options.installer ?? fakeInstaller(), assetBase: '/family-quest/', later, launchTheme: options.launchTheme ?? null }));
 
   const find = (selector: string, text?: string) =>
     [...root.querySelectorAll<HTMLElement>(selector)].find((el) => text === undefined || el.textContent?.includes(text));
+  const click = async (selector: string, text: string) => {
+    await vi.waitFor(() => expect(find(selector, text), `${selector} "${text}"`).toBeDefined());
+    find(selector, text)!.click();
+  };
   return {
     root,
     world,
+    storage,
+    store,
+    navigation,
     find,
-    click: async (selector: string, text: string) => {
-      await vi.waitFor(() => expect(find(selector, text), `${selector} "${text}"`).toBeDefined());
-      find(selector, text)!.click();
+    click,
+    /** Opens the menu (⚙) on the map and taps one of its items. */
+    goTo: async (item: string) => {
+      await click('.menu-button', '⚙');
+      await click('.menu-item', item);
     },
     type: async (label: string, value: string) => {
       const field = () => [...root.querySelectorAll('label')].find((l) => l.textContent?.includes(label))?.querySelector('input');
@@ -114,8 +133,8 @@ afterEach(() => {
 /** Creates a world as "Alex" and returns the device and the world id. */
 async function createFamily() {
   const admin = await openDevice('admin-device');
-  await admin.click('button', 'Criar uma família');
-  await admin.type('Nome da família', 'Casa');
+  await admin.click('button', 'Criar um mundo');
+  await admin.type('Nome do mundo', 'Casa');
   await admin.type('O teu nome', 'Alex');
   admin.submit();
   await admin.see('Convidar');
@@ -133,7 +152,7 @@ describe('creating a world', () => {
 
     await admin.click('button', 'Continuar');
     await admin.see('Olá, Alex!');
-    expect(admin.find('button', 'Gerir')).toBeDefined(); // the creator is admin at once
+    expect(admin.find('.menu-button')).toBeDefined(); // the creator is admin at once
   });
 });
 
@@ -141,7 +160,7 @@ describe('joining a world', () => {
   it('lets a second device join by link, pick a profile and see no management', async () => {
     const { admin, worldId } = await createFamily();
     await admin.click('button', 'Continuar');
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Pessoas');
     await admin.type('Nome', 'Sam');
     admin.submit();
     await admin.see('Sam');
@@ -151,7 +170,9 @@ describe('joining a world', () => {
     await vi.waitFor(() => expect(child.find('button.profile', 'Alex')).toBeDefined());
     await child.click('button.profile', 'Sam');
     await child.see('Olá, Sam!');
-    expect(child.find('button', 'Gerir')).toBeUndefined();
+    await child.click('.menu-button', '⚙');
+    await child.see('Como instalar');
+    expect(child.find('.menu-item', 'Pessoas')).toBeUndefined();
     expect(child.world.get()).toBe(worldId);
   });
 
@@ -179,7 +200,7 @@ describe('managing profiles', () => {
   it('hides an archived child profile from the picker, and brings it back when reactivated', async () => {
     const { admin, worldId } = await createFamily();
     await admin.click('button', 'Continuar');
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Pessoas');
     await admin.type('Nome', 'Sam');
     admin.submit();
     await admin.see('Sam');
@@ -187,7 +208,7 @@ describe('managing profiles', () => {
     await admin.click('li button', 'Arquivar');
     await admin.see('(arquivado)');
     // Adult profiles cannot be archived: only the child row has the button.
-    expect(admin.root.querySelectorAll('li button')).toHaveLength(1);
+    expect([...admin.root.querySelectorAll('li button')].filter((b) => b.textContent === 'Arquivar' || b.textContent === 'Reativar')).toHaveLength(1);
 
     const other = await openDevice('other-device', { hash: `#/join/${worldId}` });
     await other.see('Quem és tu?');
@@ -209,10 +230,12 @@ describe('managing recurring tasks', () => {
   async function openRecurring() {
     const { admin, worldId } = await createFamily();
     await admin.click('button', 'Continuar');
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Pessoas');
     await admin.type('Nome', 'Sam');
     admin.submit();
     await admin.see('Sam');
+    await admin.click('button', 'Voltar');
+    await admin.goTo('Tarefas');
     return { admin, worldId };
   }
 
@@ -263,7 +286,7 @@ type Device = Awaited<ReturnType<typeof openDevice>>;
 
 /** On the map of an admin device: creates a daily recurring task for everyone, and comes back to the map. */
 async function addRecurring(device: Device, title: string) {
-  await device.click('button', 'Gerir');
+  await device.goTo('Tarefas');
   await device.click('button', 'Nova tarefa');
   await device.type('O que é para fazer?', title);
   await pickPeople(device, 'Todos');
@@ -301,11 +324,11 @@ describe('recurring tasks on the board', () => {
     const sam = profileIds.find((p) => p.displayName === 'Sam')!;
     const alex = profileIds.find((p) => p.displayName === 'Alex')!;
 
-    await admin.click('button', 'Trocar de perfil');
+    await admin.goTo('Trocar de perfil');
     await admin.click('button.profile', 'Sam');
     await vi.waitFor(() => expect(tasksOf(worldId).map((t) => t.profileId)).toEqual([sam.id]));
 
-    await admin.click('button', 'Trocar de perfil');
+    await admin.goTo('Trocar de perfil');
     await admin.click('button.profile', 'Alex');
     await vi.waitFor(() => expect(tasksOf(worldId).map((t) => t.profileId).sort()).toEqual([alex.id, sam.id].sort()));
   });
@@ -343,7 +366,7 @@ describe('planning a big task', () => {
   /** A monthly big definition, so the task has until the end of the month (2026-10-31). */
   async function bigTaskFamily() {
     const { admin, worldId } = await familyWithChild();
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Tarefas');
     await admin.click('button', 'Nova tarefa');
     await admin.type('O que é para fazer?', 'Limpar a garagem');
     await pickPeople(admin, 'Todos');
@@ -484,7 +507,7 @@ describe('coming back', () => {
 
   it('forgets a world this device is no longer a member of', async () => {
     const device = await openDevice('stranger-device', { savedWorld: 'y'.repeat(28) });
-    await device.see('Criar uma família');
+    await device.see('Criar um mundo');
     expect(device.world.get()).toBeNull();
   });
 });
@@ -493,7 +516,7 @@ describe('coming back', () => {
 async function familyWithChild() {
   const { admin, worldId } = await createFamily();
   await admin.click('button', 'Continuar');
-  await admin.click('button', 'Gerir');
+  await admin.goTo('Pessoas');
   await admin.type('Nome', 'Sam');
   admin.submit();
   await admin.see('Sam');
@@ -522,7 +545,7 @@ describe('the profile picker', () => {
     const { admin, worldId } = await familyWithChild();
     const sam = [...backend.state.get(worldId)!.profiles.values()].find((p) => p.displayName === 'Sam')!;
     sam.avatar.symbol = '🐬';
-    await admin.click('button', 'Trocar de perfil');
+    await admin.goTo('Trocar de perfil');
     await vi.waitFor(() => expect(admin.root.querySelectorAll('button.profile')).toHaveLength(2));
     expect(admin.find('button.profile', 'Sam')?.querySelector('.avatar')?.textContent).toBe('🐬');
     expect(admin.find('button.profile', 'Sam')?.querySelector('.name')?.textContent).toBe('Sam');
@@ -644,7 +667,7 @@ describe('the one task form', () => {
   /** A world with an adult and two children, "Sam" and "Kim"; returns the admin device. */
   async function twoChildren() {
     const { admin, worldId } = await familyWithChild();
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Pessoas');
     await admin.type('Nome', 'Kim');
     admin.submit();
     await vi.waitFor(() => expect(admin.root.querySelectorAll('ul.rows li').length).toBeGreaterThanOrEqual(3));
@@ -785,7 +808,7 @@ describe('the board alert for new tasks', () => {
 describe('the adults’ view of the family', () => {
   it('lists the open and recently done tasks of a chosen profile, with no counts, and nothing of the others', async () => {
     const { admin, child } = await familyWithChild();
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Pessoas');
     await admin.type('Nome', 'Kim');
     admin.submit();
     await vi.waitFor(() => expect(admin.root.querySelectorAll('ul.rows li').length).toBeGreaterThanOrEqual(3));
@@ -803,7 +826,7 @@ describe('the adults’ view of the family', () => {
     await child.see('Nada para concluir').catch(() => {});
     await vi.waitFor(() => expect([...backend.state.get(admin.world.get()!)!.tasks.values()].some((t) => t.status === 'done')).toBe(true));
 
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Tarefas');
     await admin.see('Tarefas por perfil');
     expect(admin.root.textContent).not.toContain('Arrumar o quarto'); // nobody chosen yet
     await admin.click('button.chip', 'Sam');
@@ -953,7 +976,7 @@ describe('the check-in', () => {
       expect(digits(child)).not.toContain('37');
       await child.click('button', 'Voltar');
     }
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Tarefas');
     await admin.see('Tarefas por perfil');
     await admin.click('button.chip', 'Sam');
     expect(digits(admin)).not.toContain('37');
@@ -1114,7 +1137,7 @@ describe('retiring a task', () => {
     expect(more(child)).toHaveLength(0); // an adult gave it: the child cannot retire it
 
     await admin.click('button', 'Voltar');
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Tarefas');
     await admin.see('Tarefas por perfil');
     await admin.click('button.chip', 'Sam');
     await admin.see('Por engano');
@@ -1698,7 +1721,7 @@ describe('the showcase', () => {
     expect(state(worldId).collectibles.size).toBe(12); // nothing deleted
 
     // An admin changes the size in management, and the showcase of the other device follows.
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Regras do jogo');
     await admin.type('Lugares', '3');
     const field = [...admin.root.querySelectorAll('label')].find((l) => l.textContent?.includes('Lugares'))!;
     field.closest('form')!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
@@ -1831,7 +1854,7 @@ describe('moorings and symbols', () => {
     (boats(child)[1] as HTMLElement).click();
     await child.see('Escolher o meu símbolo');
     await child.click('button', 'Voltar');
-    await child.click('button', 'Trocar de perfil');
+    await child.goTo('Trocar de perfil');
     await child.click('button.profile', 'Sam');
     await vi.waitFor(() => expect(boats(child).map((boat) => boat.tagName)).toEqual(['BUTTON', 'DIV']));
   });
@@ -1913,7 +1936,7 @@ describe('moorings and symbols', () => {
   it('lets an admin choose the symbol of a new profile in the management screen', async () => {
     const { worldId } = await seed([]);
     const admin = await asAdult(worldId);
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Pessoas');
     await admin.type('Nome', 'Sam');
     await admin.choose('Símbolo', DOLPHIN);
     admin.submit();
@@ -1935,8 +1958,8 @@ describe('the token rules', () => {
 
   it('shows the rules of the world, saves new ones, and refuses prices that do not rise or values out of range', async () => {
     const { admin, worldId } = await familyWithChild();
-    await admin.click('button', 'Gerir');
-    await admin.see('Recompensas');
+    await admin.goTo('Regras do jogo');
+    await admin.see('Cada tarefa dá');
     await vi.waitFor(() => expect(inputs(admin).map((input) => input.value)).toEqual(['1', '2', '4', '5', '12', '25']));
 
     fill(admin, [2, 3, 5, 6, 10, 30]);
@@ -1960,8 +1983,8 @@ describe('the token rules', () => {
 
   it('shows the token icon beside every value and the themed noun in the explanation', async () => {
     const { admin } = await familyWithChild();
-    await admin.click('button', 'Gerir');
-    await admin.see('Recompensas');
+    await admin.goTo('Regras do jogo');
+    await admin.see('Cada tarefa dá');
     expect(rulesForm(admin).querySelectorAll('.token-art')).toHaveLength(6);
     await admin.see(theme.roles.token.plural);
   });
@@ -1985,7 +2008,7 @@ describe('restarting the universe', () => {
     expect(state(worldId).tasks.size).toBeGreaterThan(0);
     expect(state(worldId).taskDefs.size).toBe(1);
 
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Regras do jogo');
     const last = () => [...admin.root.querySelectorAll('section')].at(-1)!;
     await vi.waitFor(() => expect(danger(admin, 'Reiniciar')).toBeDefined()); // the last thing in management
     expect(last().contains(danger(admin, 'Reiniciar')!)).toBe(true);
@@ -2012,7 +2035,7 @@ describe('restarting the universe', () => {
   it('can be cancelled, and a child never sees it', async () => {
     const { admin, child, worldId } = await familyWithChild();
     giveLegacyRewards(worldId, 'Sam', 1);
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Regras do jogo');
     await vi.waitFor(() => expect(danger(admin, 'Reiniciar')).toBeDefined());
     danger(admin, 'Reiniciar')!.click();
     await admin.click('button', 'Cancelar');
@@ -2025,7 +2048,7 @@ describe('restarting the universe', () => {
 describe('the size of the party', () => {
   it('is saved by an admin and refuses 0 and 11', async () => {
     const { admin, worldId } = await familyWithChild();
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Regras do jogo');
     const input = () => [...admin.root.querySelectorAll('label')].find((l) => l.textContent?.includes('Tamanho'))!.querySelector('input')!;
     const form = () => input().closest('form')!;
     await vi.waitFor(() => expect(input().value).toBe('5'));
@@ -2050,7 +2073,7 @@ describe('the size of the party', () => {
       await vi.waitFor(() => expect(profileSam(worldId).partyIds).toHaveLength(i + 1));
     }
 
-    await admin.click('button', 'Gerir');
+    await admin.goTo('Regras do jogo');
     const input = () => [...admin.root.querySelectorAll('label')].find((l) => l.textContent?.includes('Tamanho'))!.querySelector('input')!;
     await vi.waitFor(() => expect(input().value).toBe('5'));
     input().value = '2';
@@ -2079,7 +2102,7 @@ describe('the theme of the world', () => {
   /** Creates a world with the farm theme, from the create screen. */
   async function createFarm(installer?: Installer) {
     const admin = await openDevice('admin-device', { installer });
-    await admin.click('button', 'Criar uma família');
+    await admin.click('button', 'Criar um mundo');
     await admin.choose('Tema', 'Tema quinta');
     await admin.see('Criar uma quinta'); // the names follow the choice at once
     await admin.type('Nome da quinta', 'Casa');
@@ -2140,15 +2163,15 @@ describe('the theme of the world', () => {
 describe('installing the app', () => {
   it('offers nothing from the bare address, even when the browser could install it', async () => {
     const device = await openDevice('device', { installer: fakeInstaller('prompt') });
-    await device.see('Criar uma família');
+    await device.see('Criar um mundo');
     expect(device.find('button', 'Instalar')).toBeUndefined();
   });
 
   it('offers the browser install button once the theme is known, and uses the browser dialog', async () => {
     const installer = fakeInstaller('prompt');
     const admin = await openDevice('admin-device', { installer });
-    await admin.click('button', 'Criar uma família');
-    await admin.type('Nome da família', 'Casa');
+    await admin.click('button', 'Criar um mundo');
+    await admin.type('Nome do mundo', 'Casa');
     await admin.type('O teu nome', 'Alex');
     admin.submit();
     await admin.see('Convidar');
@@ -2158,13 +2181,15 @@ describe('installing the app', () => {
 
     await admin.click('button', 'Continuar');
     await admin.see('Olá, Alex!');
-    expect(admin.find('.bar-actions button', 'Instalar')).toBeDefined();
+    await admin.goTo('Como instalar');
+    await admin.click('button', 'Instalar a app');
+    expect(installer.prompt).toHaveBeenCalledTimes(2);
   });
 
   it('shows the iOS steps with the name of the themed app, and hides the offer once installed', async () => {
     const admin = await openDevice('admin-device', { installer: fakeInstaller('ios', { isIos: true }) });
-    await admin.click('button', 'Criar uma família');
-    await admin.type('Nome da família', 'Casa');
+    await admin.click('button', 'Criar um mundo');
+    await admin.type('Nome do mundo', 'Casa');
     await admin.type('O teu nome', 'Alex');
     admin.submit();
     await admin.see('Para instalar «Família»: toca em Partilhar');
@@ -2172,7 +2197,8 @@ describe('installing the app', () => {
 
     const installed = await openDevice('admin-device', { installer: fakeInstaller('installed', { isIos: true, isStandalone: true }), savedWorld: admin.world.get()!, savedTheme: 'minimal' });
     await installed.see('Olá, Alex!');
-    expect(installed.find('.bar-actions button', 'Instalar')).toBeUndefined();
+    await installed.goTo('Como instalar');
+    await installed.see('já está instalada');
   });
 
   it('on iOS in a browser tab, does not join: it explains, and offers to copy the link', async () => {
@@ -2187,7 +2213,7 @@ describe('installing the app', () => {
       hash: `#/join/${worldId}/minimal`,
       installer: fakeInstaller('ios', { isIos: true }),
     });
-    await safari.see('instala primeiro a app');
+    await safari.see('adiciona esta página ao ecrã principal');
     expect(safari.root.textContent).toContain('Para instalar «Família»'); // themed from the link
     expect(safari.world.get()).toBeNull();
     expect(members()).toBe(before);
@@ -2213,5 +2239,673 @@ describe('installing the app', () => {
     await viaPaste.click('button', 'Colar');
     await viaPaste.see('Quem és tu?');
     expect(viaPaste.world.get()).toBe(worldId);
+  });
+});
+
+describe('the menu', () => {
+  const openMenu = async (device: Awaited<ReturnType<typeof openDevice>>) => {
+    await device.click('.menu-button', '⚙');
+    await vi.waitFor(() => expect(device.find('dialog.menu')).toBeDefined());
+  };
+  const itemsOf = (device: Awaited<ReturnType<typeof openDevice>>) =>
+    [...device.root.querySelectorAll('.menu-item, .menu-heading')].map((el) => el.textContent);
+  const isOpen = (device: Awaited<ReturnType<typeof openDevice>>) => (device.find('dialog.menu') as HTMLDialogElement).open;
+
+  async function adultAndChild() {
+    const { admin, worldId } = await createFamily();
+    await admin.click('button', 'Continuar');
+    await admin.goTo('Pessoas');
+    await admin.type('Nome', 'Sam');
+    admin.submit();
+    await admin.see('Sam');
+    const child = await openDevice('child-device', { hash: `#/join/${worldId}` });
+    await child.click('button.profile', 'Sam');
+    await child.see('Olá, Sam!');
+    return { admin, child };
+  }
+
+  it('keeps only the greeting and the gear on the map bar', async () => {
+    const { admin } = await createFamily();
+    await admin.click('button', 'Continuar');
+    await admin.see('Olá, Alex!');
+    const bar = admin.find('header.bar')!;
+    expect([...bar.children].map((el) => el.tagName)).toEqual(['H1', 'SPAN']);
+    expect(bar.querySelectorAll(':scope > span > button')).toHaveLength(1);
+    expect(bar.querySelector('button')!.getAttribute('aria-label')).toBe('Menu');
+    expect(bar.textContent).not.toContain('Trocar de perfil');
+  });
+
+  it("gives a child Como instalar and Trocar de perfil, with no Definições", async () => {
+    const { child } = await adultAndChild();
+    await openMenu(child);
+    expect(itemsOf(child)).toEqual(['Como jogar', 'Como instalar', 'Trocar de perfil']);
+    expect(child.root.textContent).toContain('Versão 0.10.1 · 24/10/2026');
+  });
+
+  it('gives an adult the settings too, with Trocar de perfil always last', async () => {
+    const { admin } = await createFamily();
+    await admin.click('button', 'Continuar');
+    await admin.see('Olá, Alex!');
+    await openMenu(admin);
+    expect(itemsOf(admin)).toEqual(['Como jogar', 'Como instalar', 'Definições', 'Pessoas', 'Tarefas', 'Regras do jogo', 'Trocar de perfil']);
+  });
+
+  it('closes with ✕, with a tap outside, and with the back gesture, and stays on the map', async () => {
+    const { admin } = await createFamily();
+    await admin.click('button', 'Continuar');
+    await admin.see('Olá, Alex!');
+
+    await openMenu(admin);
+    expect(isOpen(admin)).toBe(true);
+    await admin.click('.menu-close', '✕');
+    expect(isOpen(admin)).toBe(false);
+
+    await openMenu(admin);
+    (admin.find('dialog.menu') as HTMLElement).click();
+    expect(isOpen(admin)).toBe(false);
+
+    await openMenu(admin);
+    admin.navigation.back();
+    expect(isOpen(admin)).toBe(false);
+
+    expect(admin.navigation.hash()).toBe('#/map');
+    await admin.see('Olá, Alex!');
+    await vi.waitFor(() => expect(admin.find('.map')).toBeDefined());
+  });
+
+  it('opens the screen of an item, and one back gesture from there returns to the map', async () => {
+    const { admin } = await createFamily();
+    await admin.click('button', 'Continuar');
+    await admin.see('Olá, Alex!');
+    await admin.goTo('Como instalar');
+    await admin.see('instala primeiro e só depois');
+    expect(admin.navigation.hash()).toBe('#/install');
+
+    admin.navigation.back();
+    await admin.see('Olá, Alex!');
+    expect(admin.navigation.hash()).toBe('#/map');
+  });
+
+  /** An updater a test controls: nothing is found until `found()` is called. */
+  function fakeUpdater() {
+    let isAvailable = false;
+    const listeners = new Set<() => void>();
+    const updater: Updater & { check: ReturnType<typeof vi.fn>; apply: ReturnType<typeof vi.fn>; found(): void } = {
+      check: vi.fn(async () => {}),
+      available: () => isAvailable,
+      apply: vi.fn(async () => {}),
+      onChange: (listener) => (listeners.add(listener), () => listeners.delete(listener)),
+      found() {
+        isAvailable = true;
+        listeners.forEach((listener) => listener());
+      },
+    };
+    return updater;
+  }
+
+  async function adminWith(updater: Updater) {
+    const admin = await openDevice('admin-device', { updater });
+    await admin.click('button', 'Criar um mundo');
+    await admin.type('Nome do mundo', 'Casa');
+    await admin.type('O teu nome', 'Alex');
+    admin.submit();
+    await admin.see('Convidar');
+    await admin.click('button', 'Continuar');
+    await admin.see('Olá, Alex!');
+    return admin;
+  }
+
+  it('checks for a newer version when the app starts and each time the menu opens, and shows "Atualizar" only when one is found', async () => {
+    const updater = fakeUpdater();
+    const admin = await adminWith(updater);
+    expect(updater.check).toHaveBeenCalledTimes(1);
+    await openMenu(admin);
+    expect(updater.check).toHaveBeenCalledTimes(2);
+    expect(admin.find('.menu-update')).toBeUndefined();
+
+    updater.found(); // found while the menu is open
+    await vi.waitFor(() => expect(admin.find('.menu-update', 'Atualizar')).toBeDefined());
+    admin.find('.menu-update')!.click();
+    expect(updater.apply).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows nothing about a version on the map itself, and no button without a newer one', async () => {
+    const updater = fakeUpdater();
+    const admin = await adminWith(updater);
+    updater.found();
+    expect(admin.root.textContent).not.toContain('Atualizar');
+    expect(admin.root.querySelector('.map')).not.toBeNull();
+    expect(admin.find('header.bar')!.textContent).not.toContain('Atualizar');
+  });
+
+  it('opens the profile picker from Trocar de perfil', async () => {
+    const { admin } = await createFamily();
+    await admin.click('button', 'Continuar');
+    await admin.goTo('Trocar de perfil');
+    await admin.see('Quem és tu?');
+  });
+});
+
+describe('the settings screens', () => {
+  async function family() {
+    const { admin, worldId } = await createFamily();
+    await admin.click('button', 'Continuar');
+    await admin.see('Olá, Alex!');
+    await admin.goTo('Pessoas');
+    await admin.type('Nome', 'Sam');
+    admin.submit();
+    await admin.see('Sam');
+    await admin.click('button', 'Voltar');
+    return { admin, worldId };
+  }
+
+  it('reaches each former section of management with the gear and one tap', async () => {
+    const { admin } = await family();
+    await admin.goTo('Pessoas');
+    await admin.see('Novo perfil');
+    await admin.click('button', 'Voltar');
+    await admin.goTo('Tarefas');
+    await admin.see('Tarefas por perfil');
+    await admin.see('Tarefas que se repetem');
+    await admin.click('button', 'Voltar');
+    await admin.goTo('Regras do jogo');
+    await admin.see('Limites');
+    await admin.see('Dias à espera');
+    expect(admin.find('button', 'Reiniciar o mundo')).toBeDefined();
+  });
+
+  it('sends a child who opens a settings address to the map, and the old Gerir address too', async () => {
+    const { admin, worldId } = await family();
+    const child = await openDevice('child-device', { hash: `#/join/${worldId}` });
+    await child.click('button.profile', 'Sam');
+    await child.see('Olá, Sam!');
+    for (const hash of ['#/people', '#/tasks', '#/rules']) {
+      child.navigation.replace(hash);
+      child.navigation.push('#/map');
+      child.navigation.push(hash);
+      await vi.waitFor(() => expect(child.navigation.hash()).toBe('#/map'));
+    }
+    admin.navigation.push('#/manage');
+    await vi.waitFor(() => expect(admin.navigation.hash()).toBe('#/map'));
+  });
+
+  it('renames any profile, trims the name, and shows it on the profile picker', async () => {
+    const { admin } = await family();
+    await admin.goTo('Pessoas');
+    const row = () => [...admin.root.querySelectorAll('ul.rows li')].find((li) => li.textContent?.includes('Sam'))!;
+    (row().querySelector('button') as HTMLElement).click();
+    const input = admin.root.querySelector<HTMLInputElement>('form.rename input')!;
+    input.value = '  Robin ';
+    admin.root.querySelector('form.rename')!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    await admin.see('Robin');
+    await admin.notSee('Sam');
+    // the adult can be renamed too
+    const alex = [...admin.root.querySelectorAll('ul.rows li')].find((li) => li.textContent?.includes('Alex'))!;
+    (alex.querySelector('button') as HTMLElement).click();
+    expect(admin.root.querySelector('form.rename')).not.toBeNull();
+    await admin.click('button', 'Voltar');
+    await admin.goTo('Trocar de perfil');
+    await vi.waitFor(() => expect(admin.find('button.profile', 'Robin')).toBeDefined());
+  });
+
+  it('shows the invite in place from Pessoas', async () => {
+    const { admin, worldId } = await family();
+    await admin.goTo('Pessoas');
+    await admin.click('button', 'Convidar');
+    await admin.see(`Código: ${worldId}`);
+    expect(admin.root.querySelector('svg[role="img"]')).not.toBeNull();
+  });
+
+  it('saves pendingDays 3, and refuses 0 and 8', async () => {
+    const { admin, worldId } = await family();
+    await admin.goTo('Regras do jogo');
+    const input = () => [...admin.root.querySelectorAll('label')].find((l) => l.textContent?.includes('Dias à espera'))!.querySelector('input')!;
+    const submit = (value: string) => {
+      input().value = value;
+      input().closest('form')!.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    };
+    await vi.waitFor(() => expect(input().value).toBe('1'));
+    for (const bad of ['0', '8']) {
+      submit(bad);
+      await admin.see('Escolhe um número de 1 a 7');
+      expect(backend.state.get(worldId)!.world.ruleset.pendingDays).toBe(1);
+    }
+    submit('3');
+    await vi.waitFor(() => expect(backend.state.get(worldId)!.world.ruleset.pendingDays).toBe(3));
+  });
+
+  it('writes the restart texts with no theme word, and the creation texts with "mundo" before a theme is known', async () => {
+    const { admin } = await family();
+    await admin.goTo('Regras do jogo');
+    const section = admin.root.querySelector('.restart')!;
+    expect(section.textContent).toContain('Reiniciar o mundo');
+    const terms = Object.values((await import('../../scripts/theme-leak-terms.json')).default).flat(); // every theme's words
+    for (const term of terms) expect(section.textContent!.toLowerCase()).not.toContain(term);
+
+    const bare = await openDevice('bare-device');
+    await bare.see('Criar um mundo');
+    await bare.see('Cria um mundo para começar');
+  });
+});
+
+describe('"Como jogar"', () => {
+  async function adultAndChild(options: { firstTime?: boolean } = {}) {
+    const admin = await openDevice('admin-device', { firstTime: options.firstTime });
+    await admin.click('button', 'Criar um mundo');
+    await admin.type('Nome do mundo', 'Casa');
+    await admin.type('O teu nome', 'Alex');
+    admin.submit();
+    await admin.see('Convidar');
+    const worldId = admin.world.get()!;
+    await admin.click('button', 'Continuar');
+    return { admin, worldId };
+  }
+
+  it('opens by itself once per profile and device, and a second profile on the same device sees it once too', async () => {
+    const { admin } = await adultAndChild({ firstTime: true });
+    await admin.see('As tuas tarefas');
+    expect(admin.navigation.hash()).toBe('#/map'); // a popup over the map, not a screen
+    expect(admin.root.querySelector('.map')).not.toBeNull();
+    expect((admin.find('dialog.menu') as HTMLDialogElement).open).toBe(true);
+
+    admin.navigation.back();
+    expect((admin.find('dialog.menu') as HTMLDialogElement).open).toBe(false);
+    await admin.see('Olá, Alex!');
+    await admin.goTo('Pessoas');
+    await admin.type('Nome', 'Sam');
+    admin.submit();
+    await admin.see('Sam');
+    await admin.click('button', 'Voltar');
+    await admin.see('Olá, Alex!'); // not again
+    expect(admin.navigation.hash()).toBe('#/map');
+
+    await admin.goTo('Trocar de perfil');
+    await admin.click('button.profile', 'Sam');
+    await admin.see('As tuas tarefas'); // Sam's first time
+    admin.navigation.back();
+    await admin.see('Olá, Sam!');
+    await admin.goTo('Trocar de perfil');
+    await admin.click('button.profile', 'Alex');
+    await admin.see('Olá, Alex!');
+    expect(admin.navigation.hash()).toBe('#/map');
+  });
+
+  it('is always in the menu, shows the real numbers of the ruleset, and the adults\' part only to an adult', async () => {
+    const { admin, worldId } = await adultAndChild();
+    await admin.goTo('Como jogar');
+    await admin.see('Para os adultos');
+    await admin.see('as fáceis dão 1, as médias 2 e as difíceis 4');
+    await admin.see('custam 5, 12 ou 25');
+    await admin.see('Cabem 5 na equipa');
+
+    await admin.store.worlds.setTokenRules(worldId, { tokensPerLevel: { low: 2, mid: 3, high: 6 }, tokenPrices: { low: 7, mid: 14, high: 30 } }).settled;
+    await admin.see('as fáceis dão 2, as médias 3 e as difíceis 6');
+    await admin.see('custam 7, 14 ou 30');
+
+    admin.navigation.back();
+    await admin.goTo('Pessoas');
+    await admin.type('Nome', 'Sam');
+    admin.submit();
+    await admin.see('Sam');
+    const child = await openDevice('child-device', { hash: `#/join/${worldId}` });
+    await child.click('button.profile', 'Sam');
+    await child.see('Olá, Sam!');
+    await child.goTo('Como jogar');
+    await child.see('As tuas tarefas');
+    expect(child.root.textContent).not.toContain('Para os adultos');
+  });
+
+  it('is a popup over the map with the art of the game beside each explanation, and a way back to the menu', async () => {
+    const { admin } = await adultAndChild();
+    await admin.goTo('Como jogar');
+    await admin.see('Para os adultos');
+    expect(admin.root.querySelector('.map')).not.toBeNull();
+    const sections = [...admin.root.querySelectorAll('.how-to-section')];
+    expect(sections.length).toBe(8);
+    for (const section of sections) expect(section.querySelector('.how-to-art')).not.toBeNull();
+    // the tokens earned per level, and the three tiers with their prices
+    expect(admin.root.querySelectorAll('.how-to-earn .token-art')).toHaveLength(1 + 2 + 4);
+    expect(admin.root.querySelectorAll('.how-to-open .how-to-reward')).toHaveLength(3);
+    expect(admin.root.querySelector('.how-to-open')!.textContent).toContain('12');
+    // every picture is decoration: nothing the text does not say
+    expect(admin.root.querySelectorAll('.how-to-popup [role="img"]').length).toBe(0);
+
+    await admin.click('.menu-back', 'Menu');
+    await admin.see('Como instalar');
+    expect(admin.root.querySelector('.how-to-popup')).toBeNull();
+    admin.navigation.back();
+    expect((admin.find('dialog.menu') as HTMLDialogElement).open).toBe(false);
+  });
+
+  it('does not open by itself when storage cannot be written', async () => {
+    const admin = await openDevice('admin-device', { firstTime: true, readOnlyStorage: true });
+    await admin.click('button', 'Criar um mundo');
+    await admin.type('Nome do mundo', 'Casa');
+    await admin.type('O teu nome', 'Alex');
+    admin.submit();
+    await admin.see('Convidar');
+    await admin.click('button', 'Continuar');
+    await admin.see('Olá, Alex!');
+    expect(admin.navigation.hash()).toBe('#/map');
+  });
+
+  it.each(listThemes().map((t) => [t.id, t.name] as const))('reads well in the %s theme (text kept for the product owner)', async (id, name) => {
+    const admin = await openDevice('admin-device');
+    await admin.click('button', 'Criar um mundo');
+    await admin.choose('Tema', name);
+    await admin.type('Nome d', 'Casa');
+    await admin.type('O teu nome', 'Alex');
+    admin.submit();
+    await admin.see('Convidar');
+    await admin.click('button', 'Continuar');
+    await admin.goTo('Como jogar');
+    await admin.see('Para os adultos');
+    const text = [...admin.root.querySelectorAll('.how-to-section')].map((el) => `${el.querySelector('h3')!.textContent}\n${el.querySelector('p')!.textContent}`).join('\n\n');
+    await expect(`${text}\n`).toMatchFileSnapshot(`../../docs/plans/0.10-how-to-text/${id}.txt`);
+  });
+});
+
+describe('"Como instalar"', () => {
+  const NOTE = 'instala primeiro e só depois abre o link de convite';
+  async function screenFor(installer: Installer) {
+    const admin = await openDevice('admin-device', { installer });
+    await admin.click('button', 'Criar um mundo');
+    await admin.type('Nome do mundo', 'Casa');
+    await admin.type('O teu nome', 'Alex');
+    admin.submit();
+    await admin.see('Convidar');
+    await admin.click('button', 'Continuar');
+    await admin.goTo('Como instalar');
+    await admin.see('Como instalar');
+    return admin;
+  }
+
+  it('says the app is already installed', async () => {
+    const admin = await screenFor(fakeInstaller('installed', { isStandalone: true }));
+    await admin.see('já está instalada neste telemóvel');
+    expect(admin.find('button', 'Instalar a app')).toBeUndefined();
+    expect(admin.root.textContent).toContain(NOTE);
+  });
+
+  it('offers the browser dialog with one line of help', async () => {
+    const installer = fakeInstaller('prompt');
+    const admin = await screenFor(installer);
+    await admin.see('O navegador pede confirmação');
+    await admin.click('button', 'Instalar a app');
+    expect(installer.prompt).toHaveBeenCalledTimes(1);
+    expect(admin.root.textContent).toContain(NOTE);
+  });
+
+  it('shows the Safari steps with the name of the themed app', async () => {
+    const admin = await screenFor(fakeInstaller('ios', { isIos: true }));
+    await admin.see('Para instalar «Família»: toca em Partilhar');
+    expect(admin.root.textContent).toContain(NOTE);
+  });
+
+  it('shows the steps of the browser menu on Android without the dialog', async () => {
+    const admin = await screenFor(fakeInstaller('android', { isAndroid: true }));
+    await admin.see('Toca em ⋮ e depois em «Instalar app»');
+    expect(admin.root.textContent).toContain(NOTE);
+  });
+
+  it('tells anything else to open the address in Chrome or Safari', async () => {
+    const admin = await screenFor(fakeInstaller('none'));
+    await admin.see('Abre este endereço no Chrome (Android) ou no Safari (iPhone)');
+    expect(admin.root.textContent).toContain(NOTE);
+  });
+});
+
+describe('a home screen app that starts in the world it was added from (ADR 0014)', () => {
+  const IOS_TAB = () => fakeInstaller('ios', { isIos: true });
+  const IOS_APP = () => fakeInstaller('installed', { isIos: true, isStandalone: true });
+
+  async function worldWithChild() {
+    const { admin, worldId } = await createFamily();
+    await admin.click('button', 'Continuar');
+    await admin.goTo('Pessoas');
+    await admin.type('Nome', 'Sam');
+    admin.submit();
+    await admin.see('Sam');
+    const sam = [...backend.state.get(worldId)!.profiles.values()].find((p) => p.displayName === 'Sam')!;
+    const alex = [...backend.state.get(worldId)!.profiles.values()].find((p) => p.displayName === 'Alex')!;
+    return { admin, worldId, sam, alex };
+  }
+
+  it('keeps the address of an iPhone browser tab carrying its world, profile and theme, and clears it elsewhere', async () => {
+    const { worldId, alex } = await worldWithChild();
+    const written: Array<unknown> = [];
+    const tab = await openDevice('admin-device', { installer: IOS_TAB(), savedWorld: worldId, savedTheme: 'minimal', writeCarry: (c) => void written.push(c) });
+    await tab.see('Olá, Alex!');
+    await vi.waitFor(() => expect(written.at(-1)).toEqual({ worldId, profileId: alex.id, themeId: 'minimal' }));
+
+    const elsewhere: unknown[] = [];
+    const android = await openDevice('admin-device', { installer: fakeInstaller('prompt'), savedWorld: worldId, savedTheme: 'minimal', writeCarry: (c) => void elsewhere.push(c) });
+    await android.see('Olá, Alex!');
+    expect(elsewhere).toEqual([]);
+  });
+
+  it('starts the installed app in the world with the profile it carries, and takes the carry out of the address', async () => {
+    const { worldId, sam } = await worldWithChild();
+    const cleared: unknown[] = [];
+    const app = await openDevice('new-home-screen-app', { installer: IOS_APP(), launchTheme: 'minimal', carry: { worldId, profileId: sam.id }, writeCarry: (c) => void cleared.push(c) });
+    await app.see('Olá, Sam!');
+    expect(app.world.get()).toBe(worldId);
+    expect(cleared).toEqual([null]);
+    expect(app.root.textContent).not.toContain('Quem és tu?');
+  });
+
+  it('does not use the carry in an iPhone browser tab, where a join would be lost, nor when the device already has a world', async () => {
+    const { worldId, sam, alex } = await worldWithChild();
+    const tab = await openDevice('another-phone', { installer: IOS_TAB(), launchTheme: 'minimal', carry: { worldId, profileId: sam.id } });
+    await tab.see('Criar uma família'); // the theme is known from the launch address
+    expect(tab.world.get()).toBeNull();
+
+    const member = await openDevice('admin-device', { installer: IOS_APP(), savedWorld: worldId, savedTheme: 'minimal', carry: { worldId, profileId: sam.id } });
+    await member.see('Olá, Alex!');
+    expect(alex.id).not.toBe(sam.id);
+  });
+
+  it('falls back to the usual start when the carried world cannot be joined', async () => {
+    const { sam } = await worldWithChild();
+    const app = await openDevice('new-home-screen-app', { installer: IOS_APP(), launchTheme: 'minimal', carry: { worldId: 'z'.repeat(24), profileId: sam.id } });
+    await app.see('Criar uma família');
+    expect(app.world.get()).toBeNull();
+  });
+
+  it('opens straight on the map when started at the join link of the world it is already in', async () => {
+    const { worldId } = await worldWithChild();
+    const app = await openDevice('admin-device', { installer: IOS_APP(), savedWorld: worldId, savedTheme: 'minimal', hash: `#/join/${worldId}/minimal` });
+    await app.see('Olá, Alex!');
+    expect(app.navigation.hash()).toBe('#/map');
+  });
+});
+
+describe('the invite of one child (ADR 0015)', () => {
+  const IOS_TAB = () => fakeInstaller('ios', { isIos: true });
+  const IOS_APP = () => fakeInstaller('installed', { isIos: true, isStandalone: true });
+
+  /** A world made by "Alex" (an adult), with the children Sam and Robin, and an archived child. */
+  async function family() {
+    const { admin, worldId } = await createFamily();
+    await admin.click('button', 'Continuar');
+    await admin.see('Olá, Alex!');
+    const make = async (displayName: string) => {
+      const created = admin.store.worlds.createProfile(worldId, { displayName, kind: 'child' });
+      await created.settled;
+      return created.result.profileId;
+    };
+    const sam = await make('Sam');
+    const robin = await make('Robin');
+    const old = await make('Antigo');
+    await admin.store.worlds.setProfileArchived(worldId, old, true).settled;
+    const alex = [...backend.state.get(worldId)!.profiles.values()].find((p) => p.displayName === 'Alex')!.id;
+    const link = (profileId: string | null) => `#/join/${worldId}/minimal${profileId ? `/${profileId}` : ''}`;
+    return { admin, worldId, sam, robin, old, alex, link };
+  }
+  const memberProfile = (worldId: string, uid: string) => backend.state.get(worldId)!.members.get(uid)?.profileId;
+
+  it('puts a new device on the child of the link, with no picker, and the general link still shows the picker', async () => {
+    const { worldId, sam, link } = await family();
+    const phone = await openDevice('new-phone', { hash: link(sam) });
+    await phone.see('Olá, Sam!');
+    expect(phone.navigation.hash()).toBe('#/map');
+    expect(phone.root.textContent).not.toContain('Quem és tu?');
+    expect(memberProfile(worldId, 'new-phone')).toBe(sam);
+
+    const general = await openDevice('other-phone', { hash: link(null) });
+    await general.see('Quem és tu?');
+    expect(memberProfile(worldId, 'other-phone')).toBeNull();
+  });
+
+  it('does the same from the paste form, and from an iPhone app started at the link', async () => {
+    const { worldId, sam, link } = await family();
+    const pasted = await openDevice('pasting-phone', { hash: '#/join' });
+    await pasted.type('Link ou código', `https://example.org/family-quest/${link(sam)}`);
+    pasted.submit();
+    await pasted.see('Olá, Sam!');
+    expect(memberProfile(worldId, 'pasting-phone')).toBe(sam);
+
+    const app = await openDevice('home-screen-app', { installer: IOS_APP(), hash: link(sam) });
+    await app.see('Olá, Sam!');
+    expect(memberProfile(worldId, 'home-screen-app')).toBe(sam);
+  });
+
+  it('keeps the profile of a device that already has one, and chooses for a member with none', async () => {
+    const { worldId, sam, robin, link } = await family();
+    const member = await openDevice('admin-device', { savedWorld: worldId, savedTheme: 'minimal', hash: link(sam) });
+    await member.see('Olá, Alex!'); // a sibling's link never switches anyone
+    expect(memberProfile(worldId, 'admin-device')).not.toBe(sam);
+
+    const first = await openDevice('undecided', { hash: link(null) });
+    await first.see('Quem és tu?');
+    stops.pop()!();
+    const again = await openDevice('undecided', { savedWorld: worldId, savedTheme: 'minimal', hash: link(robin) });
+    await again.see('Olá, Robin!');
+    expect(memberProfile(worldId, 'undecided')).toBe(robin);
+  });
+
+  it('shows the usual picker, with no message, for an archived, unknown or adult profile, and for a malformed part', async () => {
+    const { worldId, old, alex, link } = await family();
+    let n = 0;
+    for (const hash of [link(old), link('NoSuchProfile'), link(alex), `${link(null)}/not%20a%20profile`]) {
+      const phone = await openDevice(`phone-${n++}`, { hash });
+      await phone.see('Quem és tu?');
+      expect(phone.root.textContent, hash).not.toContain('Não foi possível');
+      expect(memberProfile(worldId, `phone-${n - 1}`), hash).toBeNull();
+    }
+  });
+
+  it('still asks an iPhone in Safari to install first, and copies the link with the profile', async () => {
+    const { sam, link } = await family();
+    const copied: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t: string) => void copied.push(t) }, configurable: true });
+    const safari = await openDevice('iphone', { installer: IOS_TAB(), hash: link(sam) });
+    await safari.see('adiciona esta página ao ecrã principal');
+    expect(safari.world.get()).toBeNull();
+    await safari.click('button', 'Copiar o link');
+    await safari.see('Link copiado');
+    expect(copied[0]).toContain(link(sam));
+  });
+
+  it('keeps the carry of ADR 0014 working through the same code, an adult profile included', async () => {
+    const { worldId, alex } = await family();
+    const app = await openDevice('home-screen-app', { installer: IOS_APP(), launchTheme: 'minimal', carry: { worldId, profileId: alex } });
+    await app.see('Olá, Alex!');
+    expect(memberProfile(worldId, 'home-screen-app')).toBe(alex);
+  });
+
+  describe('a device that entered by a child\'s own link is fixed on that profile (ADR 0015, amended in 0.10.13)', () => {
+    const menuItems = async (device: Awaited<ReturnType<typeof openDevice>>) => {
+      await device.click('.menu-button', '⚙');
+      await vi.waitFor(() => expect(device.find('dialog.menu')).toBeDefined());
+      return [...device.root.querySelectorAll('.menu-item')].map((el) => el.textContent);
+    };
+
+    it('has no "Trocar de perfil", and the picker address leads to the map', async () => {
+      const { worldId, sam, link } = await family();
+      const phone = await openDevice('new-phone', { hash: link(sam) });
+      await phone.see('Olá, Sam!');
+      expect(phone.world.getLockedProfile(worldId)).toBe(sam);
+      expect(await menuItems(phone)).toEqual(['Como jogar', 'Como instalar']);
+      phone.navigation.back();
+
+      phone.navigation.push('#/profiles');
+      await vi.waitFor(() => expect(phone.navigation.hash()).toBe('#/map'));
+      expect(phone.root.textContent).not.toContain('Quem és tu?');
+    });
+
+    it('stays fixed after the app starts again', async () => {
+      const { worldId, sam, link } = await family();
+      const first = await openDevice('new-phone', { hash: link(sam) });
+      await first.see('Olá, Sam!');
+      stops.pop()!();
+      const again = await openDevice('new-phone', { storage: first.storage, hash: '#/map' });
+      await again.see('Olá, Sam!');
+      expect(again.world.getLockedProfile(worldId)).toBe(sam);
+      expect(await menuItems(again)).toEqual(['Como jogar', 'Como instalar']);
+    });
+
+    it('does not fix a device that enters by the general link, picks a profile, or comes with an adult\'s carry', async () => {
+      const { worldId, sam, alex, link } = await family();
+      const general = await openDevice('picking-phone', { hash: link(null) });
+      await general.click('button.profile', 'Sam');
+      await general.see('Olá, Sam!');
+      expect(general.world.getLockedProfile(worldId)).toBeNull();
+      expect(await menuItems(general)).toContain('Trocar de perfil');
+
+      const app = await openDevice('home-screen-app', { installer: IOS_APP(), launchTheme: 'minimal', carry: { worldId, profileId: alex } });
+      await app.see('Olá, Alex!');
+      expect(app.world.getLockedProfile(worldId)).toBeNull();
+      expect(await menuItems(app)).toContain('Trocar de perfil');
+
+      const sibling = await openDevice('admin-device', { savedWorld: worldId, savedTheme: 'minimal', hash: link(sam) });
+      await sibling.see('Olá, Alex!');
+      expect(sibling.world.getLockedProfile(worldId)).toBeNull();
+    });
+
+    it('fixes a member that had no profile yet when the link chooses the child', async () => {
+      const { worldId, robin, link } = await family();
+      const first = await openDevice('undecided', { hash: link(null) });
+      await first.see('Quem és tu?');
+      stops.pop()!();
+      const again = await openDevice('undecided', { savedWorld: worldId, savedTheme: 'minimal', hash: link(robin) });
+      await again.see('Olá, Robin!');
+      expect(again.world.getLockedProfile(worldId)).toBe(robin);
+    });
+
+    it('frees itself when the profile is archived, so there is always a way out', async () => {
+      const { admin, worldId, sam, link } = await family();
+      const phone = await openDevice('new-phone', { hash: link(sam) });
+      await phone.see('Olá, Sam!');
+      expect(await menuItems(phone)).not.toContain('Trocar de perfil');
+      phone.navigation.back();
+
+      await admin.store.worlds.setProfileArchived(worldId, sam, true).settled;
+      await vi.waitFor(async () => expect(await menuItems(phone)).toContain('Trocar de perfil'));
+      expect(phone.world.getLockedProfile(worldId)).toBeNull();
+    });
+  });
+
+  it('gives each non-archived child an invite in Pessoas, with the QR code and no code to type, and the general invite stays', async () => {
+    const { admin, worldId, sam, link } = await family();
+    await admin.goTo('Pessoas');
+    const row = (name: string) => [...admin.root.querySelectorAll('ul.rows li')].find((li) => li.textContent?.includes(name))!;
+    const invite = (name: string) => [...row(name).querySelectorAll('button')].find((b) => b.textContent === 'Convidar');
+    expect(invite('Sam')).toBeDefined();
+    expect(invite('Robin')).toBeDefined();
+    expect(invite('Alex')).toBeUndefined(); // an adult's link would hand out admin rights
+    expect(invite('Antigo')).toBeUndefined(); // archived
+
+    const copied: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t: string) => void copied.push(t) }, configurable: true });
+    invite('Sam')!.click();
+    await admin.see('Este link abre a app já no perfil de Sam');
+    expect(row('Sam').querySelector('svg[role="img"]')).not.toBeNull();
+    expect(admin.root.textContent).not.toContain(`Código: ${worldId}`);
+    (row('Sam').querySelector('.row-invite') as HTMLElement).querySelectorAll('button')[0]!.click();
+    await vi.waitFor(() => expect(copied[0]).toContain(`${BASE_URL}${link(sam)}`));
+
+    await admin.click('header.screen-bar button', 'Convidar'); // the general invite
+    await admin.see(`Código: ${worldId}`);
   });
 });

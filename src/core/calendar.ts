@@ -32,6 +32,12 @@ function calendarDate(instant: Millis, timeZone: string): CalendarDate {
 
 const pad = (value: number, length = 2): string => String(value).padStart(length, '0');
 
+/** A day as people write it in Portugal, `dd/mm/aaaa`, on the wall clock of `timeZone`. */
+export function formatBuildDate(instant: Millis, timeZone: string): string {
+  const { year, month, day } = calendarDate(instant, timeZone);
+  return `${pad(day)}/${pad(month)}/${pad(year, 4)}`;
+}
+
 export function dateKey(instant: Millis, timeZone: string): DateKey {
   const { year, month, day } = calendarDate(instant, timeZone);
   return `${pad(year, 4)}-${pad(month)}-${pad(day)}`;

@@ -42,3 +42,16 @@ export function observeSelf(ctx: AppContext, worldId: WorldId, onChange: (self: 
     stopProfiles();
   };
 }
+
+/**
+ * Whether this device is fixed on its active profile: it entered the world by that child's own link (ADR 0015, amended
+ * in 0.10.13), so it offers no way to switch profile. A fixed device frees itself when the profile is archived or is
+ * no longer the active one, so it is never left with no way out. Only clearing the app's data frees it otherwise.
+ */
+export function isFixedOn(ctx: AppContext, worldId: WorldId, profile: Profile | null): boolean {
+  const locked = ctx.world.getLockedProfile(worldId);
+  if (locked === null) return false;
+  if (profile !== null && profile.id === locked && !profile.archived) return true;
+  ctx.world.unlockProfile(worldId);
+  return false;
+}

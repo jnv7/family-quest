@@ -29,7 +29,7 @@ export const renderCreate: Screen = (ctx, root) => {
 
   const form = h('form', { class: 'stack' },
     themeField,
-    h('label', {}, ctx.text('create.worldName'), worldName),
+    h('label', {}, ctx.text(ctx.themeKnown ? 'create.worldName' : 'create.worldNameNeutral'), worldName),
     h('label', {}, ctx.text('create.yourName'), yourName),
     h('button', { class: 'primary', type: 'submit' }, ctx.text('create.submit')),
     h('button', { type: 'button', onClick: () => ctx.go({ name: 'start' }) }, ctx.text('app.back')),
@@ -48,6 +48,6 @@ export const renderCreate: Screen = (ctx, root) => {
     ctx.go({ name: 'share' });
   });
 
-  root.append(h('h1', {}, ctx.text('create.title')), form);
+  root.append(h('h1', {}, ctx.text(ctx.themeKnown ? 'create.title' : 'create.titleNeutral')), form);
   return () => {};
 };

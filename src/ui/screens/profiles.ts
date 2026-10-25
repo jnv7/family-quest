@@ -1,13 +1,18 @@
 import type { WorldScreen } from '../context';
 import { h } from '../dom';
-import { observeSelf } from '../self';
+import { isFixedOn, observeSelf } from '../self';
 
 /** Netflix-style picker of the world's non-archived profiles (SPEC.md §7.2). */
 export const renderProfiles: WorldScreen = (ctx, root, { worldId }) => {
   const list = h('div', { class: 'profiles' });
   root.append(h('h1', {}, ctx.text('profiles.title')), list);
 
-  return observeSelf(ctx, worldId, ({ profiles }) => {
+  return observeSelf(ctx, worldId, ({ profiles, profile }) => {
+    // A device fixed on its profile by a child's own link has no picker (ADR 0015, amended in 0.10.13).
+    if (isFixedOn(ctx, worldId, profile)) {
+      ctx.go({ name: 'map' }, { replace: true });
+      return;
+    }
     list.replaceChildren(
       ...profiles
         .filter((profile) => !profile.archived)

@@ -163,6 +163,12 @@ export interface WorldStore {
   /** This device's membership, or null if it is not a member. */
   getMembership(worldId: WorldId): Promise<Member | null>;
 
+  /**
+   * One profile, archived ones included, or null if it does not exist. Read from the server when online and from the
+   * cache otherwise. Members only: `permission-denied` for a device that is not a member (ADR 0015).
+   */
+  getProfile(worldId: WorldId, profileId: ProfileId): Promise<Profile | null>;
+
   observeWorld(worldId: WorldId, onValue: Observer<World>, onError?: ObserverError): Unsubscribe;
   observeMembers(worldId: WorldId, onValue: Observer<Member[]>, onError?: ObserverError): Unsubscribe;
 
@@ -189,6 +195,13 @@ export interface WorldStore {
   setShowcaseSize(worldId: WorldId, size: number): Write;
 
   /**
+   * Admin only. Sets how many days a new collectible waits, pending, before it goes to the reserve
+   * (`ruleset.pendingDays`): a whole number from 1 to `LIMITS.pendingDaysMax`, otherwise `invalid-argument`
+   * before any write. Only `ruleset.pendingDays` changes.
+   */
+  setPendingDays(worldId: WorldId, days: number): Write;
+
+  /**
    * Admin only (ADR 0011). Restarts the universe: deletes every task, task definition, reward and collectible of the
    * world, and clears every profile's token balance and party. The profiles, the devices and the `ruleset` stay.
    * The one operation that deletes. It needs a connection (`unavailable` without one) and cannot be undone; running
@@ -200,6 +213,12 @@ export interface WorldStore {
   createProfile(worldId: WorldId, input: CreateProfileInput): Write<{ profileId: ProfileId }>;
   /** Admin only, and only child profiles. Profiles are never deleted. */
   setProfileArchived(worldId: WorldId, profileId: ProfileId, archived: boolean): Write;
+
+  /**
+   * Admin only, any profile (adults included). The name is trimmed; empty, or longer than `LIMITS.displayName`, is
+   * `invalid-argument` before any write. Only `displayName` changes.
+   */
+  renameProfile(worldId: WorldId, profileId: ProfileId, displayName: string): Write;
 
   /**
    * Owner or admin. `symbol` must be one of the theme's `profileSymbols`, or null; otherwise

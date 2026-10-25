@@ -1,0 +1,23 @@
+As tuas tarefas
+O papagaio na doca mostra o que tens para fazer. Quando tem novidades, aparece um balão por cima.
+
+Fazer uma tarefa
+Quando acabares uma tarefa, marca-a como feita no farol. Se houver uma pergunta, responde com verdade. Enganaste-te? Tens uns segundos para desfazer.
+
+Ganhar tochas
+Cada tarefa feita dá tochas: as fáceis dão 1, as médias 2 e as difíceis 4. Nunca se perdem.
+
+Abrir baús
+Na gruta do tesouro trocas tochas por baús: custam 5, 12 ou 25. Quanto mais alto o preço, mais raro o que sai. Abres já, ou juntas para um melhor: a escolha é tua.
+
+Tripulação
+Cada baú traz um marujo. Escolhes se entra na tripulação, onde lhe podes dar um nome, ou se vai para a taberna. Cabem 5 na tripulação; se não houver lugar, escolhes quem sai.
+
+Taberna
+Na taberna ficam os marujos que alguém deixou ir, até 10. Quem quiser pode levar um marujo para a tripulação. Quando não há lugar, quem lá está há mais tempo vai-se embora para sempre.
+
+Barco
+No barco vês a tripulação e escolhes o teu símbolo.
+
+Para os adultos
+Criam-se tarefas no papagaio na doca ou nas definições: uma vez ou a repetir, para uma ou mais pessoas. A dificuldade decide o que a tarefa dá em tochas. As definições estão na roda dentada, em cima à direita. Ninguém vê o que os outros têm, nem quanto ganharam.

@@ -28,7 +28,7 @@ export function createTaskDefsSection(ctx: AppContext, worldId: WorldId): TaskDe
                 ` · ${ctx.text(`cadence.${def.cadence}`)}`,
                 !def.active && ` (${ctx.text('recurring.inactiveTag')})`,
               ),
-              h('button', { onClick: () => ctx.go({ name: 'newTask', defId: def.id }) }, ctx.text('recurring.editButton')),
+              h('button', { onClick: () => ctx.go({ name: 'newTask', defId: def.id, from: 'tasks' }) }, ctx.text('recurring.editButton')),
               h('button', {
                 onClick: () => ctx.settle(ctx.store.taskDefs.updateTaskDef(worldId, def.id, { active: !def.active }).settled),
               }, ctx.text(def.active ? 'recurring.deactivate' : 'recurring.activate')),
@@ -46,7 +46,6 @@ export function createTaskDefsSection(ctx: AppContext, worldId: WorldId): TaskDe
       h('h2', {}, ctx.text('recurring.title')),
       problem,
       list,
-      h('button', { onClick: () => ctx.go({ name: 'newTask', defId: null }) }, ctx.text('recurring.new')),
     ),
     dispose: stop,
   };

@@ -3,6 +3,8 @@
 export interface Platform {
   /** iPhone or iPad: there is no install API, so the person is shown how. */
   isIos: boolean;
+  /** An Android phone or tablet. */
+  isAndroid: boolean;
   /** Running as an installed app, not in a browser tab. */
   isStandalone: boolean;
 }
@@ -14,6 +16,8 @@ export type InstallMode =
   | 'prompt'
   /** iOS in a browser: show the steps (Share → Add to Home Screen). */
   | 'ios'
+  /** Android in a browser that has not offered its dialog (yet): show the steps of the browser's menu. */
+  | 'android'
   /** Nothing can be offered here. */
   | 'none';
 
@@ -36,6 +40,7 @@ export function detectPlatform(win: Window): Platform {
   const isIpadOs = nav.platform === 'MacIntel' && nav.maxTouchPoints > 1; // iPadOS reports itself as a Mac
   return {
     isIos: /iPhone|iPad|iPod/.test(nav.userAgent) || isIpadOs,
+    isAndroid: /Android/.test(nav.userAgent),
     isStandalone: nav.standalone === true || win.matchMedia?.('(display-mode: standalone)').matches === true,
   };
 }
@@ -67,7 +72,8 @@ export function createInstaller(win: Window): Installer {
     mode() {
       if (installed) return 'installed';
       if (deferred) return 'prompt';
-      return platform.isIos ? 'ios' : 'none';
+      if (platform.isIos) return 'ios';
+      return platform.isAndroid ? 'android' : 'none';
     },
     async prompt() {
       const event = deferred;
