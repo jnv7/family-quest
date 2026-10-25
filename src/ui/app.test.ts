@@ -55,9 +55,9 @@ let stops: Array<() => void> = [];
 /** One device: its own store, remembered world and screen, sharing the backend. */
 async function openDevice(
   uid: string,
-  options: { theme?: Theme; firstTime?: boolean; readOnlyStorage?: boolean; hash?: string; savedWorld?: string; savedTheme?: string; launchTheme?: string; wrap?: (store: DataStore) => DataStore; installer?: Installer; updater?: Updater; carry?: Carry | null; writeCarry?: CarryWriter } = {},
+  options: { theme?: Theme; firstTime?: boolean; readOnlyStorage?: boolean; hash?: string; savedWorld?: string; savedTheme?: string; launchTheme?: string; wrap?: (store: DataStore) => DataStore; installer?: Installer; updater?: Updater; carry?: Carry | null; writeCarry?: CarryWriter; storage?: Map<string, string> } = {},
 ) {
-  const storage = new Map<string, string>();
+  const storage = options.storage ?? new Map<string, string>();
   const world = createWorldMemory({
     // "Como jogar" opens by itself on a profile's first visit; tests skip it unless they ask for it.
     getItem: (k) => (!options.firstTime && k.startsWith('fq.howToSeen.') ? '1' : storage.get(k) ?? null),
@@ -84,6 +84,7 @@ async function openDevice(
   return {
     root,
     world,
+    storage,
     store,
     navigation,
     find,
@@ -2811,6 +2812,78 @@ describe('the invite of one child (ADR 0015)', () => {
     const app = await openDevice('home-screen-app', { installer: IOS_APP(), launchTheme: 'minimal', carry: { worldId, profileId: alex } });
     await app.see('Olá, Alex!');
     expect(memberProfile(worldId, 'home-screen-app')).toBe(alex);
+  });
+
+  describe('a device that entered by a child\'s own link is fixed on that profile (ADR 0015, amended in 0.10.13)', () => {
+    const menuItems = async (device: Awaited<ReturnType<typeof openDevice>>) => {
+      await device.click('.menu-button', '⚙');
+      await vi.waitFor(() => expect(device.find('dialog.menu')).toBeDefined());
+      return [...device.root.querySelectorAll('.menu-item')].map((el) => el.textContent);
+    };
+
+    it('has no "Trocar de perfil", and the picker address leads to the map', async () => {
+      const { worldId, sam, link } = await family();
+      const phone = await openDevice('new-phone', { hash: link(sam) });
+      await phone.see('Olá, Sam!');
+      expect(phone.world.getLockedProfile(worldId)).toBe(sam);
+      expect(await menuItems(phone)).toEqual(['Como jogar', 'Como instalar']);
+      phone.navigation.back();
+
+      phone.navigation.push('#/profiles');
+      await vi.waitFor(() => expect(phone.navigation.hash()).toBe('#/map'));
+      expect(phone.root.textContent).not.toContain('Quem és tu?');
+    });
+
+    it('stays fixed after the app starts again', async () => {
+      const { worldId, sam, link } = await family();
+      const first = await openDevice('new-phone', { hash: link(sam) });
+      await first.see('Olá, Sam!');
+      stops.pop()!();
+      const again = await openDevice('new-phone', { storage: first.storage, hash: '#/map' });
+      await again.see('Olá, Sam!');
+      expect(again.world.getLockedProfile(worldId)).toBe(sam);
+      expect(await menuItems(again)).toEqual(['Como jogar', 'Como instalar']);
+    });
+
+    it('does not fix a device that enters by the general link, picks a profile, or comes with an adult\'s carry', async () => {
+      const { worldId, sam, alex, link } = await family();
+      const general = await openDevice('picking-phone', { hash: link(null) });
+      await general.click('button.profile', 'Sam');
+      await general.see('Olá, Sam!');
+      expect(general.world.getLockedProfile(worldId)).toBeNull();
+      expect(await menuItems(general)).toContain('Trocar de perfil');
+
+      const app = await openDevice('home-screen-app', { installer: IOS_APP(), launchTheme: 'minimal', carry: { worldId, profileId: alex } });
+      await app.see('Olá, Alex!');
+      expect(app.world.getLockedProfile(worldId)).toBeNull();
+      expect(await menuItems(app)).toContain('Trocar de perfil');
+
+      const sibling = await openDevice('admin-device', { savedWorld: worldId, savedTheme: 'minimal', hash: link(sam) });
+      await sibling.see('Olá, Alex!');
+      expect(sibling.world.getLockedProfile(worldId)).toBeNull();
+    });
+
+    it('fixes a member that had no profile yet when the link chooses the child', async () => {
+      const { worldId, robin, link } = await family();
+      const first = await openDevice('undecided', { hash: link(null) });
+      await first.see('Quem és tu?');
+      stops.pop()!();
+      const again = await openDevice('undecided', { savedWorld: worldId, savedTheme: 'minimal', hash: link(robin) });
+      await again.see('Olá, Robin!');
+      expect(again.world.getLockedProfile(worldId)).toBe(robin);
+    });
+
+    it('frees itself when the profile is archived, so there is always a way out', async () => {
+      const { admin, worldId, sam, link } = await family();
+      const phone = await openDevice('new-phone', { hash: link(sam) });
+      await phone.see('Olá, Sam!');
+      expect(await menuItems(phone)).not.toContain('Trocar de perfil');
+      phone.navigation.back();
+
+      await admin.store.worlds.setProfileArchived(worldId, sam, true).settled;
+      await vi.waitFor(async () => expect(await menuItems(phone)).toContain('Trocar de perfil'));
+      expect(phone.world.getLockedProfile(worldId)).toBeNull();
+    });
   });
 
   it('gives each non-archived child an invite in Pessoas, with the QR code and no code to type, and the general invite stays', async () => {

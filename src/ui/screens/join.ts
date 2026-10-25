@@ -21,7 +21,7 @@ export function renderJoin(route: Extract<Route, { name: 'join' }>): Screen {
       message.textContent = ctx.text('join.joining');
       try {
         // A child's link (ADR 0015) saves the choice of profile on the first entry; any other link, or any trouble with it, shows the picker.
-        const next = await joinAndChoose(ctx, id, profileId, { childOnly: true });
+        const next = await joinAndChoose(ctx, id, profileId, { childOnly: true, fix: true });
         if (disposed) return;
         ctx.world.set(id);
         ctx.world.setTheme(ctx.theme.id);

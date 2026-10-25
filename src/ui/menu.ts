@@ -4,7 +4,7 @@ import type { AppContext, Dispose } from './context';
 import { h } from './dom';
 import { howToView } from './howToView';
 import type { Route } from './routes';
-import { observeSelf } from './self';
+import { isFixedOn, observeSelf } from './self';
 
 /** One row of the menu: it opens a screen, or runs an action in the panel itself. */
 type Item = { label: string; route: Route } | { label: string; action: () => void };
@@ -22,6 +22,8 @@ export function createMenu(ctx: AppContext, worldId: WorldId): { button: HTMLEle
   const dialog = h('dialog', { class: 'menu', 'aria-label': ctx.text('menu.title') });
   const button = h('button', { class: 'menu-button', type: 'button', 'aria-label': ctx.text('menu.open'), onClick: () => open() }, '⚙');
   let isAdmin = false;
+  /** Fixed on its profile by a child's own link: no way to switch (ADR 0015, amended in 0.10.13). */
+  let fixed = false;
   let world: World | null = null;
   let view: 'menu' | 'howTo' = 'menu';
   /** Whether "Como jogar" was reached from the menu, which then offers a way back to it. */
@@ -41,7 +43,7 @@ export function createMenu(ctx: AppContext, worldId: WorldId): { button: HTMLEle
         { label: ctx.text('menu.rules'), route: { name: 'rules' } },
       );
     }
-    items.push({ label: ctx.text('map.switch'), route: { name: 'profiles' } });
+    if (!fixed) items.push({ label: ctx.text('map.switch'), route: { name: 'profiles' } });
     return items;
   };
 
@@ -132,6 +134,7 @@ export function createMenu(ctx: AppContext, worldId: WorldId): { button: HTMLEle
 
   const stopSelf = observeSelf(ctx, worldId, (self) => {
     isAdmin = self.isAdmin;
+    fixed = isFixedOn(ctx, worldId, self.profile);
     draw();
   });
   const stopWorld = ctx.store.worlds.observeWorld(worldId, (value) => ((world = value), draw()), () => {});

@@ -83,4 +83,32 @@ describe('createWorldMemory', () => {
     expect(blocked.hasSeenHowTo('w', 'a')).toBe(true); // not twice in one session either
     expect(createWorldMemory(null).setSeenHowTo('w', 'a')).toBe(false);
   });
+
+  it('fixes a device on a profile of a world, keeps it across launches, and lifts it', () => {
+    const storage = fakeStorage();
+    const memory = createWorldMemory(storage);
+    expect(memory.getLockedProfile('w')).toBeNull();
+    memory.lockProfile('w', 'kid');
+    expect(memory.getLockedProfile('w')).toBe('kid');
+    expect(memory.getLockedProfile('other')).toBeNull();
+    expect(createWorldMemory(storage).getLockedProfile('w')).toBe('kid');
+    memory.unlockProfile('w');
+    expect(memory.getLockedProfile('w')).toBeNull();
+    expect(createWorldMemory(storage).getLockedProfile('w')).toBeNull();
+  });
+
+  it('takes the lock away with the world it leaves, and works when storage cannot be written', () => {
+    const storage = fakeStorage();
+    const memory = createWorldMemory(storage);
+    memory.set('w');
+    memory.lockProfile('w', 'kid');
+    memory.clear();
+    expect(createWorldMemory(storage).getLockedProfile('w')).toBeNull();
+
+    const blocked = createWorldMemory({ getItem: () => null, setItem: () => { throw new Error('full'); }, removeItem: () => { throw new Error('full'); } });
+    blocked.lockProfile('w', 'kid');
+    expect(blocked.getLockedProfile('w')).toBe('kid');
+    blocked.unlockProfile('w');
+    expect(blocked.getLockedProfile('w')).toBeNull();
+  });
 });

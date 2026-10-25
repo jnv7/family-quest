@@ -74,3 +74,13 @@ getProfile(worldId: WorldId, profileId: ProfileId): Promise<Profile | null>;
   - the contract tests of `getProfile` in both adapters;
   - `app.test.ts`: every case of §3, and the iPhone copy and paste.
 - **Documentation:** `SPEC.md` §5 and §7, `docs/architecture.md` (routes), `CHANGELOG.md`.
+
+## Amendment (0.10.13, product owner, 2026-10-25): a device entered by a child's link stays on that child
+
+§2 said the profile part "only saves the choice in the profile picker" and the device could still switch profile. For a device that **entered by a child's own link**, that changes, and only for that case:
+
+1. **When it applies.** When `joinAndChoose` chooses the profile of a child's link (`fix: true`: the join screen, a pasted link, a start at a child's link). It does not apply to the general link, to an adult's profile, to a device that already had a profile, nor to ADR 0014's carry (`fix: false`), which is the device's own choice.
+2. **What it does.** The device remembers, in its own storage (`WorldMemory`, key `fq.lockedProfile.{worldId}`), the profile it is fixed on. While that profile is the active one and is not archived, the menu has no "Trocar de perfil" and the `profiles` route leads to the map.
+3. **How it ends.** Only by clearing the app's data (the product owner's choice). It also falls by itself, so the device is never left without a way out, when the profile is archived or is no longer the active one, and with the world, if the device leaves it.
+4. **What it is not.** Not security: nothing is stored in Firestore and no rule changes. Anyone with the world code can still join on another device and choose any profile (ADR 0003). The PIN in "Later" stays the real protection.
+5. **Tests:** `app.test.ts` covers the fixed device (no menu item, the picker address leads to the map, it stays fixed after a restart), the cases that must not fix it (the general link, a picked profile, a sibling's link on a device with a profile, the carry), a member with no profile that the link chooses, and the fall when the profile is archived; `worldMemory.test.ts` covers the lock.

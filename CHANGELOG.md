@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.10.13] — 2026-10-25
+
+### Changed (the product owner's decision, ADR 0015 amended)
+
+- **A device that entered by a child's own link stays on that child:** it has no "Trocar de perfil" in the menu, and the profile picker address leads to the map. It is a remedy against mistakes, not security: the lock lives only on that device. Only clearing the app's data frees it, and it frees itself if the profile is archived. It applies only to the child's link: the general link, an adult's profile and the carry of an app added to an iPhone's home screen keep "Trocar de perfil". No Firestore rules change.
+
 ## [0.10.12] — 2026-10-24
 
 ### Added (the product owner's request, ADR 0015)

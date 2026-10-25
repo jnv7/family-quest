@@ -12,13 +12,16 @@ import type { AppContext } from './context';
  *    admin rights directly, ADR 0003; the carry is the same device's own profile, so it passes `childOnly: false`);
  * 3. choosing it succeeds.
  *
+ * With `fix`, the device is then fixed on that profile (a child's own link: no "Trocar de perfil", `isFixedOn`).
+ * The carry of an app added to an iPhone's home screen is the device's own choice, so it does not fix anything.
+ *
  * A failure to join (an unknown world, no connection) is thrown, for the caller to say.
  */
 export async function joinAndChoose(
   ctx: AppContext,
   worldId: WorldId,
   profileId: ProfileId | null,
-  options: { childOnly: boolean },
+  options: { childOnly: boolean; fix: boolean },
 ): Promise<'map' | 'profiles'> {
   const { worlds } = ctx.store;
   const membership = await worlds.joinWorld(worldId);
@@ -28,6 +31,7 @@ export async function joinAndChoose(
     const profile = await worlds.getProfile(worldId, profileId);
     if (!profile || profile.archived || (options.childOnly && profile.kind !== 'child')) return 'profiles';
     await worlds.chooseProfile(worldId, profileId).settled;
+    if (options.fix) ctx.world.lockProfile(worldId, profileId);
     return 'map';
   } catch (error) {
     // The shortcut only saves a tap: any trouble leaves the picker.

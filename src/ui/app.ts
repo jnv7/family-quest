@@ -279,7 +279,7 @@ async function resumeSession(ctx: AppContext, navigation: Navigation): Promise<v
     }
     // Already in this world and started at a child's link, with no profile yet: the link's profile applies (ADR 0015).
     const next = route.name === 'join' && route.profileId && !membership.profileId
-      ? await joinAndChoose(ctx, worldId, route.profileId, { childOnly: true })
+      ? await joinAndChoose(ctx, worldId, route.profileId, { childOnly: true, fix: true })
       : membership.profileId ? 'map' : 'profiles';
     navigation.replace(hashFor({ name: next }));
   } catch (error) {
@@ -301,7 +301,7 @@ async function adoptCarry(ctx: AppContext, carry: Carry | null, write?: CarryWri
   if (ctx.world.get() === null && !inBrowserTab) {
     try {
       // The carry is this device's own profile, an adult's too, so it is not limited to children (ADR 0015 §4).
-      await joinAndChoose(ctx, carry.worldId, carry.profileId, { childOnly: false });
+      await joinAndChoose(ctx, carry.worldId, carry.profileId, { childOnly: false, fix: false });
       ctx.world.set(carry.worldId);
     } catch (error) {
       console.warn('Could not start in the carried world', error);

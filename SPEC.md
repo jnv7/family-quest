@@ -153,7 +153,8 @@ A reward and its collectible share one id. **[decided]**
 
 **The invite of one child** (from 0.10). **[decided]** (product owner, 2026-10-24; the format in ADR 0015) The join link may end with a child's profile id: `<app URL>#/join/<worldId>/<themeId>/<profileId>`. Only the random id goes in it, never a name.
 
-- **A shortcut, not a login.** A device that joins with it starts on that child's profile, with no picker. It gives no right the general link does not give, so the rules are unchanged, and the device can still switch profile from the menu. Protection per profile is the PIN in "Later".
+- **A shortcut, not a login.** A device that joins with it starts on that child's profile, with no picker. It gives no right the general link does not give, so the rules are unchanged. Protection per profile is the PIN in "Later".
+- **The device stays on that child** (from 0.10.13; product owner, 2026-10-25). A device that entered by a child's own link, and so had the profile chosen for it, has no "Trocar de perfil" in the menu and no profile picker. This is a remedy against mistakes, not security: the lock is kept only on that device, and anyone with the world code can still join on another device and choose any profile. Only clearing the app's data frees the device, and it frees itself if the profile is archived, so it is never left without a way out. It applies only to the child's link: a device that enters by the general link, by an adult's profile or by the carry of an app added to an iPhone's home screen keeps "Trocar de perfil" as for everyone.
 - **Only on the first entry.** It is used only when the device has no active profile in that world. A device that already has one keeps it, so a sibling's link never switches anyone.
 - **Child profiles only.** Adults use the general invite. An adult, archived or unknown profile in the link gives the usual profile picker, with no error.
 - **On iPhone,** the order stays "install first, then open the link". Copying or pasting the link keeps the profile, and an app started at the link uses it.
@@ -285,7 +286,7 @@ The main screen is a **map** with five tappable places. Each tap starts a short 
 
 - **Como jogar** and **Como instalar**, for everyone;
 - under the heading **Definições**, for adults only (the admin rule of ADR 0003): **Pessoas**, **Tarefas** and **Regras do jogo** (item 8);
-- **Trocar de perfil**, for everyone, always last;
+- **Trocar de perfil**, for everyone, always last, except on a device fixed on a child's profile by that child's own link (section 5);
 - a footer with the running version and its build date, and **Atualizar** when a newer version is published (ADR 0012). Offline, or if the check fails, only the version shows. Nothing outside the menu says that a new version exists.
 
 Tapping an item closes the panel and opens the screen; its back button returns to the map. The exception is **Como jogar**, which is a popup over the map, not a screen (item 9 of section 7).
