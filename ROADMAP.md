@@ -4,7 +4,7 @@ Each release is one minor version, developed on its own `release/0.x` branch (`G
 
 The behaviour each release implements is specified in `SPEC.md`.
 
-**Last closed release: 0.9 — Rewards that last** (2026-10-23, tag `v0.9`; [release notes](docs/release-notes/0.9.md)). **Current release:** 0.10 — Settings and configuration ([product brief](docs/plans/0.10-product-brief.md)), on `release/0.10`.
+**Last closed release: 0.10 — Settings and configuration** (2026-10-25, tag `v0.10`; [release notes](docs/release-notes/0.10.md)). No release is open.
 
 ## Release plan
 
@@ -143,7 +143,7 @@ Exit criteria:
 
 ### 0.10 — Settings and configuration
 
-Noted by the product owner on 2026-10-21; scope decided on 2026-10-24. Product brief: [docs/plans/0.10-product-brief.md](docs/plans/0.10-product-brief.md). The delivery plan is to be written by the tech lead.
+Noted by the product owner on 2026-10-21; scope decided on 2026-10-24. Product brief: [docs/plans/0.10-product-brief.md](docs/plans/0.10-product-brief.md). Closed on 2026-10-25.
 
 Scope:
 
