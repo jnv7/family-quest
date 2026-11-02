@@ -106,20 +106,24 @@ export function parseJoinInput(input: string): JoinTarget | null {
 
 /**
  * What an iPhone's home screen app is given to start already in its world (ADR 0014): the world code and the profile
- * of the device it was added from, in the query of the address (`?join=<worldId>.<profileId>`). The ids are
- * letters and digits. The code is no more exposed than in a join link: anyone who has it can already join and
- * choose any profile (ADR 0003).
+ * of the device it was added from, in the query of the address (`?join=<worldId>.<profileId>`), and `fixed=1` when
+ * that device was fixed on the profile by a child's own link (ADR 0016). The ids are letters and digits. The code is
+ * no more exposed than in a join link: anyone who has it can already join and choose any profile (ADR 0003).
  */
 export interface Carry {
   worldId: WorldId;
   profileId: string;
+  fixed: boolean;
 }
 
 const CARRY_PARAM = 'join';
+const FIXED_PARAM = 'fixed';
 
 export function parseCarry(search: string): Carry | null {
-  const match = /^([A-Za-z0-9]+)\.([A-Za-z0-9]+)$/.exec(new URLSearchParams(search).get(CARRY_PARAM) ?? '');
-  return match && match[1]!.length >= LIMITS.worldIdMinLength ? { worldId: match[1]!, profileId: match[2]! } : null;
+  const params = new URLSearchParams(search);
+  const match = /^([A-Za-z0-9]+)\.([A-Za-z0-9]+)$/.exec(params.get(CARRY_PARAM) ?? '');
+  if (!match || match[1]!.length < LIMITS.worldIdMinLength) return null;
+  return { worldId: match[1]!, profileId: match[2]!, fixed: params.get(FIXED_PARAM) === '1' };
 }
 
 /** `search` with the carry and the theme set, or, for `null`, with the carry taken out. Other parameters stay. */
@@ -128,8 +132,11 @@ export function carrySearch(search: string, carry: (Carry & { themeId: string })
   if (carry) {
     params.set(CARRY_PARAM, `${carry.worldId}.${carry.profileId}`);
     params.set('theme', carry.themeId);
+    if (carry.fixed) params.set(FIXED_PARAM, '1');
+    else params.delete(FIXED_PARAM);
   } else {
     params.delete(CARRY_PARAM);
+    params.delete(FIXED_PARAM);
   }
   const text = params.toString();
   return text ? `?${text}` : '';

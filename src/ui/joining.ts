@@ -13,7 +13,7 @@ import type { AppContext } from './context';
  * 3. choosing it succeeds.
  *
  * With `fix`, the device is then fixed on that profile (a child's own link: no "Trocar de perfil", `isFixedOn`).
- * The carry of an app added to an iPhone's home screen is the device's own choice, so it does not fix anything.
+ * The carry of an app added to an iPhone's home screen fixes only what the tab it was added from had fixed (ADR 0016).
  *
  * A failure to join (an unknown world, no connection) is thrown, for the caller to say.
  */

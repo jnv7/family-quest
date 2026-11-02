@@ -291,8 +291,9 @@ async function resumeSession(ctx: AppContext, navigation: Navigation): Promise<v
 
 /**
  * A home screen app added on an iPhone from a browser tab where the world was already open starts with that world
- * and profile in its address (ADR 0014): it joins and takes the profile by itself, so nobody does it twice. Only a
- * device with no world does this, and only outside an iPhone's browser tab. Any failure leaves the usual start.
+ * and profile in its address (ADR 0014): it joins and takes the profile by itself, so nobody does it twice, and stays
+ * fixed on it if the tab was (ADR 0016). Only a device with no world does this, and only outside an iPhone's browser
+ * tab, whose own address carries it. Any failure leaves the usual start.
  */
 async function adoptCarry(ctx: AppContext, carry: Carry | null, write?: CarryWriter): Promise<void> {
   if (!carry) return;
@@ -301,7 +302,8 @@ async function adoptCarry(ctx: AppContext, carry: Carry | null, write?: CarryWri
   if (ctx.world.get() === null && !inBrowserTab) {
     try {
       // The carry is this device's own profile, an adult's too, so it is not limited to children (ADR 0015 §4).
-      await joinAndChoose(ctx, carry.worldId, carry.profileId, { childOnly: false, fix: false });
+      // A tab fixed by a child's own link hands its lock on (ADR 0016).
+      await joinAndChoose(ctx, carry.worldId, carry.profileId, { childOnly: false, fix: carry.fixed });
       ctx.world.set(carry.worldId);
     } catch (error) {
       console.warn('Could not start in the carried world', error);

@@ -1,6 +1,6 @@
 # 0005 — Themed installation
 
-- **Status:** Accepted
+- **Status:** Accepted. Decision 5 superseded by ADR 0016 (2026-11-01): a join link joins in an iPhone's browser tab too.
 - **Date:** 2026-10-19
 - **Proposed by:** product owner (radar items of 2026-10-19)
 - **Accepted by:** product owner, 2026-10-19

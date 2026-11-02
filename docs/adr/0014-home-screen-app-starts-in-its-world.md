@@ -1,6 +1,6 @@
 # 0014 — A home screen app on iPhone starts in its world
 
-- **Status:** Accepted (product owner, 2026-10-24)
+- **Status:** Accepted (product owner, 2026-10-24). Amended by ADR 0016 (2026-11-01): a join link now joins in the Safari tab itself, and the carry says whether the tab was fixed on a child.
 - **Date:** 2026-10-24
 - **Decided by:** the developer's proposal, for the request: someone who is already in a world in Safari on an iPhone adds the page to the home screen, and the app should open already in that world, with no new join and no new choice of profile
 - **Refines:** ADR 0005 (the themed install flow)
