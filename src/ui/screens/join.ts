@@ -1,14 +1,12 @@
 import { DataStoreError } from '../../data/DataStore';
 import type { Screen } from '../context';
 import { h } from '../dom';
-import { mountInstallOffer } from '../installOffer';
 import { joinAndChoose } from '../joining';
-import { joinLink, parseJoinInput, type Route } from '../routes';
+import { parseJoinInput, type Route } from '../routes';
 
 /**
- * Joins with the code from a link, or asks for the code to be typed or pasted.
- * On iOS in a browser tab it does not join: the installed app has its own storage,
- * so joining here would be lost. It offers the installation instead (ADR 0005).
+ * Joins with the code from a link, or asks for the code to be typed or pasted. It joins everywhere, an iPhone's
+ * browser tab included (ADR 0016).
  */
 export function renderJoin(route: Extract<Route, { name: 'join' }>): Screen {
   const { worldId, profileId } = route;
@@ -37,28 +35,9 @@ export function renderJoin(route: Extract<Route, { name: 'join' }>): Screen {
     const back = h('div', { class: 'stack' }, h('button', { onClick: () => ctx.go({ name: 'start' }) }, ctx.text('app.back')));
 
     if (worldId !== null) {
-      const { platform } = ctx.installer;
-      if (platform.isIos && !platform.isStandalone) {
-        // Install first, then join from the installed app.
-        const offer = h('div', { class: 'stack' });
-        disposers.push(mountInstallOffer(ctx, offer));
-        const link = joinLink(ctx.baseUrl, worldId, ctx.theme.id, profileId);
-        const copy = h('button', {
-          class: 'primary',
-          onClick: async () => {
-            try {
-              await navigator.clipboard.writeText(link);
-              message.textContent = ctx.text('share.copied');
-            } catch {
-              message.textContent = ctx.text('share.copyFailed');
-            }
-          },
-        }, ctx.text('join.copyCode'));
-        root.append(h('h1', {}, ctx.text('join.title')), h('p', {}, ctx.text('join.iosInstallFirst')), offer, h('div', { class: 'stack' }, copy), message, back);
-      } else {
-        root.append(h('h1', {}, ctx.text('join.title')), message, back);
-        void join(worldId);
-      }
+      // An iPhone's browser tab joins too: an app added from it later starts in the world (ADR 0014, ADR 0016).
+      root.append(h('h1', {}, ctx.text('join.title')), message, back);
+      void join(worldId);
     } else {
       const code = h('input', { type: 'text', required: true, autocomplete: 'off', autocapitalize: 'off', spellcheck: false });
       const go = (text: string) => {

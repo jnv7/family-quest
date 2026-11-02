@@ -2201,26 +2201,19 @@ describe('installing the app', () => {
     await installed.see('já está instalada');
   });
 
-  it('on iOS in a browser tab, does not join: it explains, and offers to copy the link', async () => {
+  it('on iOS in a browser tab, joins at once and asks who the person is (ADR 0016)', async () => {
     const { admin, worldId } = await createFamily();
     await admin.click('button', 'Continuar');
-    const members = () => backend.state.get(worldId)!.members.size;
-    const before = members();
 
-    const copied: string[] = [];
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t: string) => void copied.push(t) }, configurable: true });
     const safari = await openDevice('iphone', {
       hash: `#/join/${worldId}/minimal`,
       installer: fakeInstaller('ios', { isIos: true }),
     });
-    await safari.see('adiciona esta página ao ecrã principal');
-    expect(safari.root.textContent).toContain('Para instalar «Família»'); // themed from the link
-    expect(safari.world.get()).toBeNull();
-    expect(members()).toBe(before);
-
-    await safari.click('button', 'Copiar o link');
-    await safari.see('Link copiado');
-    expect(copied[0]).toContain(`#/join/${worldId}/minimal`);
+    await safari.see('Quem és tu?');
+    expect(safari.world.get()).toBe(worldId);
+    expect(backend.state.get(worldId)!.members.has('iphone')).toBe(true);
+    await safari.click('button.profile', 'Alex');
+    await safari.see('Olá, Alex!');
   });
 
   it('on iOS in the installed app, joins as usual; and a pasted link joins too', async () => {
@@ -2318,7 +2311,7 @@ describe('the menu', () => {
     await admin.click('button', 'Continuar');
     await admin.see('Olá, Alex!');
     await admin.goTo('Como instalar');
-    await admin.see('instala primeiro e só depois');
+    await admin.see('abre o link de convite ou lê o código QR');
     expect(admin.navigation.hash()).toBe('#/install');
 
     admin.navigation.back();
@@ -2606,7 +2599,7 @@ describe('"Como jogar"', () => {
 });
 
 describe('"Como instalar"', () => {
-  const NOTE = 'instala primeiro e só depois abre o link de convite';
+  const NOTE = 'abre o link de convite ou lê o código QR';
   async function screenFor(installer: Installer) {
     const admin = await openDevice('admin-device', { installer });
     await admin.click('button', 'Criar um mundo');
@@ -2676,7 +2669,7 @@ describe('a home screen app that starts in the world it was added from (ADR 0014
     const written: Array<unknown> = [];
     const tab = await openDevice('admin-device', { installer: IOS_TAB(), savedWorld: worldId, savedTheme: 'minimal', writeCarry: (c) => void written.push(c) });
     await tab.see('Olá, Alex!');
-    await vi.waitFor(() => expect(written.at(-1)).toEqual({ worldId, profileId: alex.id, themeId: 'minimal' }));
+    await vi.waitFor(() => expect(written.at(-1)).toEqual({ worldId, profileId: alex.id, fixed: false, themeId: 'minimal' }));
 
     const elsewhere: unknown[] = [];
     const android = await openDevice('admin-device', { installer: fakeInstaller('prompt'), savedWorld: worldId, savedTheme: 'minimal', writeCarry: (c) => void elsewhere.push(c) });
@@ -2687,27 +2680,27 @@ describe('a home screen app that starts in the world it was added from (ADR 0014
   it('starts the installed app in the world with the profile it carries, and takes the carry out of the address', async () => {
     const { worldId, sam } = await worldWithChild();
     const cleared: unknown[] = [];
-    const app = await openDevice('new-home-screen-app', { installer: IOS_APP(), launchTheme: 'minimal', carry: { worldId, profileId: sam.id }, writeCarry: (c) => void cleared.push(c) });
+    const app = await openDevice('new-home-screen-app', { installer: IOS_APP(), launchTheme: 'minimal', carry: { worldId, profileId: sam.id, fixed: false }, writeCarry: (c) => void cleared.push(c) });
     await app.see('Olá, Sam!');
     expect(app.world.get()).toBe(worldId);
     expect(cleared).toEqual([null]);
     expect(app.root.textContent).not.toContain('Quem és tu?');
   });
 
-  it('does not use the carry in an iPhone browser tab, where a join would be lost, nor when the device already has a world', async () => {
+  it('does not use the carry in an iPhone browser tab, whose own address carries it, nor when the device already has a world', async () => {
     const { worldId, sam, alex } = await worldWithChild();
-    const tab = await openDevice('another-phone', { installer: IOS_TAB(), launchTheme: 'minimal', carry: { worldId, profileId: sam.id } });
+    const tab = await openDevice('another-phone', { installer: IOS_TAB(), launchTheme: 'minimal', carry: { worldId, profileId: sam.id, fixed: false } });
     await tab.see('Criar uma família'); // the theme is known from the launch address
     expect(tab.world.get()).toBeNull();
 
-    const member = await openDevice('admin-device', { installer: IOS_APP(), savedWorld: worldId, savedTheme: 'minimal', carry: { worldId, profileId: sam.id } });
+    const member = await openDevice('admin-device', { installer: IOS_APP(), savedWorld: worldId, savedTheme: 'minimal', carry: { worldId, profileId: sam.id, fixed: false } });
     await member.see('Olá, Alex!');
     expect(alex.id).not.toBe(sam.id);
   });
 
   it('falls back to the usual start when the carried world cannot be joined', async () => {
     const { sam } = await worldWithChild();
-    const app = await openDevice('new-home-screen-app', { installer: IOS_APP(), launchTheme: 'minimal', carry: { worldId: 'z'.repeat(24), profileId: sam.id } });
+    const app = await openDevice('new-home-screen-app', { installer: IOS_APP(), launchTheme: 'minimal', carry: { worldId: 'z'.repeat(24), profileId: sam.id, fixed: false } });
     await app.see('Criar uma família');
     expect(app.world.get()).toBeNull();
   });
@@ -2795,21 +2788,23 @@ describe('the invite of one child (ADR 0015)', () => {
     }
   });
 
-  it('still asks an iPhone in Safari to install first, and copies the link with the profile', async () => {
-    const { sam, link } = await family();
-    const copied: string[] = [];
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (t: string) => void copied.push(t) }, configurable: true });
-    const safari = await openDevice('iphone', { installer: IOS_TAB(), hash: link(sam) });
-    await safari.see('adiciona esta página ao ecrã principal');
-    expect(safari.world.get()).toBeNull();
-    await safari.click('button', 'Copiar o link');
-    await safari.see('Link copiado');
-    expect(copied[0]).toContain(link(sam));
+  it('puts an iPhone in Safari on the child of the link too, fixed, and an app added from it stays fixed (ADR 0016)', async () => {
+    const { worldId, sam, link } = await family();
+    const written: Array<Carry & { themeId: string } | null> = [];
+    const safari = await openDevice('iphone', { installer: IOS_TAB(), hash: link(sam), writeCarry: (c) => void written.push(c) });
+    await safari.see('Olá, Sam!');
+    expect(memberProfile(worldId, 'iphone')).toBe(sam);
+    expect(safari.world.getLockedProfile(worldId)).toBe(sam);
+    await vi.waitFor(() => expect(written.at(-1)).toEqual({ worldId, profileId: sam, fixed: true, themeId: 'minimal' }));
+
+    const app = await openDevice('home-screen-app', { installer: IOS_APP(), launchTheme: 'minimal', carry: written.at(-1)! });
+    await app.see('Olá, Sam!');
+    expect(app.world.getLockedProfile(worldId)).toBe(sam);
   });
 
   it('keeps the carry of ADR 0014 working through the same code, an adult profile included', async () => {
     const { worldId, alex } = await family();
-    const app = await openDevice('home-screen-app', { installer: IOS_APP(), launchTheme: 'minimal', carry: { worldId, profileId: alex } });
+    const app = await openDevice('home-screen-app', { installer: IOS_APP(), launchTheme: 'minimal', carry: { worldId, profileId: alex, fixed: false } });
     await app.see('Olá, Alex!');
     expect(memberProfile(worldId, 'home-screen-app')).toBe(alex);
   });
@@ -2853,7 +2848,7 @@ describe('the invite of one child (ADR 0015)', () => {
       expect(general.world.getLockedProfile(worldId)).toBeNull();
       expect(await menuItems(general)).toContain('Trocar de perfil');
 
-      const app = await openDevice('home-screen-app', { installer: IOS_APP(), launchTheme: 'minimal', carry: { worldId, profileId: alex } });
+      const app = await openDevice('home-screen-app', { installer: IOS_APP(), launchTheme: 'minimal', carry: { worldId, profileId: alex, fixed: false } });
       await app.see('Olá, Alex!');
       expect(app.world.getLockedProfile(worldId)).toBeNull();
       expect(await menuItems(app)).toContain('Trocar de perfil');

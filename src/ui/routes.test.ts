@@ -77,18 +77,27 @@ describe('the carry for a home screen app', () => {
   const PROFILE = 'p1Q2w3E4r5T6y7U8i9O0';
 
   it('is read from the query, and only when it looks like a world code and a profile', () => {
-    expect(parseCarry(`?theme=minimal&join=${ID}.${PROFILE}`)).toEqual({ worldId: ID, profileId: PROFILE });
+    expect(parseCarry(`?theme=minimal&join=${ID}.${PROFILE}`)).toEqual({ worldId: ID, profileId: PROFILE, fixed: false });
+    expect(parseCarry(`?join=${ID}.${PROFILE}&fixed=1`)).toEqual({ worldId: ID, profileId: PROFILE, fixed: true });
+    expect(parseCarry(`?join=${ID}.${PROFILE}&fixed=yes`)?.fixed).toBe(false);
     for (const search of ['', '?join=', '?join=short.abc', `?join=${ID}`, `?join=${ID}.`, `?join=${ID}.a/b`, `?join=${ID}.a.b`]) {
       expect(parseCarry(search), search).toBeNull();
     }
   });
 
   it('is written with the theme, keeps other parameters, and is taken out again', () => {
-    const written = carrySearch('?x=1', { worldId: ID, profileId: PROFILE, themeId: 'minimal-farm' });
-    expect(parseCarry(written)).toEqual({ worldId: ID, profileId: PROFILE });
+    const written = carrySearch('?x=1', { worldId: ID, profileId: PROFILE, fixed: false, themeId: 'minimal-farm' });
+    expect(parseCarry(written)).toEqual({ worldId: ID, profileId: PROFILE, fixed: false });
     expect(new URLSearchParams(written).get('theme')).toBe('minimal-farm');
     expect(new URLSearchParams(written).get('x')).toBe('1');
     expect(carrySearch(written, null)).toBe('?x=1&theme=minimal-farm');
     expect(carrySearch('?join=abc', null)).toBe('');
+  });
+
+  it('says whether the device is fixed on the profile, and drops that with the carry (ADR 0016)', () => {
+    const fixed = carrySearch('', { worldId: ID, profileId: PROFILE, fixed: true, themeId: 'minimal' });
+    expect(parseCarry(fixed)?.fixed).toBe(true);
+    expect(parseCarry(carrySearch(fixed, { worldId: ID, profileId: PROFILE, fixed: false, themeId: 'minimal' }))?.fixed).toBe(false);
+    expect(carrySearch(fixed, null)).toBe('?theme=minimal');
   });
 });

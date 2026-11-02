@@ -8,7 +8,7 @@ Each major decision (`GOVERNANCE.md` §1) is recorded here as `NNNN-short-title.
 | [0002](0002-data-access-contract.md) | Data access contract and write semantics | Accepted |
 | [0003](0003-admin-rights-from-profile.md) | Admin rights come from the active profile | Accepted |
 | [0004](0004-installable-offline-app-shell.md) | Installable app and offline app shell | Accepted |
-| [0005](0005-themed-install-flow.md) | Themed installation | Accepted |
+| [0005](0005-themed-install-flow.md) | Themed installation | Accepted (decision 5: superseded by 0016) |
 | [0006](0006-theme-is-a-skin.md) | A theme is a skin, and interface text has three layers | Accepted |
 | [0007](0007-big-ad-hoc-tasks.md) | Big tasks that do not repeat | Accepted |
 | [0008](0008-tokens-and-offline-spending.md) | Tokens, and spending them offline without double spending | Accepted |
@@ -17,5 +17,6 @@ Each major decision (`GOVERNANCE.md` §1) is recorded here as `NNNN-short-title.
 | [0011](0011-restarting-the-universe.md) | Restarting the universe | Accepted |
 | [0012](0012-version-check.md) | Showing the version and loading a newer one | Accepted |
 | [0013](0013-the-page-is-themed-from-its-first-line.md) | The page is themed from its first line | Accepted |
-| [0014](0014-home-screen-app-starts-in-its-world.md) | A home screen app on iPhone starts in its world | Accepted |
-| [0015](0015-join-link-with-a-child-profile.md) | The join link, with an optional child profile | Accepted |
+| [0014](0014-home-screen-app-starts-in-its-world.md) | A home screen app on iPhone starts in its world | Accepted (amended by 0016) |
+| [0015](0015-join-link-with-a-child-profile.md) | The join link, with an optional child profile | Accepted (amended by 0016) |
+| [0016](0016-joining-in-an-iphone-browser-tab.md) | A join link joins in an iPhone's browser tab | Accepted |

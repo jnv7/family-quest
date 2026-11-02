@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.10.14] — 2026-11-01
+
+### Fixed (the product owner's decision, ADR 0016)
+
+- **An iPhone can join in Safari.** Scanning the invite's QR code, opening the link or pasting the code in Safari now joins the world and shows the profile picker (a child's link puts the phone on that child), as on Android. Before, Safari only showed the install steps and "Copiar o link", so nobody could get in from Safari. An app added to the home screen from that tab still starts in the world, on the same profile.
+- **A child's phone stays on that child after being added to the home screen.** The tab's address now says it is fixed (`fixed=1`), and the app added from it is fixed too.
+- **"Como instalar"** no longer says to install first: another person opens the invite link or scans the QR code, and installs from there. No Firestore rules change: nothing to publish.
+
 ## [0.10.13] — 2026-10-25
 
 ### Changed (the product owner's decision, ADR 0015 amended)
